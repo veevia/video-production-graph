@@ -130,6 +130,8 @@ delegated.
 | Guide | Covers |
 |---|---|
 | [Operator guide](docs/operator-guide.md) | Running a production step by step, privacy scanning and publication |
+| [Agent hosts](docs/agent-hosts.md) | Using vpg with Claude Code, Codex, GitHub Copilot, OpenCode, Gemini CLI or Cursor |
+| [AGENTS.md](AGENTS.md) | The rules coding agents load automatically, including the human-only boundary |
 | [Extension guide](docs/extension-guide.md) | Binding renderers and TTS; adding tools, nodes, agents, rubrics and rules |
 | [Graph specification](docs/graph-spec.md) | Nodes, edges, subgraphs and policies, with the [generated diagram](docs/graph.svg) |
 | [Architecture](docs/architecture.md) | Engine layers and design principles |
