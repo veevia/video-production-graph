@@ -3,7 +3,7 @@
 A local, graph-based production workflow for product demo films. One YAML graph takes a brief through
 planning, production, review and targeted rework to a packaged film.
 
-![The Video Production Graph: 25 steps in 7 phases. A brief moves through discovery, definition, planning and production; six reviews judge each version in parallel; defects return only to the step that made them; a person approves at five human gates before packaging and delivery.](docs/images/vpg-overview.png)
+![The Video Production Graph: 25 steps in 7 phases. A brief moves through discovery, definition, planning and production; six reviews judge each version in parallel; defects return only to the step that made them; a person approves at five human gates before packaging and delivery.](docs/images/vpg-overview.gif)
 
 - **One graph drives the work.** 25 nodes, 49 edges and 7 subgraphs in [`graph/workflow.yaml`](graph/workflow.yaml)
   define every step, review and rework path.
