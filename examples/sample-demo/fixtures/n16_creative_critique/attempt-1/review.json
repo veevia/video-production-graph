@@ -1,0 +1,46 @@
+{
+ "reviewer": "creative-critic (scripted)",
+ "scores": [
+  {
+   "dimension": "CRE-HOOK",
+   "score": 4.5,
+   "evidence": "B1 0:00\u20130:05 names the problem"
+  },
+  {
+   "dimension": "CRE-ONE-MESSAGE",
+   "score": 4.5,
+   "evidence": "each beat shows one idea"
+  },
+  {
+   "dimension": "CRE-MOTION",
+   "score": 4.5,
+   "evidence": "B2 animates the line leaving the band"
+  },
+  {
+   "dimension": "CRE-TRANSITIONS",
+   "score": 4.5,
+   "evidence": "signal line carries B1\u2192B2"
+  },
+  {
+   "dimension": "CRE-FOCUS",
+   "score": 4.5,
+   "evidence": "B3 ring on the outlook card"
+  },
+  {
+   "dimension": "CRE-LENSES",
+   "score": 4.5,
+   "evidence": "plant manager, director, first-time viewer each follow"
+  },
+  {
+   "dimension": "CRE-POLISH",
+   "score": 4.5,
+   "evidence": "no crops through text"
+  },
+  {
+   "dimension": "CRE-ARC",
+   "score": 4.5,
+   "evidence": "unease \u2192 clarity \u2192 confidence"
+  }
+ ],
+ "defects": []
+}

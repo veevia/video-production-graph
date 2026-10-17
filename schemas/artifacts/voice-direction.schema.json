@@ -1,0 +1,57 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/voice-direction",
+ "title": "voice-direction",
+ "type": "object",
+ "properties": {
+  "age": {
+   "enum": [
+    "adult"
+   ]
+  },
+  "delivery": {
+   "type": "string",
+   "minLength": 10
+  },
+  "engine": {
+   "type": "string"
+  },
+  "voice": {
+   "type": "string"
+  },
+  "pronunciations": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "term": {
+      "type": "string"
+     },
+     "say": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "term",
+     "say"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "human_listening": {
+   "enum": [
+    "pending",
+    "approved",
+    "rejected"
+   ]
+  },
+  "audio_spec": {}
+ },
+ "required": [
+  "age",
+  "delivery",
+  "engine",
+  "human_listening"
+ ],
+ "additionalProperties": true
+}

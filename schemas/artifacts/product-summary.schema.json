@@ -1,0 +1,38 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/product-summary",
+ "title": "product-summary",
+ "type": "object",
+ "properties": {
+  "product_context": {
+   "type": "string",
+   "minLength": 10
+  },
+  "product_requirements": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "capabilities": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "minItems": 1
+  },
+  "demo_scenarios": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "product_context",
+  "capabilities",
+  "demo_scenarios"
+ ],
+ "additionalProperties": true
+}

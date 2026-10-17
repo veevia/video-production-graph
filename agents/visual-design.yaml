@@ -1,0 +1,43 @@
+# Visual Design Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: visual-design
+name: Visual Design Agent
+responsibility: Define the design system and the production spec as machine-readable tokens.
+nodes:
+- N09 Visual-system definition
+inputs_allowed:
+- artifact:creative_decision
+- control:creative
+- control:design
+- control:production
+- state:inputs.sources
+controls:
+  read:
+  - creative
+  - design
+  - production
+  write:
+  - design
+  - production
+skills:
+- brand-guidelines
+- design-system-as-infrastructure
+- design-system-author
+- frontend-design
+- impeccable
+tools:
+- WCAG contrast calculator (vpg.tools._common:contrast)
+outputs:
+- design_system
+decision_authority: Proposes tokens; Wei approves them and they are locked.
+constraints:
+- Supplied logos only
+- WCAG-passing text pairs
+- No imported template skin
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- visual-system
+escalation:
+  when: Brand constraints conflict
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: FDE Design Reviewer

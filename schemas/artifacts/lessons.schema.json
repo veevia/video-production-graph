@@ -1,0 +1,50 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/lessons",
+ "title": "lessons",
+ "type": "object",
+ "properties": {
+  "lessons": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string",
+      "minLength": 10
+     },
+     "class": {
+      "enum": [
+       "reusable",
+       "project_specific"
+      ]
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1
+     },
+     "rule": {
+      "type": "string"
+     },
+     "scope": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "text",
+     "class",
+     "evidence"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "lessons"
+ ],
+ "additionalProperties": true
+}

@@ -1,0 +1,137 @@
+# Design-system compliance — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: design-compliance
+name: Design-system compliance
+reviewer: design-system-reviewer
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: DES-TOKENS
+  name: Palette tokens and text pairs
+  brief_dimension: design_system_compliance
+  level: MUST
+  check:
+    type: tool
+    fn: design:compliance
+  threshold: 1.0
+  target: every colour is a design.md token in an approved pair
+  rule: R-DES-005
+  cases:
+    never: []
+    always: []
+- id: DES-TYPE
+  name: Type families
+  brief_dimension: design_system_compliance
+  level: MUST
+  check:
+    type: tool
+    fn: design:compliance
+  threshold: 1.0
+  target: only approved families, in their roles
+  rule: R-DES-002
+  cases:
+    never: []
+    always: []
+- id: DES-LOGO
+  name: Logo integrity
+  brief_dimension: design_system_compliance
+  level: MUST
+  check:
+    type: tool
+    fn: design:compliance
+  threshold: 1.0
+  target: supplied files, uniform scale, hash match
+  rule: R-DES-003
+  cases:
+    never: []
+    always: []
+- id: DES-PROHIBITED
+  name: Prohibited patterns
+  brief_dimension: design_system_compliance
+  level: MUST
+  check:
+    type: tool
+    fn: design:compliance
+  threshold: 1.0
+  target: none of design.md's prohibited patterns
+  rule: R-DES-004
+  cases:
+    never: []
+    always: []
+- id: DES-COHERENCE
+  name: One visual system
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: bookends, infographics and product chapters read as one film
+  rule: R-DES-002
+  cases:
+    never:
+    - An infographic style that looks like a different film from the bookends
+    always:
+    - Reuse one motion vocabulary and one type system
+- id: DES-CONSISTENCY
+  name: Cross-scene consistency
+  brief_dimension: cross_scene_consistency
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: type, colour and motion roles are consistent scene to scene
+  rule: R-DES-002
+  cases:
+    never:
+    - Section titles set differently from scene to scene
+    always:
+    - Same role, same style
+- id: DES-COMPOSITION
+  name: Composition and hierarchy
+  brief_dimension: composition_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: one focal point per frame; clear reading order; balanced use of the frame
+  rule: R-DEN-001
+  cases:
+    never:
+    - Two competing focal points
+    - An end state crammed into the top half of the frame
+    always:
+    - The narrated element is the largest or brightest thing on screen
+- id: DES-SPECIFICITY
+  name: Asset specificity
+  brief_dimension: asset_specificity
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: imagery shows this product's context, not stock generics
+  rule: R-AST-001
+  cases:
+    never:
+    - Generic 'technology background' imagery
+    - An illustration that could belong to any company
+    always:
+    - Show the specific subject, setting and detail the narration names
+- id: DES-BOOKENDS
+  name: Iconic bookends
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: minimal, high-contrast bold-caps bookends with the supplied logos
+  rule: R-DES-001
+  cases:
+    never:
+    - Busy or decorated bookends
+    - Small bookend text
+    - Missing partner logos
+    always:
+    - One title, one line, one lockup

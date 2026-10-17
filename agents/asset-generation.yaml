@@ -1,0 +1,48 @@
+# Asset Generation Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: asset-generation
+name: Asset Generation Agent
+responsibility: 'Plan and produce every asset at spec with provenance: capture real UI, generate specific imagery, never invent UI or logos.'
+nodes:
+- N10 Asset planning
+- N11 Asset generation
+inputs_allowed:
+- artifact:asset_plan
+- artifact:design_system
+- artifact:storyboard
+- control:design
+- control:production
+- defects:rework
+- state:inputs.sources
+- state:production.asset_plan
+controls:
+  read:
+  - design
+  - production
+  write: []
+skills:
+- asset-collection
+- azure-foundry-image
+- excalidraw-diagramming
+- video-shotcraft
+- webapp-testing
+tools:
+- PIL
+- Playwright capture
+- image generation (gpt-image via Azure AI Foundry skill)
+outputs:
+- asset_plan
+- assets
+decision_authority: Chooses generation prompts and capture paths within the plan.
+constraints:
+- Product UI captured, never generated
+- Rights recorded per asset
+- Single-flight on the image API and the capture browser
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- asset-plan
+- assets
+escalation:
+  when: Rights need clearance, or a source is missing
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: impeccable-asset-producer

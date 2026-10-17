@@ -1,0 +1,55 @@
+{
+ "concepts": [
+  {
+   "id": "C1",
+   "title": "See it before it's waste",
+   "logline": "One plant's signal, from pattern to action.",
+   "anchor": "problem-first story",
+   "structure": [
+    "problem",
+    "signal",
+    "action"
+   ],
+   "strengths": [
+    "clear causality"
+   ],
+   "risks": [
+    "may feel small"
+   ]
+  },
+  {
+   "id": "C2",
+   "title": "A plant manager's morning",
+   "logline": "A day-in-the-life reveal.",
+   "anchor": "user's-day journey",
+   "structure": [
+    "morning",
+    "alert",
+    "decision"
+   ],
+   "strengths": [
+    "human"
+   ],
+   "risks": [
+    "needs a character we do not have"
+   ]
+  },
+  {
+   "id": "C3",
+   "title": "The whole network",
+   "logline": "Zoom from all plants to one signal.",
+   "anchor": "system reveal",
+   "structure": [
+    "network",
+    "zoom",
+    "signal"
+   ],
+   "strengths": [
+    "scale"
+   ],
+   "risks": [
+    "dense first frame"
+   ]
+  }
+ ]
+}

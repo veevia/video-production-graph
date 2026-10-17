@@ -1,0 +1,39 @@
+# Product Understanding Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: product-understanding
+name: Product Understanding Agent
+responsibility: 'Establish product truth: capabilities, interactions, demo scenarios, the engineers'' terminology, prohibited terms and verified
+  claims.'
+nodes:
+- N04 Product and experience understanding
+inputs_allowed:
+- artifact:brief
+- control:product
+- state:inputs.sources
+controls:
+  read:
+  - evaluation
+  - product
+  write:
+  - product
+skills:
+- evidence-tagging
+- grounding-critic-designer
+- jobs-to-be-done
+- webapp-testing
+tools:
+- Playwright (read-only prototype walk)
+- transcript search
+outputs:
+- product_summary
+decision_authority: Drafts product truth. Wei approves it, and after approval it is locked.
+constraints:
+- Every term and claim cites a source
+- Read-only prototype walks (no submits)
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- product-truth
+escalation:
+  when: An unsourced claim is needed for the story
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Prototype Runner & QA

@@ -1,0 +1,31 @@
+{
+ "reviewer": "creative-critic (scripted)",
+ "scores": [
+  {
+   "dimension": "NAR-CLARITY",
+   "score": 4.5,
+   "evidence": "retellable: signal, then outlook"
+  },
+  {
+   "dimension": "NAR-RELEVANCE",
+   "score": 4.5,
+   "evidence": "each lens sees its value"
+  },
+  {
+   "dimension": "NAR-CONNECTION",
+   "score": 4.5,
+   "evidence": "line-carry seams"
+  },
+  {
+   "dimension": "NAR-PERSPECTIVE",
+   "score": 4.5,
+   "evidence": "the plant team acts first"
+  },
+  {
+   "dimension": "VOI-PRONUNCIATION",
+   "score": 4.5,
+   "evidence": "'Northwind' heard correctly"
+  }
+ ],
+ "defects": []
+}

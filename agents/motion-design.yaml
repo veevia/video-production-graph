@@ -1,0 +1,45 @@
+# Motion Design Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: motion-design
+name: Motion Design Agent
+responsibility: Render scenes cued to the narration, with purposeful motion, and export the text-layer manifest.
+nodes:
+- N13 Motion and scene production
+inputs_allowed:
+- artifact:assets
+- artifact:design_system
+- artifact:storyboard
+- artifact:timings
+- control:design
+- defects:rework
+controls:
+  read:
+  - creative
+  - design
+  write: []
+skills:
+- design-system-as-infrastructure
+- frontend-design
+- remotion
+- video-shotcraft
+tools:
+- deterministic HTML/SVG renderer (Playwright/Chromium) or Remotion after licence clearance
+- ffmpeg
+outputs:
+- scene_frames
+- scene_params
+- scenes
+- text_layers
+decision_authority: Decides motion within the storyboard and design tokens.
+constraints:
+- One message per frame
+- Rings ≥1 s on measured boxes
+- No ghost text
+- Single-flight on the renderer
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- motion
+escalation:
+  when: Legibility and design rules conflict in a scene
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Prototype Runner & QA

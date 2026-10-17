@@ -1,0 +1,44 @@
+# Remotion or Composition Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: composition
+name: Remotion or Composition Agent
+responsibility: Assemble the master, stems, captions and silent master; normalise loudness; keep captions speech-locked.
+nodes:
+- N14 Video assembly
+inputs_allowed:
+- artifact:scenes
+- artifact:text_layers
+- artifact:timings
+- artifact:voice
+- control:production
+- defects:rework
+controls:
+  read:
+  - production
+  write: []
+skills:
+- remotion
+- video-shotcraft
+tools:
+- deterministic renderer
+- ffmpeg (xfade
+- loudnorm)
+- sidechaincompress
+outputs:
+- assembly_params
+- captions
+- master
+- music_stem
+- silent
+- voice_stem
+decision_authority: Chooses assembly parameters; never re-renders upstream work.
+constraints:
+- Remotion only after company-licence clearance
+- Reuse upstream outputs unchanged
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- assembly
+escalation:
+  when: The assembly command fails 3 times
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Prototype Runner & QA

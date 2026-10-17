@@ -1,0 +1,19 @@
+{
+ "selected": "C1",
+ "rationale": "The only direction that proves both success criteria in 20 s without inventing a character.",
+ "rejected": [
+  {
+   "id": "C2",
+   "reason": "needs a persona the sources do not provide"
+  },
+  {
+   "id": "C3",
+   "reason": "a dense first frame breaks one message per frame"
+  }
+ ],
+ "narrative_arc": [
+  "problem",
+  "signal",
+  "action"
+ ]
+}

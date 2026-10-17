@@ -1,0 +1,7 @@
+{
+ "outcome": "pass",
+ "outputs": {
+  "storyboard": "storyboard.json",
+  "shotlist": "shotlist.json"
+ }
+}

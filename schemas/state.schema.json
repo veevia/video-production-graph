@@ -1,0 +1,2382 @@
+{
+ "$defs": {
+  "Approval": {
+   "additionalProperties": false,
+   "properties": {
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "decision": {
+     "title": "Decision",
+     "type": "string"
+    },
+    "actor": {
+     "title": "Actor",
+     "type": "string"
+    },
+    "human": {
+     "title": "Human",
+     "type": "boolean"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    },
+    "reason": {
+     "default": "",
+     "title": "Reason",
+     "type": "string"
+    },
+    "outputs": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Outputs",
+     "type": "object"
+    },
+    "grant": {
+     "default": "",
+     "title": "Grant",
+     "type": "string"
+    }
+   },
+   "required": [
+    "node",
+    "decision",
+    "actor",
+    "human",
+    "at"
+   ],
+   "title": "Approval",
+   "type": "object"
+  },
+  "ArtifactRecord": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "key": {
+     "title": "Key",
+     "type": "string"
+    },
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "sha256": {
+     "title": "Sha256",
+     "type": "string"
+    },
+    "bytes": {
+     "title": "Bytes",
+     "type": "integer"
+    },
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "attempt": {
+     "title": "Attempt",
+     "type": "integer"
+    },
+    "item": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Item"
+    },
+    "produced_at": {
+     "title": "Produced At",
+     "type": "string"
+    },
+    "inputs": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Inputs",
+     "type": "array"
+    },
+    "tool": {
+     "default": "",
+     "title": "Tool",
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "title": "Params",
+     "type": "object"
+    },
+    "version": {
+     "default": 0,
+     "title": "Version",
+     "type": "integer"
+    },
+    "status": {
+     "default": "current",
+     "enum": [
+      "current",
+      "superseded"
+     ],
+     "title": "Status",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "key",
+    "path",
+    "sha256",
+    "bytes",
+    "node",
+    "attempt",
+    "produced_at"
+   ],
+   "title": "ArtifactRecord",
+   "type": "object"
+  },
+  "Assumption": {
+   "additionalProperties": false,
+   "properties": {
+    "text": {
+     "title": "Text",
+     "type": "string"
+    },
+    "status": {
+     "default": "open",
+     "enum": [
+      "open",
+      "confirmed",
+      "rejected"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "evidence": {
+     "default": "",
+     "title": "Evidence",
+     "type": "string"
+    }
+   },
+   "required": [
+    "text"
+   ],
+   "title": "Assumption",
+   "type": "object"
+  },
+  "ChangeRequest": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "doc": {
+     "title": "Doc",
+     "type": "string"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    },
+    "requested_by": {
+     "title": "Requested By",
+     "type": "string"
+    },
+    "status": {
+     "default": "open",
+     "enum": [
+      "open",
+      "approved",
+      "rejected",
+      "applied",
+      "deferred"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "approved_by": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Approved By"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    },
+    "revisit": {
+     "default": "",
+     "title": "Revisit",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "doc",
+    "reason",
+    "requested_by",
+    "at"
+   ],
+   "title": "ChangeRequest",
+   "type": "object"
+  },
+  "CheckpointRef": {
+   "additionalProperties": false,
+   "properties": {
+    "seq": {
+     "title": "Seq",
+     "type": "integer"
+    },
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "event": {
+     "title": "Event",
+     "type": "string"
+    },
+    "node": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Node"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    }
+   },
+   "required": [
+    "seq",
+    "path",
+    "event",
+    "at"
+   ],
+   "title": "CheckpointRef",
+   "type": "object"
+  },
+  "Comparison": {
+   "additionalProperties": false,
+   "properties": {
+    "rework_cycle": {
+     "title": "Rework Cycle",
+     "type": "integer"
+    },
+    "defect_id": {
+     "title": "Defect Id",
+     "type": "string"
+    },
+    "before_version": {
+     "title": "Before Version",
+     "type": "integer"
+    },
+    "after_version": {
+     "title": "After Version",
+     "type": "integer"
+    },
+    "resolved": {
+     "title": "Resolved",
+     "type": "boolean"
+    },
+    "before": {
+     "title": "Before",
+     "type": "string"
+    },
+    "after": {
+     "title": "After",
+     "type": "string"
+    },
+    "artifacts_changed": {
+     "additionalProperties": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": "Artifacts Changed",
+     "type": "object"
+    }
+   },
+   "required": [
+    "rework_cycle",
+    "defect_id",
+    "before_version",
+    "after_version",
+    "resolved",
+    "before",
+    "after"
+   ],
+   "title": "Comparison",
+   "type": "object"
+  },
+  "ControlDocState": {
+   "additionalProperties": false,
+   "properties": {
+    "doc": {
+     "title": "Doc",
+     "type": "string"
+    },
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "status": {
+     "default": "draft",
+     "enum": [
+      "draft",
+      "approved"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "version": {
+     "default": 0,
+     "title": "Version",
+     "type": "integer"
+    },
+    "sha256": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Sha256"
+    },
+    "approved_sha256": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Approved Sha256"
+    },
+    "approved_by": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Approved By"
+    },
+    "approved_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Approved At"
+    },
+    "snapshot": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Snapshot"
+    }
+   },
+   "required": [
+    "doc",
+    "path"
+   ],
+   "title": "ControlDocState",
+   "type": "object"
+  },
+  "Decision": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "text": {
+     "title": "Text",
+     "type": "string"
+    },
+    "by": {
+     "title": "By",
+     "type": "string"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "node",
+    "text",
+    "by",
+    "at"
+   ],
+   "title": "Decision",
+   "type": "object"
+  },
+  "Defect": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "signature": {
+     "title": "Signature",
+     "type": "string"
+    },
+    "severity": {
+     "enum": [
+      "P1",
+      "P2",
+      "P3",
+      "nit"
+     ],
+     "title": "Severity",
+     "type": "string"
+    },
+    "dimension": {
+     "title": "Dimension",
+     "type": "string"
+    },
+    "description": {
+     "title": "Description",
+     "type": "string"
+    },
+    "evidence": {
+     "default": "",
+     "title": "Evidence",
+     "type": "string"
+    },
+    "source": {
+     "title": "Source",
+     "type": "string"
+    },
+    "traced_node": {
+     "title": "Traced Node",
+     "type": "string"
+    },
+    "artifact_key": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Artifact Key"
+    },
+    "smallest_fix": {
+     "default": "",
+     "title": "Smallest Fix",
+     "type": "string"
+    },
+    "acceptance_check": {
+     "default": "",
+     "title": "Acceptance Check",
+     "type": "string"
+    },
+    "status": {
+     "default": "open",
+     "enum": [
+      "open",
+      "in_rework",
+      "resolved",
+      "persisting",
+      "waived"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "needs_human": {
+     "default": false,
+     "title": "Needs Human",
+     "type": "boolean"
+    },
+    "first_seen_version": {
+     "default": 0,
+     "title": "First Seen Version",
+     "type": "integer"
+    },
+    "last_seen_version": {
+     "default": 0,
+     "title": "Last Seen Version",
+     "type": "integer"
+    },
+    "rework_count": {
+     "default": 0,
+     "title": "Rework Count",
+     "type": "integer"
+    },
+    "elements": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Elements",
+     "type": "array"
+    },
+    "human_hold": {
+     "default": "",
+     "title": "Human Hold",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "signature",
+    "severity",
+    "dimension",
+    "description",
+    "source",
+    "traced_node"
+   ],
+   "title": "Defect",
+   "type": "object"
+  },
+  "Deliverable": {
+   "additionalProperties": false,
+   "properties": {
+    "key": {
+     "title": "Key",
+     "type": "string"
+    },
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "sha256": {
+     "title": "Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "key",
+    "path",
+    "sha256"
+   ],
+   "title": "Deliverable",
+   "type": "object"
+  },
+  "Escalation": {
+   "additionalProperties": false,
+   "properties": {
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    },
+    "report": {
+     "title": "Report",
+     "type": "string"
+    },
+    "to": {
+     "title": "To",
+     "type": "string"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    },
+    "resolved": {
+     "default": false,
+     "title": "Resolved",
+     "type": "boolean"
+    },
+    "edge": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Edge"
+    },
+    "edges": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Edges",
+     "type": "array"
+    },
+    "reopened": {
+     "default": "",
+     "title": "Reopened",
+     "type": "string"
+    },
+    "holds": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Holds",
+     "type": "array"
+    }
+   },
+   "required": [
+    "node",
+    "reason",
+    "report",
+    "to",
+    "at"
+   ],
+   "title": "Escalation",
+   "type": "object"
+  },
+  "EvaluationState": {
+   "additionalProperties": false,
+   "properties": {
+    "reviews": {
+     "items": {
+      "$ref": "#/$defs/Review"
+     },
+     "title": "Reviews",
+     "type": "array"
+    },
+    "defects": {
+     "items": {
+      "$ref": "#/$defs/Defect"
+     },
+     "title": "Defects",
+     "type": "array"
+    },
+    "feedback": {
+     "items": {
+      "$ref": "#/$defs/Feedback"
+     },
+     "title": "Feedback",
+     "type": "array"
+    },
+    "gate_results": {
+     "items": {
+      "$ref": "#/$defs/GateResult"
+     },
+     "title": "Gate Results",
+     "type": "array"
+    },
+    "comparisons": {
+     "items": {
+      "$ref": "#/$defs/Comparison"
+     },
+     "title": "Comparisons",
+     "type": "array"
+    }
+   },
+   "title": "EvaluationState",
+   "type": "object"
+  },
+  "Feedback": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "text": {
+     "title": "Text",
+     "type": "string"
+    },
+    "actor": {
+     "title": "Actor",
+     "type": "string"
+    },
+    "at": {
+     "default": "",
+     "title": "At",
+     "type": "string"
+    },
+    "severity": {
+     "default": "",
+     "title": "Severity",
+     "type": "string"
+    },
+    "version": {
+     "default": 0,
+     "title": "Version",
+     "type": "integer"
+    },
+    "created_at": {
+     "title": "Created At",
+     "type": "string"
+    },
+    "status": {
+     "default": "open",
+     "enum": [
+      "open",
+      "interpreted",
+      "triage",
+      "dismissed"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "defect_ids": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Defect Ids",
+     "type": "array"
+    },
+    "no_action_reason": {
+     "default": "",
+     "title": "No Action Reason",
+     "type": "string"
+    },
+    "hold": {
+     "default": "",
+     "title": "Hold",
+     "type": "string"
+    },
+    "triage": {
+     "default": "",
+     "enum": [
+      "",
+      "pending",
+      "accepted",
+      "dismissed"
+     ],
+     "title": "Triage",
+     "type": "string"
+    },
+    "triaged_by": {
+     "default": "",
+     "title": "Triaged By",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "text",
+    "actor",
+    "created_at"
+   ],
+   "title": "Feedback",
+   "type": "object"
+  },
+  "Finding": {
+   "additionalProperties": false,
+   "properties": {
+    "check": {
+     "title": "Check",
+     "type": "string"
+    },
+    "dimension": {
+     "title": "Dimension",
+     "type": "string"
+    },
+    "severity": {
+     "enum": [
+      "P1",
+      "P2",
+      "P3",
+      "nit"
+     ],
+     "title": "Severity",
+     "type": "string"
+    },
+    "message": {
+     "title": "Message",
+     "type": "string"
+    },
+    "evidence": {
+     "default": "",
+     "title": "Evidence",
+     "type": "string"
+    },
+    "traced_node": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Traced Node"
+    },
+    "artifact_key": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Artifact Key"
+    },
+    "smallest_fix": {
+     "default": "",
+     "title": "Smallest Fix",
+     "type": "string"
+    },
+    "level": {
+     "default": "MUST",
+     "enum": [
+      "MUST",
+      "SHOULD"
+     ],
+     "title": "Level",
+     "type": "string"
+    },
+    "element": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Element"
+    }
+   },
+   "required": [
+    "check",
+    "dimension",
+    "severity",
+    "message"
+   ],
+   "title": "Finding",
+   "type": "object"
+  },
+  "GapWaiver": {
+   "additionalProperties": false,
+   "description": "A named human's decision to proceed without resolving an intake gap (recorded by `vpg unblock --waive`).",
+   "properties": {
+    "gap": {
+     "title": "Gap",
+     "type": "string"
+    },
+    "by": {
+     "title": "By",
+     "type": "string"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    }
+   },
+   "required": [
+    "gap",
+    "by",
+    "reason",
+    "at"
+   ],
+   "title": "GapWaiver",
+   "type": "object"
+  },
+  "GateResult": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "version": {
+     "title": "Version",
+     "type": "integer"
+    },
+    "outcome": {
+     "enum": [
+      "pass",
+      "rework",
+      "blocked"
+     ],
+     "title": "Outcome",
+     "type": "string"
+    },
+    "reasons": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Reasons",
+     "type": "array"
+    },
+    "open_blocking": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Open Blocking",
+     "type": "array"
+    },
+    "created_at": {
+     "title": "Created At",
+     "type": "string"
+    },
+    "trend": {
+     "anyOf": [
+      {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Trend"
+    }
+   },
+   "required": [
+    "id",
+    "node",
+    "version",
+    "outcome",
+    "reasons",
+    "created_at"
+   ],
+   "title": "GateResult",
+   "type": "object"
+  },
+  "Grant": {
+   "additionalProperties": false,
+   "description": "A named human's delegation of named human-only actions to one agent, until a date (v1.7, #18). An action taken under\nit is recorded as the agent's, with the grant and its grantor, never as the human's.",
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "grantor": {
+     "title": "Grantor",
+     "type": "string"
+    },
+    "grantee": {
+     "title": "Grantee",
+     "type": "string"
+    },
+    "actions": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Actions",
+     "type": "array"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    },
+    "expires": {
+     "title": "Expires",
+     "type": "string"
+    },
+    "revoked_at": {
+     "default": "",
+     "title": "Revoked At",
+     "type": "string"
+    },
+    "revoked_by": {
+     "default": "",
+     "title": "Revoked By",
+     "type": "string"
+    },
+    "revoke_reason": {
+     "default": "",
+     "title": "Revoke Reason",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "grantor",
+    "grantee",
+    "actions",
+    "reason",
+    "at",
+    "expires"
+   ],
+   "title": "Grant",
+   "type": "object"
+  },
+  "HistoryState": {
+   "additionalProperties": false,
+   "properties": {
+    "versions": {
+     "items": {
+      "$ref": "#/$defs/VersionRecord"
+     },
+     "title": "Versions",
+     "type": "array"
+    },
+    "decisions": {
+     "items": {
+      "$ref": "#/$defs/Decision"
+     },
+     "title": "Decisions",
+     "type": "array"
+    },
+    "approvals": {
+     "items": {
+      "$ref": "#/$defs/Approval"
+     },
+     "title": "Approvals",
+     "type": "array"
+    },
+    "retries": {
+     "items": {
+      "$ref": "#/$defs/RetryRecord"
+     },
+     "title": "Retries",
+     "type": "array"
+    },
+    "checkpoints": {
+     "items": {
+      "$ref": "#/$defs/CheckpointRef"
+     },
+     "title": "Checkpoints",
+     "type": "array"
+    },
+    "change_requests": {
+     "items": {
+      "$ref": "#/$defs/ChangeRequest"
+     },
+     "title": "Change Requests",
+     "type": "array"
+    },
+    "grants": {
+     "items": {
+      "$ref": "#/$defs/Grant"
+     },
+     "title": "Grants",
+     "type": "array"
+    }
+   },
+   "title": "HistoryState",
+   "type": "object"
+  },
+  "ImmutableInputs": {
+   "additionalProperties": false,
+   "properties": {
+    "brief": {
+     "default": "",
+     "title": "Brief",
+     "type": "string"
+    },
+    "sources": {
+     "items": {
+      "$ref": "#/$defs/SourceRef"
+     },
+     "title": "Sources",
+     "type": "array"
+    },
+    "constraints": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Constraints",
+     "type": "array"
+    },
+    "waivers": {
+     "items": {
+      "$ref": "#/$defs/GapWaiver"
+     },
+     "title": "Waivers",
+     "type": "array"
+    },
+    "frozen": {
+     "default": false,
+     "title": "Frozen",
+     "type": "boolean"
+    },
+    "frozen_sha256": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Frozen Sha256"
+    },
+    "frozen_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Frozen At"
+    }
+   },
+   "title": "ImmutableInputs",
+   "type": "object"
+  },
+  "ItemRuntime": {
+   "additionalProperties": false,
+   "properties": {
+    "status": {
+     "$ref": "#/$defs/NodeStatus",
+     "default": "PLANNED"
+    },
+    "attempts": {
+     "default": 0,
+     "title": "Attempts",
+     "type": "integer"
+    },
+    "fingerprint": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Fingerprint"
+    },
+    "outputs": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Outputs",
+     "type": "object"
+    }
+   },
+   "title": "ItemRuntime",
+   "type": "object"
+  },
+  "KnowledgeRef": {
+   "additionalProperties": false,
+   "properties": {
+    "rules_path": {
+     "title": "Rules Path",
+     "type": "string"
+    },
+    "rules_version": {
+     "title": "Rules Version",
+     "type": "string"
+    },
+    "rules_sha256": {
+     "title": "Rules Sha256",
+     "type": "string"
+    },
+    "enforced": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Enforced",
+     "type": "array"
+    },
+    "advisory": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Advisory",
+     "type": "array"
+    },
+    "proposals": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Proposals",
+     "type": "array"
+    }
+   },
+   "required": [
+    "rules_path",
+    "rules_version",
+    "rules_sha256"
+   ],
+   "title": "KnowledgeRef",
+   "type": "object"
+  },
+  "NodeRuntime": {
+   "additionalProperties": false,
+   "properties": {
+    "status": {
+     "$ref": "#/$defs/NodeStatus",
+     "default": "PLANNED"
+    },
+    "attempts": {
+     "default": 0,
+     "title": "Attempts",
+     "type": "integer"
+    },
+    "fail_streak": {
+     "default": 0,
+     "title": "Fail Streak",
+     "type": "integer"
+    },
+    "executions": {
+     "default": 0,
+     "title": "Executions",
+     "type": "integer"
+    },
+    "memo_hits": {
+     "default": 0,
+     "title": "Memo Hits",
+     "type": "integer"
+    },
+    "outcome": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Outcome"
+    },
+    "result_data": {
+     "additionalProperties": true,
+     "title": "Result Data",
+     "type": "object"
+    },
+    "fingerprint": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Fingerprint"
+    },
+    "last_pass_fingerprint": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Last Pass Fingerprint"
+    },
+    "command_code": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Command Code",
+     "type": "object"
+    },
+    "fingerprint_scheme": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Fingerprint Scheme"
+    },
+    "settled_fingerprint": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Settled Fingerprint"
+    },
+    "last_pass_scheme": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Last Pass Scheme"
+    },
+    "dispatch_token": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Dispatch Token"
+    },
+    "task_packet": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Task Packet"
+    },
+    "started_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Started At"
+    },
+    "finished_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Finished At"
+    },
+    "failures": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Failures",
+     "type": "array"
+    },
+    "pre_findings": {
+     "items": {
+      "$ref": "#/$defs/Finding"
+     },
+     "title": "Pre Findings",
+     "type": "array"
+    },
+    "rework_defects": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Rework Defects",
+     "type": "array"
+    },
+    "items": {
+     "additionalProperties": {
+      "$ref": "#/$defs/ItemRuntime"
+     },
+     "title": "Items",
+     "type": "object"
+    },
+    "traversals": {
+     "additionalProperties": {
+      "type": "integer"
+     },
+     "title": "Traversals",
+     "type": "object"
+    },
+    "interruptions": {
+     "default": 0,
+     "title": "Interruptions",
+     "type": "integer"
+    },
+    "force_rerun": {
+     "default": false,
+     "title": "Force Rerun",
+     "type": "boolean"
+    },
+    "executed": {
+     "default": false,
+     "title": "Executed",
+     "type": "boolean"
+    },
+    "rechecks": {
+     "default": 0,
+     "title": "Rechecks",
+     "type": "integer"
+    },
+    "preflight": {
+     "anyOf": [
+      {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Preflight"
+    },
+    "preflight_revisions": {
+     "default": 0,
+     "title": "Preflight Revisions",
+     "type": "integer"
+    },
+    "command_code_at_run": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Command Code At Run",
+     "type": "object"
+    },
+    "self_written_code": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Self Written Code",
+     "type": "object"
+    }
+   },
+   "title": "NodeRuntime",
+   "type": "object"
+  },
+  "NodeStatus": {
+   "enum": [
+    "PLANNED",
+    "READY",
+    "RUNNING",
+    "WAITING_RUNTIME",
+    "WAITING_HUMAN",
+    "VALIDATING",
+    "STEP_PASS",
+    "ITERATE",
+    "STALE",
+    "BLOCKED",
+    "CANCELLED"
+   ],
+   "title": "NodeStatus",
+   "type": "string"
+  },
+  "ProductionState": {
+   "additionalProperties": false,
+   "properties": {
+    "objective": {
+     "default": "",
+     "title": "Objective",
+     "type": "string"
+    },
+    "audience": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Audience",
+     "type": "array"
+    },
+    "business_context": {
+     "default": "",
+     "title": "Business Context",
+     "type": "string"
+    },
+    "product_context": {
+     "default": "",
+     "title": "Product Context",
+     "type": "string"
+    },
+    "assumptions": {
+     "items": {
+      "$ref": "#/$defs/Assumption"
+     },
+     "title": "Assumptions",
+     "type": "array"
+    },
+    "open_questions": {
+     "items": {
+      "$ref": "#/$defs/Question"
+     },
+     "title": "Open Questions",
+     "type": "array"
+    },
+    "brief_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Brief Ref"
+    },
+    "product_truth_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Product Truth Ref"
+    },
+    "concepts_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Concepts Ref"
+    },
+    "creative_decision_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Creative Decision Ref"
+    },
+    "narrative_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Narrative Ref"
+    },
+    "script_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Script Ref"
+    },
+    "storyboard_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Storyboard Ref"
+    },
+    "shotlist_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Shotlist Ref"
+    },
+    "scenes": {
+     "items": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "title": "Scenes",
+     "type": "array"
+    },
+    "product_requirements": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Product Requirements",
+     "type": "array"
+    },
+    "design_system_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Design System Ref"
+    },
+    "visual_references": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Visual References",
+     "type": "array"
+    },
+    "asset_plan_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Asset Plan Ref"
+    },
+    "asset_plan": {
+     "items": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "title": "Asset Plan",
+     "type": "array"
+    },
+    "asset_registry": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Asset Registry",
+     "type": "object"
+    },
+    "audio_spec": {
+     "additionalProperties": true,
+     "title": "Audio Spec",
+     "type": "object"
+    },
+    "voice_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Voice Ref"
+    },
+    "timings_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Timings Ref"
+    },
+    "scenes_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Scenes Ref"
+    },
+    "text_layers_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Text Layers Ref"
+    },
+    "master_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Master Ref"
+    },
+    "captions_ref": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Captions Ref"
+    },
+    "config": {
+     "additionalProperties": true,
+     "title": "Config",
+     "type": "object"
+    },
+    "refs": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Refs",
+     "type": "object"
+    }
+   },
+   "title": "ProductionState",
+   "type": "object"
+  },
+  "ProjectMeta": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "name": {
+     "title": "Name",
+     "type": "string"
+    },
+    "created_at": {
+     "title": "Created At",
+     "type": "string"
+    },
+    "workflow_id": {
+     "title": "Workflow Id",
+     "type": "string"
+    },
+    "workflow_version": {
+     "title": "Workflow Version",
+     "type": "string"
+    },
+    "workflow_sha256": {
+     "title": "Workflow Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "created_at",
+    "workflow_id",
+    "workflow_version",
+    "workflow_sha256"
+   ],
+   "title": "ProjectMeta",
+   "type": "object"
+  },
+  "Question": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "text": {
+     "title": "Text",
+     "type": "string"
+    },
+    "blocking": {
+     "default": false,
+     "title": "Blocking",
+     "type": "boolean"
+    },
+    "owner": {
+     "default": "Wei",
+     "title": "Owner",
+     "type": "string"
+    },
+    "status": {
+     "default": "open",
+     "enum": [
+      "open",
+      "answered",
+      "waived"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "answer": {
+     "default": "",
+     "title": "Answer",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "text"
+   ],
+   "title": "Question",
+   "type": "object"
+  },
+  "RetryRecord": {
+   "additionalProperties": false,
+   "properties": {
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "attempt": {
+     "title": "Attempt",
+     "type": "integer"
+    },
+    "reasons": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Reasons",
+     "type": "array"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    }
+   },
+   "required": [
+    "node",
+    "attempt",
+    "reasons",
+    "at"
+   ],
+   "title": "RetryRecord",
+   "type": "object"
+  },
+  "Review": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "version": {
+     "title": "Version",
+     "type": "integer"
+    },
+    "reviewer": {
+     "title": "Reviewer",
+     "type": "string"
+    },
+    "rubric_ids": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Rubric Ids",
+     "type": "array"
+    },
+    "scores": {
+     "items": {
+      "$ref": "#/$defs/Score"
+     },
+     "title": "Scores",
+     "type": "array"
+    },
+    "tool_findings": {
+     "items": {
+      "$ref": "#/$defs/Finding"
+     },
+     "title": "Tool Findings",
+     "type": "array"
+    },
+    "defect_ids": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Defect Ids",
+     "type": "array"
+    },
+    "verdict": {
+     "enum": [
+      "pass",
+      "fail"
+     ],
+     "title": "Verdict",
+     "type": "string"
+    },
+    "overridden_agent_passes": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Overridden Agent Passes",
+     "type": "array"
+    },
+    "pending_human": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Pending Human",
+     "type": "array"
+    },
+    "carried_forward": {
+     "default": false,
+     "title": "Carried Forward",
+     "type": "boolean"
+    },
+    "created_at": {
+     "title": "Created At",
+     "type": "string"
+    },
+    "actor": {
+     "default": "",
+     "title": "Actor",
+     "type": "string"
+    },
+    "inputs": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Inputs",
+     "type": "object"
+    },
+    "reviewed": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Reviewed",
+     "type": "object"
+    },
+    "independent": {
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Independent"
+    }
+   },
+   "required": [
+    "id",
+    "node",
+    "version",
+    "reviewer",
+    "rubric_ids",
+    "verdict",
+    "created_at"
+   ],
+   "title": "Review",
+   "type": "object"
+  },
+  "RunStatus": {
+   "enum": [
+    "RUNNING",
+    "WAITING_RUNTIME",
+    "WAITING_HUMAN",
+    "BLOCKED",
+    "RUN_PASS"
+   ],
+   "title": "RunStatus",
+   "type": "string"
+  },
+  "RuntimeState": {
+   "additionalProperties": false,
+   "properties": {
+    "run_id": {
+     "title": "Run Id",
+     "type": "string"
+    },
+    "status": {
+     "$ref": "#/$defs/RunStatus",
+     "default": "RUNNING"
+    },
+    "nodes": {
+     "additionalProperties": {
+      "$ref": "#/$defs/NodeRuntime"
+     },
+     "title": "Nodes",
+     "type": "object"
+    },
+    "sequence": {
+     "default": 0,
+     "title": "Sequence",
+     "type": "integer"
+    },
+    "rework_cycles": {
+     "default": 0,
+     "title": "Rework Cycles",
+     "type": "integer"
+    },
+    "defect_failures": {
+     "additionalProperties": {
+      "type": "integer"
+     },
+     "title": "Defect Failures",
+     "type": "object"
+    },
+    "escalations": {
+     "items": {
+      "$ref": "#/$defs/Escalation"
+     },
+     "title": "Escalations",
+     "type": "array"
+    },
+    "current_version": {
+     "default": 0,
+     "title": "Current Version",
+     "type": "integer"
+    },
+    "dry_run": {
+     "default": false,
+     "title": "Dry Run",
+     "type": "boolean"
+    },
+    "batches": {
+     "items": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": "Batches",
+     "type": "array"
+    },
+    "resumes": {
+     "default": 0,
+     "title": "Resumes",
+     "type": "integer"
+    },
+    "config_sha256": {
+     "default": "",
+     "title": "Config Sha256",
+     "type": "string"
+    },
+    "pending_ledger": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Pending Ledger",
+     "type": "array"
+    },
+    "ledger_tail": {
+     "items": {},
+     "title": "Ledger Tail",
+     "type": "array"
+    },
+    "ledger_breaks": {
+     "items": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "title": "Ledger Breaks",
+     "type": "array"
+    },
+    "config_parts": {
+     "additionalProperties": true,
+     "title": "Config Parts",
+     "type": "object"
+    },
+    "loop_extra": {
+     "additionalProperties": {
+      "type": "integer"
+     },
+     "title": "Loop Extra",
+     "type": "object"
+    },
+    "rework_extra": {
+     "default": 0,
+     "title": "Rework Extra",
+     "type": "integer"
+    },
+    "grant_versions": {
+     "additionalProperties": {
+      "type": "integer"
+     },
+     "title": "Grant Versions",
+     "type": "object"
+    }
+   },
+   "required": [
+    "run_id"
+   ],
+   "title": "RuntimeState",
+   "type": "object"
+  },
+  "Score": {
+   "additionalProperties": false,
+   "properties": {
+    "dimension": {
+     "title": "Dimension",
+     "type": "string"
+    },
+    "score": {
+     "title": "Score",
+     "type": "number"
+    },
+    "threshold": {
+     "title": "Threshold",
+     "type": "number"
+    },
+    "level": {
+     "default": "MUST",
+     "enum": [
+      "MUST",
+      "SHOULD"
+     ],
+     "title": "Level",
+     "type": "string"
+    },
+    "passed": {
+     "title": "Passed",
+     "type": "boolean"
+    },
+    "evidence": {
+     "default": "",
+     "title": "Evidence",
+     "type": "string"
+    }
+   },
+   "required": [
+    "dimension",
+    "score",
+    "threshold",
+    "passed"
+   ],
+   "title": "Score",
+   "type": "object"
+  },
+  "SourceRef": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "kind": {
+     "title": "Kind",
+     "type": "string"
+    },
+    "evidence": {
+     "enum": [
+      "observed",
+      "reported",
+      "assumed"
+     ],
+     "title": "Evidence",
+     "type": "string"
+    },
+    "sha256": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Sha256"
+    },
+    "bytes": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Bytes"
+    },
+    "confidential": {
+     "default": false,
+     "title": "Confidential",
+     "type": "boolean"
+    },
+    "notes": {
+     "default": "",
+     "title": "Notes",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "path",
+    "kind",
+    "evidence"
+   ],
+   "title": "SourceRef",
+   "type": "object"
+  },
+  "VersionRecord": {
+   "additionalProperties": false,
+   "properties": {
+    "version": {
+     "title": "Version",
+     "type": "integer"
+    },
+    "created_at": {
+     "title": "Created At",
+     "type": "string"
+    },
+    "node_attempt": {
+     "title": "Node Attempt",
+     "type": "string"
+    },
+    "artifacts": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Artifacts",
+     "type": "object"
+    }
+   },
+   "required": [
+    "version",
+    "created_at",
+    "node_attempt",
+    "artifacts"
+   ],
+   "title": "VersionRecord",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "properties": {
+  "schema_version": {
+   "const": "vpg-state/v1",
+   "default": "vpg-state/v1",
+   "title": "Schema Version",
+   "type": "string"
+  },
+  "project": {
+   "$ref": "#/$defs/ProjectMeta"
+  },
+  "inputs": {
+   "$ref": "#/$defs/ImmutableInputs"
+  },
+  "production": {
+   "$ref": "#/$defs/ProductionState"
+  },
+  "artifacts": {
+   "additionalProperties": {
+    "$ref": "#/$defs/ArtifactRecord"
+   },
+   "title": "Artifacts",
+   "type": "object"
+  },
+  "evaluation": {
+   "$ref": "#/$defs/EvaluationState"
+  },
+  "history": {
+   "$ref": "#/$defs/HistoryState"
+  },
+  "controls": {
+   "additionalProperties": {
+    "$ref": "#/$defs/ControlDocState"
+   },
+   "title": "Controls",
+   "type": "object"
+  },
+  "knowledge": {
+   "$ref": "#/$defs/KnowledgeRef"
+  },
+  "runtime": {
+   "$ref": "#/$defs/RuntimeState"
+  },
+  "deliverables": {
+   "items": {
+    "$ref": "#/$defs/Deliverable"
+   },
+   "title": "Deliverables",
+   "type": "array"
+  }
+ },
+ "required": [
+  "project",
+  "knowledge",
+  "runtime"
+ ],
+ "title": "ProjectState",
+ "type": "object"
+}

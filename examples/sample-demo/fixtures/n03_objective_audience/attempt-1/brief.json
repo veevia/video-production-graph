@@ -1,0 +1,19 @@
+{
+ "objective": "A first-time viewer can say, within 20 seconds, that the monitor flags unusual water use per plant and shows a seven-day outlook.",
+ "audience": [
+  "plant managers",
+  "operations director"
+ ],
+ "business_context": "Unusual water use is found too late to act on.",
+ "success_criteria": [
+  "viewer can name the water-use signal",
+  "viewer can say the outlook is based on the production plan",
+  "runtime ≤ 20 s",
+  "never uses the word 'predicts'"
+ ],
+ "runtime_target_s": 16,
+ "runtime_max_s": 20,
+ "constraints": [
+  "synthetic data tagged on screen"
+ ]
+}

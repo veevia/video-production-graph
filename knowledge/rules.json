@@ -1,0 +1,3593 @@
+{
+ "schema": "vpg-rules/v1",
+ "version": "1.0",
+ "updated": "2026-09-26",
+ "note": "Governed cross-project rule base. Lifecycle and gates: vpg/memory.py. Seeded from knowledge/case-studies/platform-film-2026-09 (evidence ids = history iterations; wei:Mx = Wei's recovered messages).",
+ "protected_scopes": [
+  "product_truth",
+  "objective",
+  "brand_constraints",
+  "approved_design_principles"
+ ],
+ "categories": [
+  "design_principles",
+  "creative_narrative_preferences",
+  "craft_quality",
+  "legibility_accessibility",
+  "visual_consistency_detail",
+  "voice_sound_pacing_transitions",
+  "storytelling_product_demos",
+  "recurring_failure_patterns",
+  "effective_corrective_actions",
+  "production_defaults",
+  "project_specific_decisions"
+ ],
+ "rules": [
+  {
+   "id": "R-PRO-001",
+   "statement": "Never stop after one production round: keep the produce→critique→fix loop running until every gate passes or a genuine blocker is reported.",
+   "category": "production_defaults",
+   "scope": "production_default",
+   "origin": "Wei: 'you should not stop when you just finish one round of production'",
+   "check": {
+    "type": "tool",
+    "fn": "engine:review_gate",
+    "test": "tests/test_engine.py::test_targeted_rework_cycle"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R05-pass-01",
+    "R06-e2e-v04",
+    "R07-v10",
+    "wei:M2",
+    "wei:M5.7"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R05-pass-01"
+      ],
+      "reason": "Wei: 'you should not stop when you just finish one round of production'"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R05-pass-01",
+       "R06-e2e-v04",
+       "R07-v10",
+       "wei:M5.7",
+       "wei:M2"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_targeted_rework_cycle"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 7"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: engine"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-002",
+   "statement": "Machine QA and critic READY are never human approval: human listening, taste and release are separate named decisions, and dry-run approvals are labelled not human.",
+   "category": "recurring_failure_patterns",
+   "scope": "production_default",
+   "origin": "R01 quality contract: technical_pass_is_visual_pass=false; human_release_approval_required=true",
+   "check": {
+    "type": "tool",
+    "fn": "engine:decide",
+    "test": "tests/test_engine.py::test_human_gate_requires_named_human"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R01-v01",
+    "R02-v02-candidates",
+    "R05-pass-02",
+    "R06-e2e-v07",
+    "R07-v07",
+    "R07-v15"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R01-v01"
+      ],
+      "reason": "R01 quality contract: technical_pass_is_visual_pass=false; human_release_approval_required=true"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R01-v01",
+       "R02-v02-candidates",
+       "R05-pass-02",
+       "R06-e2e-v07",
+       "R07-v07",
+       "R07-v15"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_human_gate_requires_named_human"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 release gates ('final output feels polished enough…' is Wei's call)"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: engine"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-003",
+   "statement": "Freeze and hash the source evidence before rendering; if sources drift, re-render from the frozen sources instead of weakening the test.",
+   "category": "effective_corrective_actions",
+   "scope": "production_default",
+   "origin": "R02: rerendered after source-lineage drift",
+   "check": {
+    "type": "tool",
+    "fn": "engine:_integrity_problems",
+    "test": "tests/test_engine.py::test_frozen_inputs_are_immutable"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R02-v02-candidates",
+    "R04-v01"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R02-v02-candidates"
+      ],
+      "reason": "R02: rerendered after source-lineage drift"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R02-v02-candidates",
+       "R04-v01"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_frozen_inputs_are_immutable"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-PRO-004",
+   "statement": "Prove a change on one 10–15 s clip with real assets before batching it across the film.",
+   "category": "production_defaults",
+   "scope": "production_default",
+   "origin": "R01 scene01 proof; Wei's shotcraft handoff: 'the next proof is a 10–15 s continuity/voice test, not a restart'",
+   "check": {
+    "type": "review",
+    "never": [
+     "Batch a new look, voice or motion rule across every chapter before a single-clip proof"
+    ],
+    "always": [
+     "Render a 10–15 s actual-asset proof and review it first"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R01-v02-scene01",
+    "wei:M3"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R01-v02-scene01"
+      ],
+      "reason": "R01 scene01 proof; Wei's shotcraft handoff: 'the next proof is a 10–15 s continuity/voice test, not a restart'"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R01-v02-scene01",
+       "wei:M3"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M3 (R06): video-shotcraft handoff guidance"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: engine"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-005",
+   "statement": "Preserve every rejected version with its failure evidence; replace a strong element only when the new one is demonstrably better.",
+   "category": "production_defaults",
+   "scope": "production_default",
+   "origin": "R04/R05 lessons",
+   "check": {
+    "type": "tool",
+    "fn": "engine:_commit_outputs (superseded, never deleted)",
+    "test": "tests/test_engine.py::test_lineage_and_superseded_artifacts"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R04-v01",
+    "R05-pass-01",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R04-v01"
+      ],
+      "reason": "R04/R05 lessons"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R04-v01",
+       "R05-pass-01",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_lineage_and_superseded_artifacts"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) ('Preserve useful assets from earlier rounds')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: engine"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-006",
+   "statement": "The runtime cap is a hard constraint: cut words and holds, never evidence the viewer needs, and never speed up the voice.",
+   "category": "production_defaults",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "pacing:estimate_script",
+    "test": "tests/test_tools.py::test_runtime_estimate_blocks_over_cap"
+   },
+   "threshold": "brief.runtime_max_s",
+   "rubric_dimensions": [
+    "PAC-RUNTIME",
+    "TEC-DURATION"
+   ],
+   "evidence": [
+    "R05-pass-01",
+    "R05-pass-02",
+    "wei:M2",
+    "wei:M4"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R05-pass-01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R05-pass-01",
+       "R05-pass-02",
+       "wei:M2",
+       "wei:M4"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_runtime_estimate_blocks_over_cap"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M2 (R05): review the demo, target ≤2:00, run a loop; Wei M4 (R06): iterate through rubrics and critique, cap 2:30"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: PAC-RUNTIME, TEC-DURATION"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-007",
+   "statement": "Every version is reviewed on its own rendered evidence by an independent critic through the project's review lenses; an earlier READY never survives new rejection.",
+   "category": "recurring_failure_patterns",
+   "scope": "production_default",
+   "origin": "R07-v04 was a self-audited intermediate with no critic row",
+   "check": {
+    "type": "tool",
+    "fn": "evaluation:gate (reviews must be current-version)",
+    "test": "tests/test_engine.py::test_gate_blocks_without_current_reviews"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "CRE-LENSES"
+   ],
+   "evidence": [
+    "R06-e2e-v01",
+    "R06-e2e-v03",
+    "R06-e2e-v04",
+    "R06-e2e-v05",
+    "R06-e2e-v06",
+    "R07-v04",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v01"
+      ],
+      "reason": "R07-v04 was a self-audited intermediate with no critic row"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v01",
+       "R06-e2e-v03",
+       "R06-e2e-v04",
+       "R06-e2e-v05",
+       "R06-e2e-v06",
+       "R07-v04",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_gate_blocks_without_current_reviews"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §7F"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: CRE-LENSES"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-008",
+   "statement": "Scope each rework to the exact critic findings and re-run only what they trace to; never restart broadly.",
+   "category": "effective_corrective_actions",
+   "scope": "production_default",
+   "origin": "Round 07 critic loop",
+   "check": {
+    "type": "tool",
+    "fn": "regen:plan",
+    "test": "tests/test_engine.py::test_targeted_rework_cycle"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R07-v01",
+    "R07-v02",
+    "R07-v05",
+    "R07-v13",
+    "R07-v14"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": "Round 07 critic loop"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "R07-v02",
+       "R07-v05",
+       "R07-v13",
+       "R07-v14"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_targeted_rework_cycle"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §8 ('re-run only the affected node')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: engine"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-VOI-001",
+   "statement": "The narrator is an adult tech professional with a warm, confident storytelling read; never a child-like or youthful voice.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "human",
+    "never": [
+     "Ship a take a listener could describe as child-like, cartoonish or youthful"
+    ],
+    "always": [
+     "Record age=adult and the delivery in voice-direction.json",
+     "Request Wei's listening sign-off"
+    ],
+    "test": "tests/test_tools.py::test_voice_direction_requires_adult"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "VOI-ADULT"
+   ],
+   "evidence": [
+    "R06-e2e-v03",
+    "R06-e2e-v04",
+    "wei:M5.1",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v03"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v03",
+       "R06-e2e-v04",
+       "wei:M5.1",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_voice_direction_requires_adult"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 1; Wei M6 (Round 07 brief §1–7, release gates) §1"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: VOI-ADULT"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-VOI-002",
+   "statement": "No stutter, dropped word, clipped ending or seam: every script unit is spoken in order, and mixing never attenuates inside speech by more than a 6 dB breath dip.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "audio:check_voice",
+    "test": "tests/test_tools.py::test_voice_check_catches_dropped_unit"
+   },
+   "threshold": "max_speech_dip_db 6",
+   "rubric_dimensions": [
+    "VOI-COMPLETE"
+   ],
+   "evidence": [
+    "R07-v01",
+    "R07-v07",
+    "wei:M6",
+    "wei:M7.P5"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "R07-v07",
+       "wei:M6",
+       "wei:M7.P5"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_voice_check_catches_dropped_unit"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M7 (Round 07 final loop P1–P6) P5; Wei M6 (Round 07 brief §1–7, release gates) §1"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: VOI-COMPLETE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-VOI-003",
+   "statement": "Pronunciation is verified per product term; if a term is misheard in most takes, rephrase the line instead of shipping the error.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "R07: 'versioned' heard as 'version' in 8/8 takes → rephrased",
+   "check": {
+    "type": "review",
+    "never": [
+     "Keep a product term that ASR mishears in most takes"
+    ],
+    "always": [
+     "List product terms and their expected pronunciation in voice-direction.json"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "VOI-PRONUNCIATION"
+   ],
+   "evidence": [
+    "R07-v08",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v08"
+      ],
+      "reason": "R07: 'versioned' heard as 'version' in 8/8 takes → rephrased"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v08",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §1 ('clean pronunciation')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: VOI-PRONUNCIATION"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-AUD-001",
+   "statement": "Deliver at −16 LUFS integrated (±1) with true peak ≤ −1 dBTP, measured on the encoded master.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "media:technical_qa",
+    "test": "tests/test_tools.py::test_technical_qa_on_real_media"
+   },
+   "threshold": "-16 LUFS ±1; TP ≤ -1 dBTP",
+   "rubric_dimensions": [
+    "TEC-LOUDNESS"
+   ],
+   "evidence": [
+    "R07-v07",
+    "R07-v15",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v07"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v07",
+       "R07-v15",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_technical_qa_on_real_media"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §4 (level balancing)"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: TEC-LOUDNESS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-AUD-002",
+   "statement": "Music supports the voice: look-ahead ducking under speech, no competing phrases, no abrupt cuts; voice over music p10 ≥ 16 LU.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "human",
+    "never": [
+     "Let music phrases compete with narration",
+     "Cut music abruptly at a seam"
+    ],
+    "always": [
+     "Duck under speech",
+     "Test several directions before choosing"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "CRE-MUSIC"
+   ],
+   "evidence": [
+    "R07-v07",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v07"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v07",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §4"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: CRE-MUSIC"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-AUD-003",
+   "statement": "Every silence longer than 1.5 s is a planned pause; unexplained silence is a defect.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "media:technical_qa",
+    "test": "tests/test_tools.py::test_technical_qa_flags_unexplained_silence"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "TEC-SILENCE"
+   ],
+   "evidence": [
+    "R07-v01",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_technical_qa_flags_unexplained_silence"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §1 ('unexplained silence')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: TEC-SILENCE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-CAP-001",
+   "statement": "Captions are speech-locked: never after the first spoken word; mid-sentence lead ≤ 0.20 s; sentence-first lead ≤ 0.45 s into cleared time; never clear > 0.10 s before the last word.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "r07-v13→v15 critic rounds",
+   "check": {
+    "type": "tool",
+    "fn": "captions:sync",
+    "test": "tests/test_tools.py::test_caption_sync_detects_lag_and_early_clear"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "ACC-CAPTIONS"
+   ],
+   "evidence": [
+    "R07-v13",
+    "R07-v14",
+    "R07-v15",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v13"
+      ],
+      "reason": "r07-v13→v15 critic rounds"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v13",
+       "R07-v14",
+       "R07-v15",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_caption_sync_detects_lag_and_early_clear"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §1 (voice/visual synchronisation)"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: ACC-CAPTIONS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-CAP-002",
+   "statement": "Caption reading rate ≤ 20 characters/s and each cue ≥ 0.8 s.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "captions:sync",
+    "test": "tests/test_tools.py::test_caption_sync_detects_lag_and_early_clear"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "ACC-CAPTIONS"
+   ],
+   "evidence": [
+    "R07-v06",
+    "R07-v15",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v06"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v06",
+       "R07-v15",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_caption_sync_detects_lag_and_early_clear"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6 ('sufficient reading time')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: ACC-CAPTIONS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-001",
+   "statement": "Critical text is ≥ 22 px at 1080p.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "22 px",
+   "rubric_dimensions": [
+    "LEG-SIZE"
+   ],
+   "evidence": [
+    "R03-v01",
+    "R07-v01",
+    "wei:M6",
+    "wei:M9"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R03-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R03-v01",
+       "R07-v01",
+       "wei:M6",
+       "wei:M9"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6; Wei M9 (this workflow brief §2: convert feedback into testable rules) ('diagrams difficult to read')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-SIZE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-002",
+   "statement": "Text contrast ≥ 4.5:1 (≥ 3:1 for large text), using only approved text/background pairs.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "WCAG 1.4.3",
+   "rubric_dimensions": [
+    "LEG-CONTRAST"
+   ],
+   "evidence": [
+    "R07-v01",
+    "R07-v15",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "R07-v15",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-CONTRAST"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-003",
+   "statement": "Every text is on screen at least max(1.0 s, 0.24 s × words).",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-DWELL",
+    "PAC-READ"
+   ],
+   "evidence": [
+    "R06-e2e-v02",
+    "R07-v08",
+    "R07-v09",
+    "R07-v12",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v02"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v02",
+       "R07-v08",
+       "R07-v09",
+       "R07-v12",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-DWELL, PAC-READ"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-004",
+   "statement": "Essential content stays inside the title-safe area (x 96–1824 at 1920 wide).",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-SAFE"
+   ],
+   "evidence": [
+    "R07-v08",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v08"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v08",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6 ('safe margins')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-SAFE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-005",
+   "statement": "Nothing essential sits in the caption band (below y 900) while captions are on.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-SAFE"
+   ],
+   "evidence": [
+    "R07-v02",
+    "R07-v12",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v02"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v02",
+       "R07-v12",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-SAFE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-006",
+   "statement": "No ghost text: de-emphasised text steps down to a solid grey token, never partial opacity.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-GHOST"
+   ],
+   "evidence": [
+    "R07-v08",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v08"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v08",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6 ('strong contrast')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-GHOST"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-LEG-007",
+   "statement": "No more than 3 flashes in any second; colour is never the only carrier of meaning.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check",
+    "test": "tests/test_tools.py::test_flash_detection"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-FLASH",
+    "LEG-COLOR-CUE"
+   ],
+   "evidence": [
+    "R07-v01",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_flash_detection"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §6 ('avoid fast flashing'; 'colour is not the only way')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-FLASH, LEG-COLOR-CUE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-DEN-001",
+   "statement": "One primary message per frame: introduce entities progressively on their spoken cue; avoid dense node graphs, simultaneous animations, tiny labels and excess connectors.",
+   "category": "design_principles",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check (density)",
+    "test": "tests/test_tools.py::test_density_limit",
+    "never": [
+     "Show the whole system at once",
+     "Animate several groups simultaneously"
+    ],
+    "always": [
+     "Reveal one idea per spoken cue"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-DENSITY",
+    "CRE-ONE-MESSAGE"
+   ],
+   "evidence": [
+    "R03-v01",
+    "R04-v01",
+    "R06-e2e-v04",
+    "R07-v10",
+    "R07-v11",
+    "wei:M6",
+    "wei:M7.P1",
+    "wei:M7.P2"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R03-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R03-v01",
+       "R04-v01",
+       "R06-e2e-v04",
+       "R07-v10",
+       "R07-v11",
+       "wei:M7.P1",
+       "wei:M7.P2",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_density_limit"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M7 (Round 07 final loop P1–P6) P1/P2; Wei M6 (Round 07 brief §1–7, release gates) §3"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: LEG-DENSITY, CRE-ONE-MESSAGE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "calibration": "Requirement approved by Wei; the numeric threshold was validated on Round 07 audits and the critic, not yet calibrated against Wei's own eye. The 8-text-elements cap is a first estimate.",
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-DES-001",
+   "statement": "Bookends are minimal and iconic: bold caps type on the brand's primary field with white type, strong hierarchy, and the supplied partner logos on the opening and closing.",
+   "category": "design_principles",
+   "scope": "production_default",
+   "origin": "The brand colour itself is project-specific (design.md)",
+   "check": {
+    "type": "review",
+    "never": [
+     "Busy bookends with competing elements",
+     "Small bookend text",
+     "Logos missing from the opening or closing"
+    ],
+    "always": [
+     "One title, one line, one lockup"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "DES-BOOKENDS"
+   ],
+   "evidence": [
+    "R06-e2e-v04",
+    "R07-v01",
+    "wei:M5.2",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04"
+      ],
+      "reason": "The brand colour itself is project-specific (design.md)"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04",
+       "R07-v01",
+       "wei:M5.2",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 2; Wei M6 (Round 07 brief §1–7, release gates) §2"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: DES-BOOKENDS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-DES-002",
+   "statement": "Typography is one system: section titles, infographics and the bookends share the same families in defined roles.",
+   "category": "visual_consistency_detail",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "design:compliance",
+    "test": "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "DES-TYPE",
+    "DES-CONSISTENCY"
+   ],
+   "evidence": [
+    "R06-e2e-v04",
+    "wei:M5.4",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04",
+       "wei:M5.4",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 4; Wei M6 (Round 07 brief §1–7, release gates) §2"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: DES-TYPE, DES-CONSISTENCY"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-DES-003",
+   "statement": "Logos and marks are the supplied files, scaled uniformly; never regenerated, morphed or deformed.",
+   "category": "design_principles",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "design:compliance",
+    "test": "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "DES-LOGO"
+   ],
+   "evidence": [
+    "R06-e2e-v04",
+    "wei:M3"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04",
+       "wei:M3"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M3 (R06): video-shotcraft handoff guidance ('no logo deformation')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: DES-LOGO"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-DES-004",
+   "statement": "Borrow motion grammar, not a template's skin: no imported amber/paper/serif looks, invented demo counters or UI, or unapproved architecture edges.",
+   "category": "design_principles",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "design:compliance (prohibited patterns)",
+    "test": "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "DES-PROHIBITED"
+   ],
+   "evidence": [
+    "R06-e2e-v02",
+    "wei:M3"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v02"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v02",
+       "wei:M3"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M3 (R06): video-shotcraft handoff guidance"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: DES-PROHIBITED"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-DES-005",
+   "statement": "Every drawn colour and font traces to design.md tokens (the design-compliance trace replaces 'it doesn't follow design.md').",
+   "category": "visual_consistency_detail",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "design:compliance",
+    "test": "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "DES-TOKENS"
+   ],
+   "evidence": [
+    "R07-v10",
+    "wei:M9"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v10"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v10",
+       "wei:M9"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_design_compliance_flags_font_logo_palette"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M9 (this workflow brief §2: convert feedback into testable rules) ('style does not follow design.md')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: DES-TOKENS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-AST-001",
+   "statement": "Generated imagery names a specific subject, setting and detail tied to a beat; product UI is captured, never generated; logos are supplied.",
+   "category": "craft_quality",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "assets:check_plan",
+    "test": "tests/test_tools.py::test_asset_plan_rules"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "DES-SPECIFICITY",
+    "ACC-UI"
+   ],
+   "evidence": [
+    "R02-v02-candidates",
+    "R03-v01",
+    "wei:M9"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R02-v02-candidates"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R02-v02-candidates",
+       "R03-v01",
+       "wei:M9"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_asset_plan_rules"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M9 (this workflow brief §2: convert feedback into testable rules) ('assets are too generic')"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: DES-SPECIFICITY, ACC-UI"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-ACC-001",
+   "statement": "The engineers' terminology is the source of truth: never invent a term, and map requested terms that have no source instead of adopting them.",
+   "category": "storytelling_product_demos",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "accuracy:check_script",
+    "test": "tests/test_tools.py::test_accuracy_flags_prohibited_and_unverified"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "ACC-TERMS",
+    "ACC-CLAIMS"
+   ],
+   "evidence": [
+    "R03-v01",
+    "R07-v10",
+    "wei:M7.P3"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R03-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R03-v01",
+       "R07-v10",
+       "wei:M7.P3"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_accuracy_flags_prohibited_and_unverified"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M7 (Round 07 final loop P1–P6) P3"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: ACC-TERMS, ACC-CLAIMS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-ACC-002",
+   "statement": "No invented UI, metrics, counters, claims or architecture edges; the prototype is shown untouched, with boundary tags where the demo is synthetic or target-state.",
+   "category": "storytelling_product_demos",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "tool",
+    "fn": "accuracy:check_film",
+    "test": "tests/test_tools.py::test_accuracy_flags_generated_ui"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "ACC-UI",
+    "ACC-BOUNDARIES"
+   ],
+   "evidence": [
+    "R01-v01",
+    "R02-v02-master",
+    "R03-v01",
+    "R05-pass-02",
+    "wei:M3"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R01-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R01-v01",
+       "R02-v02-master",
+       "R03-v01",
+       "R05-pass-02",
+       "wei:M3"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_accuracy_flags_generated_ui"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M3 (R06): video-shotcraft handoff guidance"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: ACC-UI, ACC-BOUNDARIES"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-ACC-003",
+   "statement": "Demonstrate the real workflow in depth: open the detail pages (signal → evidence → case → plan → governance steps), never stopping on a list.",
+   "category": "storytelling_product_demos",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "End the walkthrough on a list view",
+     "Describe a feature without showing it"
+    ],
+    "always": [
+     "Show the detail page and the decision it supports"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "ACC-DEPTH"
+   ],
+   "evidence": [
+    "R02-v02-candidates",
+    "R06-e2e-v04",
+    "R07-v10",
+    "wei:M5.5",
+    "wei:M7.P4"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R02-v02-candidates"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R02-v02-candidates",
+       "R06-e2e-v04",
+       "R07-v10",
+       "wei:M5.5",
+       "wei:M7.P4"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 5; Wei M7 (Round 07 final loop P1–P6) P4"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: ACC-DEPTH"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-NAR-001",
+   "statement": "Frame the story as the platform helping the customer's experts solve their business problems (the customer is the protagonist).",
+   "category": "creative_narrative_preferences",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "A feature tour without a business problem"
+    ],
+    "always": [
+     "Name whose problem is solved and how"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "NAR-PERSPECTIVE"
+   ],
+   "evidence": [
+    "R06-e2e-v04",
+    "wei:M5.2"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04",
+       "wei:M5.2"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 2"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: NAR-PERSPECTIVE"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-NAR-002",
+   "statement": "The film is one connected story: every scene connects to the one before and after; nothing is introduced before the viewer is ready.",
+   "category": "creative_narrative_preferences",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "A scene that repeats information without adding value",
+     "A concept introduced before it is needed"
+    ],
+    "always": [
+     "Name the outgoing and incoming anchor of every seam"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "NAR-CONNECTION",
+    "NAR-CLARITY"
+   ],
+   "evidence": [
+    "R07-v01",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §5"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: NAR-CONNECTION, NAR-CLARITY"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-MOT-001",
+   "statement": "Explanatory illustrations become animation that clarifies the problem; a static plate with a pan is not an explanation.",
+   "category": "craft_quality",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "Use a still illustration with only a camera move for an explanatory beat"
+    ],
+    "always": [
+     "Animate the causal elements in the order the narration names them"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "CRE-MOTION"
+   ],
+   "evidence": [
+    "R03-v01",
+    "R06-e2e-v04",
+    "wei:M5.3",
+    "wei:M5.6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R03-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R03-v01",
+       "R06-e2e-v04",
+       "wei:M5.3",
+       "wei:M5.6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) items 3 and 6"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: CRE-MOTION"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-MOT-002",
+   "statement": "Motion and transitions serve comprehension: one brand-derived vocabulary, motivated seams (line-carry, matched frames), no decorative or repetitive transitions.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "A transition that doesn't advance the story",
+     "A new effect on every cut"
+    ],
+    "always": [
+     "One transition per seam, specified in the storyboard"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "CRE-TRANSITIONS",
+    "NAR-CONNECTION"
+   ],
+   "evidence": [
+    "R06-e2e-v02",
+    "R06-e2e-v07",
+    "wei:M3",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v02"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v02",
+       "R06-e2e-v07",
+       "wei:M3",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §3; Wei M3 (R06): video-shotcraft handoff guidance"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: CRE-TRANSITIONS, NAR-CONNECTION"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-UI-003",
+   "statement": "Direct attention to real UI with highlight rings on measured boxes and restrained camera moves (video-shotcraft), so the viewer knows where to look.",
+   "category": "storytelling_product_demos",
+   "scope": "production_default",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "Show a full screen with no focus cue"
+    ],
+    "always": [
+     "Ring the element the narration names"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "CRE-FOCUS"
+   ],
+   "evidence": [
+    "R06-e2e-v04",
+    "wei:M5.5"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R06-e2e-v04",
+       "wei:M5.5"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M5 (R06 next iterations, items 1–7) item 5"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: CRE-FOCUS"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-PRO-009",
+   "statement": "Resume from durable project state (state, checkpoints, ledger, repo files), never from a long chat history; preserve the original session.",
+   "category": "effective_corrective_actions",
+   "scope": "production_default",
+   "origin": "R04: the renderer and session crashed; the work was resumed from repo files",
+   "check": {
+    "type": "tool",
+    "fn": "engine:_resume_fixups",
+    "test": "tests/test_engine.py::test_resume_does_not_rerun_approved"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R04-v01-recovery-finish",
+    "wei:M1"
+   ],
+   "lifecycle": {
+    "state": "adopted",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R04-v01-recovery-finish"
+      ],
+      "reason": "R04: the renderer and session crashed; the work was resumed from repo files"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R04-v01-recovery-finish",
+       "wei:M1"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_engine.py::test_resume_does_not_rerun_approved"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M1 (resume the crashing session and finish the uncompleted tasks)"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     },
+     {
+      "state": "adopted",
+      "at": "2026-09-26",
+      "by": "vpg v1.0.0 seed",
+      "human": false,
+      "evidence": [
+       "rubrics: engine"
+      ],
+      "reason": "included in the default rubrics/engine"
+     }
+    ]
+   },
+   "adopted_in": "rubrics/*.yaml + config/defaults.yaml"
+  },
+  {
+   "id": "R-ACC-004",
+   "statement": "Real UI pixels stay untouched: veils, blurs and camera moves are verified by a pixel-integrity audit with negative controls, and never mirror or reveal cut-off content.",
+   "category": "craft_quality",
+   "scope": "production_default",
+   "origin": "critic r07-v03 (mirrored product text), r07-v06 (audit needs negative controls)",
+   "check": {
+    "type": "review",
+    "never": [
+     "A backdrop-filter veil over product UI",
+     "Readable cut-off words at a veil edge"
+    ],
+    "always": [
+     "Compare rendered product pixels with the capture",
+     "Prove the audit can fail (negative controls)"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "ACC-UI"
+   ],
+   "evidence": [
+    "R07-v03",
+    "R07-v05",
+    "R07-v06"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v03"
+      ],
+      "reason": "critic r07-v03 (mirrored product text), r07-v06 (audit needs negative controls)"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v03",
+       "R07-v05",
+       "R07-v06"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-PRO-010",
+   "statement": "A correction must produce fresh evidence: a defect resolves only when its reviewer re-runs on a newer version and no longer reports it; a fix that changes nothing counts as a failed attempt.",
+   "category": "effective_corrective_actions",
+   "scope": "production_default",
+   "origin": "found by vpg's own dry run: an unchanged script 'fix' passed the gate before this rule",
+   "check": {
+    "type": "tool",
+    "fn": "evaluation:compare_after_rework",
+    "test": "tests/test_engine.py::test_fix_that_changes_nothing_is_not_resolved"
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "task:vpg-dry-run-2026-09-26"
+   ],
+   "lifecycle": {
+    "state": "candidate",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "task:vpg-dry-run-2026-09-26"
+      ],
+      "reason": "found by vpg's own dry run: an unchanged script 'fix' passed the gate before this rule"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-UI-001",
+   "statement": "Camera crops land in empty gutters, never through product text.",
+   "category": "craft_quality",
+   "scope": "production_default",
+   "origin": "critic r07-v10 P3-3 and r07-v13 P3-A",
+   "check": {
+    "type": "review",
+    "never": [
+     "Crop through a label or a paragraph at the frame edge"
+    ],
+    "always": [
+     "Choose zooms whose edges fall in layout gutters"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "CRE-POLISH"
+   ],
+   "evidence": [
+    "R07-v10",
+    "R07-v13"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v10"
+      ],
+      "reason": "critic r07-v10 P3-3 and r07-v13 P3-A"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v10",
+       "R07-v13"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-UI-002",
+   "statement": "Focus rings and highlights hold ≥ 1 s and never rest mid-slide over a label.",
+   "category": "craft_quality",
+   "scope": "production_default",
+   "origin": "critic r07-v10 P3-1 and r07-v13 P3-C",
+   "check": {
+    "type": "tool",
+    "fn": "legibility:check (rings)",
+    "test": "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+   },
+   "threshold": "",
+   "rubric_dimensions": [
+    "LEG-RING"
+   ],
+   "evidence": [
+    "R07-v10",
+    "R07-v13"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v10"
+      ],
+      "reason": "critic r07-v10 P3-1 and r07-v13 P3-C"
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v10",
+       "R07-v13"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "tests/test_tools.py::test_legibility_flags_small_low_contrast_short_ghost"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-PS-001",
+   "statement": "Case 2026-09: remove 'Governance at every step' (redundant); show governance concretely instead.",
+   "category": "project_specific_decisions",
+   "scope": "project_specific",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "never": [
+     "Use the phrase in narration or on screen"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R07-v08",
+    "wei:M7.P6"
+   ],
+   "lifecycle": {
+    "state": "approved",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v08"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v08",
+       "wei:M7.P6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M7 (Round 07 final loop P1–P6) P6"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-PS-002",
+   "statement": "Case 2026-09: the customer's brand-colour field with white bold caps; the partner lockup on both bookends.",
+   "category": "project_specific_decisions",
+   "scope": "project_specific",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "always": [
+     "Use the approved lockup files"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R07-v01",
+    "wei:M6"
+   ],
+   "lifecycle": {
+    "state": "approved",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v01"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v01",
+       "wei:M6"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M6 (Round 07 brief §1–7, release gates) §2"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-PS-003",
+   "statement": "Case 2026-09 review lenses: customer executive, operations leader, sustainability leader, engineer, first-time viewer.",
+   "category": "project_specific_decisions",
+   "scope": "project_specific",
+   "origin": "",
+   "check": {
+    "type": "review",
+    "always": [
+     "Score every lens"
+    ]
+   },
+   "threshold": "",
+   "rubric_dimensions": [],
+   "evidence": [
+    "R07-v10",
+    "wei:M7"
+   ],
+   "lifecycle": {
+    "state": "approved",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-09-26",
+      "by": "vpg seed from production history",
+      "human": false,
+      "evidence": [
+       "R07-v10"
+      ],
+      "reason": ""
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "R07-v10",
+       "wei:M7"
+      ],
+      "reason": "≥2 independent occurrences"
+     },
+     {
+      "state": "validated",
+      "at": "2026-09-26",
+      "by": "vpg seed",
+      "human": false,
+      "evidence": [
+       "loop/review.py dry run"
+      ],
+      "reason": "check exists and is exercised by the test suite or the dry run"
+     },
+     {
+      "state": "approved",
+      "at": "2026-09-26",
+      "by": "Wei",
+      "human": true,
+      "evidence": [
+       "Wei M7 (Round 07 final loop P1–P6) (final quality pass lenses)"
+      ],
+      "reason": "Wei stated this requirement explicitly"
+     }
+    ]
+   }
+  }
+ ]
+}

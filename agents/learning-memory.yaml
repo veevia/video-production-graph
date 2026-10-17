@@ -1,0 +1,38 @@
+# Learning and Memory Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: learning-memory
+name: Learning and Memory Agent
+responsibility: Capture lessons, separate project-specific from reusable ones, and propose governed rule changes.
+nodes:
+- N25 Post-production learning and memory updates
+inputs_allowed:
+- control:memory
+- defects:all
+- knowledge:rules
+- state:evaluation.comparisons
+controls:
+  read:
+  - memory
+  write:
+  - memory
+skills:
+- decision-capture
+- evidence-tagging
+- rubric-authoring
+- wiki-ingest
+tools:
+- vpg.tools.learning:propose
+outputs:
+- learning_proposal
+- lessons
+decision_authority: Proposes only; a named human applies rule changes.
+constraints:
+- Evidence before promotion
+- Protected scopes are untouchable
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- learning
+escalation:
+  when: A lesson needs Wei's classification
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Skill & Agent Smith

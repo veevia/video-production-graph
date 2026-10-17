@@ -1,0 +1,78 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/script",
+ "title": "script",
+ "type": "object",
+ "properties": {
+  "title": {
+   "type": "string"
+  },
+  "runtime_target_s": {
+   "type": "number"
+  },
+  "chapters": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "objective": {
+      "type": "string",
+      "minLength": 5
+     },
+     "units": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "text": {
+         "type": "string",
+         "minLength": 2
+        },
+        "claims": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "terms": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "additionalProperties": true
+      },
+      "minItems": 1
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "objective",
+     "units"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "title",
+  "chapters"
+ ],
+ "additionalProperties": true
+}

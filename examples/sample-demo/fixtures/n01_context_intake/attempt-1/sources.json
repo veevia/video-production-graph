@@ -1,0 +1,40 @@
+{
+ "sources": [
+  {
+   "id": "S01",
+   "path": "sources/brief.md",
+   "kind": "brief",
+   "evidence": "observed",
+   "notes": "requester's brief"
+  },
+  {
+   "id": "S02",
+   "path": "sources/product-notes.md",
+   "kind": "product",
+   "evidence": "observed",
+   "notes": "product truth"
+  },
+  {
+   "id": "S03",
+   "path": "sources/brand.md",
+   "kind": "brand",
+   "evidence": "observed",
+   "notes": "brand authority"
+  },
+  {
+   "id": "S04",
+   "path": "sources/ui/dashboard.png",
+   "kind": "prototype",
+   "evidence": "observed",
+   "notes": "captured product screen (synthetic data)"
+  },
+  {
+   "id": "S05",
+   "path": "assets/brand/northwind-mark.png",
+   "kind": "brand",
+   "evidence": "observed",
+   "notes": "supplied mark"
+  }
+ ],
+ "open_questions": []
+}

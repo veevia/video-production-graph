@@ -1,0 +1,46 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/learning-proposal",
+ "title": "learning-proposal",
+ "type": "object",
+ "properties": {
+  "schema": {
+   "type": "string"
+  },
+  "run": {
+   "type": "string"
+  },
+  "observations": {
+   "type": "array",
+   "items": {
+    "type": "object"
+   }
+  },
+  "candidates": {
+   "type": "array",
+   "items": {
+    "type": "object"
+   }
+  },
+  "project_specific": {
+   "type": "array",
+   "items": {
+    "type": "object"
+   }
+  },
+  "corrections": {
+   "type": "array",
+   "items": {
+    "type": "object"
+   }
+  }
+ },
+ "required": [
+  "schema",
+  "run",
+  "observations",
+  "candidates",
+  "project_specific"
+ ],
+ "additionalProperties": true
+}

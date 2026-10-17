@@ -1,0 +1,41 @@
+# Final Approval Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: final-approval
+name: Final Approval Agent
+responsibility: Recompute the release conditions, prepare the release summary, package and verify.
+nodes:
+- N23 Final verification
+- N24 Packaging and delivery
+inputs_allowed:
+- artifact:master
+- artifact:release_summary
+- control:production
+- defects:open
+- reviews:current
+controls:
+  read:
+  - evaluation
+  - production
+  write: []
+skills:
+- shipping-and-launch
+- traffic-light-decisions
+tools:
+- vpg.tools.package:build
+- vpg.tools.verify:final
+outputs:
+- manifest
+- package
+- release_summary
+- verification
+decision_authority: Prepares the decision; only Wei releases.
+constraints:
+- Never claims human approval; dry-run approvals are labelled
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- delivery
+- release
+escalation:
+  when: A release condition fails twice
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Repo Steward

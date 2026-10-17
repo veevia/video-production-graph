@@ -1,0 +1,66 @@
+{
+ "assets": [
+  {
+   "id": "A1",
+   "beats": [
+    "B1"
+   ],
+   "role": "title-plate",
+   "source_type": "rendered",
+   "rights": "owned",
+   "spec": {
+    "w": 1920,
+    "h": 1080,
+    "format": "png"
+   },
+   "subject": "Northwind blue field crossed by one white water-use signal line"
+  },
+  {
+   "id": "A2",
+   "beats": [
+    "B2"
+   ],
+   "role": "diagram",
+   "source_type": "rendered",
+   "rights": "owned",
+   "spec": {
+    "w": 1920,
+    "h": 1080,
+    "format": "png"
+   },
+   "subject": "one plant's daily water-use line leaving its own expected range band"
+  },
+  {
+   "id": "A3",
+   "beats": [
+    "B3"
+   ],
+   "role": "product-ui",
+   "source_type": "captured",
+   "rights": "owned",
+   "spec": {
+    "w": 1920,
+    "h": 1080,
+    "format": "png"
+   },
+   "subject": "captured Northwind dashboard showing the Coastal plant signal and outlook card",
+   "ref": "sources/ui/dashboard.png"
+  },
+  {
+   "id": "A4",
+   "beats": [
+    "B1"
+   ],
+   "role": "logo",
+   "source_type": "supplied",
+   "rights": "owned",
+   "spec": {
+    "w": 512,
+    "h": 512,
+    "format": "png"
+   },
+   "subject": "the supplied Northwind mark used as delivered",
+   "ref": "assets/brand/northwind-mark.png"
+  }
+ ]
+}

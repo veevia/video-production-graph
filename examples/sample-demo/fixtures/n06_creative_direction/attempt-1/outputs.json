@@ -1,0 +1,7 @@
+{
+ "outcome": "pass",
+ "outputs": {
+  "creative_decision": "creative-decision.json",
+  "narrative": "narrative.md"
+ }
+}

@@ -1,0 +1,115 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/interpretation",
+ "title": "interpretation",
+ "type": "object",
+ "properties": {
+  "defects": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "dimension": {
+      "type": "string"
+     },
+     "severity": {
+      "enum": [
+       "P1",
+       "P2",
+       "P3",
+       "nit"
+      ]
+     },
+     "description": {
+      "type": "string",
+      "minLength": 5
+     },
+     "evidence": {
+      "type": "string"
+     },
+     "traced_node": {
+      "type": "string"
+     },
+     "smallest_fix": {
+      "type": "string"
+     },
+     "feedback": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "dimension",
+     "severity",
+     "description",
+     "traced_node"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "feedback": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "defect_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "matches": {
+      "type": "object"
+     },
+     "no_action_reason": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "fixes": {
+   "type": "object",
+   "description": "Open defect id → its smallest fix, for findings that arrived without one.",
+   "additionalProperties": {
+    "type": "string",
+    "minLength": 1
+   }
+  },
+  "resolved": {
+   "type": "array",
+   "description": "Defect ids the interpreter judges resolved by the new version, with evidence.",
+   "items": {
+    "oneOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "object",
+      "required": [
+       "id"
+      ],
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "evidence": {
+        "type": "string"
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
+ "required": [
+  "defects",
+  "feedback"
+ ],
+ "additionalProperties": true
+}

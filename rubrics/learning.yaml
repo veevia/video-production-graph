@@ -1,0 +1,19 @@
+# Learning — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: learning
+name: Learning
+reviewer: learning-memory
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: LRN-GOVERNED
+  name: Governed lessons
+  brief_dimension: delivery_completeness
+  level: MUST
+  check:
+    type: tool
+    fn: learning:check
+  threshold: 1.0
+  target: every lesson classed and evidenced; no protected scope
+  rule: R-PRO-001
+  cases:
+    never: []
+    always: []

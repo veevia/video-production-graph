@@ -1,0 +1,14 @@
+{
+ "product_context": "Northwind Water Monitor flags unusual water use against each plant's expected range and shows a seven-day outlook.",
+ "product_requirements": [
+  "tag synthetic data",
+  "show the outlook card on the real screen"
+ ],
+ "capabilities": [
+  "water-use signal",
+  "seven-day outlook"
+ ],
+ "demo_scenarios": [
+  "Coastal plant leaves its expected range; the team reads the outlook"
+ ]
+}

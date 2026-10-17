@@ -1,0 +1,62 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/concepts",
+ "title": "concepts",
+ "type": "object",
+ "properties": {
+  "concepts": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "logline": {
+      "type": "string"
+     },
+     "anchor": {
+      "type": "string"
+     },
+     "structure": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 2
+     },
+     "strengths": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "risks": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "logline",
+     "anchor",
+     "structure",
+     "risks"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 3
+  }
+ },
+ "required": [
+  "concepts"
+ ],
+ "additionalProperties": true
+}

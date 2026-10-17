@@ -1,0 +1,51 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/brief",
+ "title": "brief",
+ "type": "object",
+ "properties": {
+  "objective": {
+   "type": "string",
+   "minLength": 10
+  },
+  "audience": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "minItems": 1
+  },
+  "business_context": {
+   "type": "string"
+  },
+  "success_criteria": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "minItems": 3
+  },
+  "runtime_target_s": {
+   "type": "number",
+   "exclusiveMinimum": 0
+  },
+  "runtime_max_s": {
+   "type": "number",
+   "exclusiveMinimum": 0
+  },
+  "constraints": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "required": [
+  "objective",
+  "audience",
+  "success_criteria",
+  "runtime_target_s",
+  "runtime_max_s"
+ ],
+ "additionalProperties": true
+}

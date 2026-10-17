@@ -1,0 +1,36 @@
+# Technical QA Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: technical-qa
+name: Technical QA Agent
+responsibility: 'Measure the delivered master: format, sync, duration, loudness, silence, black frames, captions.'
+nodes:
+- N15 Technical QA
+inputs_allowed:
+- artifact:captions
+- artifact:master
+- artifact:timings
+- control:evaluation
+- control:production
+controls:
+  read:
+  - evaluation
+  - production
+  write: []
+skills:
+- observability-and-instrumentation
+- webapp-testing
+tools:
+- ffmpeg ebur128/silencedetect/blackdetect
+- ffprobe
+outputs:
+- technical_qa
+decision_authority: Reports measured defects; can't waive a finding.
+constraints:
+- Measurements only; no taste
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- technical
+escalation:
+  when: Media can't be probed
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: FDE Test Engineer

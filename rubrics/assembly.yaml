@@ -1,0 +1,19 @@
+# Assembly — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: assembly
+name: Assembly
+reviewer: composition
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: ASM-OUTPUTS
+  name: Master and stems
+  brief_dimension: delivery_completeness
+  level: MUST
+  check:
+    type: tool
+    fn: media:check_master
+  threshold: 1.0
+  target: master with streams, captions, stems and silent master
+  rule: R-PRO-002
+  cases:
+    never: []
+    always: []

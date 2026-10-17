@@ -1,0 +1,97 @@
+# Technical correctness — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: technical
+name: Technical correctness
+reviewer: technical-qa
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: TEC-FORMAT
+  name: Format and codecs
+  brief_dimension: technical_correctness
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: resolution, fps, H.264/yuv420p, AAC 48 kHz as production.md
+  rule: R-PRO-002
+  cases:
+    never: []
+    always: []
+- id: TEC-SYNC
+  name: Audio/video sync
+  brief_dimension: technical_correctness
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: A/V durations within 50 ms
+  rule: R-PRO-002
+  cases:
+    never: []
+    always: []
+- id: TEC-DURATION
+  name: Runtime within cap
+  brief_dimension: pacing
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: duration ≤ brief.runtime_max_s
+  rule: R-PRO-006
+  cases:
+    never: []
+    always: []
+- id: TEC-LOUDNESS
+  name: Loudness and true peak
+  brief_dimension: audio_quality
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: −16 LUFS ±1; TP ≤ −1 dBTP
+  rule: R-AUD-001
+  cases:
+    never: []
+    always: []
+- id: TEC-SILENCE
+  name: No unexplained silence
+  brief_dimension: audio_quality
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: silences > 1.5 s are planned pauses
+  rule: R-AUD-003
+  cases:
+    never: []
+    always: []
+- id: TEC-BLACK
+  name: No unplanned black frames
+  brief_dimension: rendering_quality
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: no black run except fade-in/out
+  rule: R-PRO-002
+  cases:
+    never: []
+    always: []
+- id: TEC-CAPTIONS
+  name: Caption sidecar valid
+  brief_dimension: technical_correctness
+  level: MUST
+  check:
+    type: tool
+    fn: media:technical_qa
+  threshold: 1.0
+  target: SRT parses, ends within the master
+  rule: R-CAP-002
+  cases:
+    never: []
+    always: []

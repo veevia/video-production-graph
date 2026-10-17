@@ -1,0 +1,8 @@
+# vpg runtime. Tested with Python 3.11.15, pydantic 2.13.4, PyYAML 6.0.3, jsonschema 4.26.0, numpy 2.4.6,
+# Pillow 12.2.0, pytest 9.1.1 and ffmpeg/ffprobe 8.1.1 on PATH. Other versions within these majors are untested.
+pydantic>=2,<3
+PyYAML>=6
+jsonschema>=4
+numpy>=2
+Pillow>=12
+pytest>=9

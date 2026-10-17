@@ -1,0 +1,84 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/asset-plan",
+ "title": "asset-plan",
+ "type": "object",
+ "properties": {
+  "assets": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "beats": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1
+     },
+     "role": {
+      "type": "string"
+     },
+     "source_type": {
+      "enum": [
+       "supplied",
+       "captured",
+       "generated",
+       "rendered"
+      ]
+     },
+     "rights": {
+      "type": "string"
+     },
+     "spec": {
+      "type": "object",
+      "properties": {
+       "w": {
+        "type": "integer"
+       },
+       "h": {
+        "type": "integer"
+       },
+       "format": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "w",
+       "h",
+       "format"
+      ],
+      "additionalProperties": true
+     },
+     "subject": {
+      "type": "string"
+     },
+     "prompt": {
+      "type": "string"
+     },
+     "ref": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "beats",
+     "role",
+     "source_type",
+     "rights",
+     "spec",
+     "subject"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "assets"
+ ],
+ "additionalProperties": true
+}

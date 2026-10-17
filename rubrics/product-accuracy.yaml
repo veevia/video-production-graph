@@ -1,0 +1,93 @@
+# Product accuracy — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: product-accuracy
+name: Product accuracy
+reviewer: product-accuracy-reviewer
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: ACC-TERMS
+  name: Source terminology
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: accuracy:check_film
+  threshold: 1.0
+  target: only product.md terms; no prohibited terms
+  rule: R-ACC-001
+  cases:
+    never: []
+    always: []
+- id: ACC-CLAIMS
+  name: Verified claims only
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: accuracy:check_film
+  threshold: 1.0
+  target: every claim id is in verified_claims
+  rule: R-ACC-001
+  cases:
+    never: []
+    always: []
+- id: ACC-UI
+  name: No invented UI
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: accuracy:check_film
+  threshold: 1.0
+  target: product UI is captured, never generated
+  rule: R-ACC-002
+  cases:
+    never: []
+    always: []
+- id: ACC-DEPTH
+  name: Demonstration depth
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: the walkthrough opens the detail pages and shows the decision they support
+  rule: R-ACC-003
+  cases:
+    never:
+    - End on a list view
+    - Describe a capability without showing it
+    always:
+    - Open the detail and show who acts on it
+- id: ACC-BOUNDARIES
+  name: Honest boundaries
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: synthetic data, target architecture and seeded decisions are tagged on screen
+  rule: R-ACC-002
+  cases:
+    never:
+    - Present a prototype as a deployed product
+    always:
+    - Tag synthetic data, target state and seeded decisions
+- id: ACC-UNTAGGED
+  name: No untagged claims
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: every product claim in the narration or on screen (a capability, number, outcome or comparison) carries a claim id that product.md verifies;
+    problem framing and questions need none
+  rule: R-ACC-002
+  cases:
+    never:
+    - A number, percentage or outcome about the product with no claim id, for example 'cuts water costs 40%' untagged
+    - A comparison with a competitor or the old process that no verified claim supports
+    always:
+    - Tag each product claim with its verified claim id, or cut it

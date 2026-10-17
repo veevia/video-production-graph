@@ -1,0 +1,49 @@
+# Creative direction — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: creative-direction
+name: Creative direction
+reviewer: creative-director
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: DIR-DECISION
+  name: Recorded decision
+  brief_dimension: narrative_clarity
+  level: MUST
+  check:
+    type: tool
+    fn: briefs:check_decision
+  threshold: 1.0
+  target: the selection plus a rejection reason for every alternative
+  rule: R-PRO-005
+  cases:
+    never: []
+    always: []
+- id: DIR-BOUNDARIES
+  name: Creative boundaries
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei approves the creative boundaries at N06
+  rule: R-DES-004
+  cases:
+    never:
+    - An empty 'creative boundaries' section
+    always:
+    - List ≥ 3 boundaries
+    - Record Wei's creative-direction decision
+- id: CON-FIT
+  name: Fit to the objective
+  brief_dimension: audience_relevance
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei selects, at N06, a concept that fits the objective and audience
+  rule: R-NAR-001
+  cases:
+    never:
+    - A concept with no business problem
+    always:
+    - State the problem, the solver and the proof
+    - Record which concept Wei selected and why

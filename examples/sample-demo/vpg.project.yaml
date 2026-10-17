@@ -1,0 +1,16 @@
+# Example production: a fictional product with synthetic data. `python -m vpg dry-run` copies it to a temp dir and runs
+# it with scripted agents (fixtures/) and real local media commands (pipeline/).
+id: sample-demo
+name: Northwind Water Monitor teaser (fictional example)
+workflow: default
+executor: scripted
+fixtures: fixtures
+dry_run: true
+brief: sources/brief.md
+constraints: ["fictional product, synthetic data", "runtime ≤ 20 s", "local media tools only"]
+commands:
+  n11_asset_generation: "{python} pipeline/assets.py"
+  n12_voice_audio: "{python} pipeline/voice.py"
+  n13_motion_scenes: "{python} pipeline/scenes.py"
+  n14_video_assembly: "{python} pipeline/assemble.py"
+command_timeout_s: 600

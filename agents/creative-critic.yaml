@@ -1,0 +1,48 @@
+# Creative Critic Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: creative-critic
+name: Creative Critic Agent
+responsibility: Independently judge the rendered film through the review lenses (N16) and the narrative and pacing (N20).
+nodes:
+- N16 Creative critique
+- N20 Narrative and pacing evaluation
+inputs_allowed:
+- artifact:brief
+- artifact:master
+- artifact:scenes
+- artifact:script
+- artifact:storyboard
+- artifact:timings
+- control:creative
+- control:evaluation
+controls:
+  read:
+  - creative
+  - evaluation
+  write: []
+skills:
+- design-review
+- extreme-clarity
+- persona-critic
+- speed-critique
+- video-shotcraft
+tools:
+- frame viewer
+- keyframe extraction
+- vpg.tools.pacing:analyze
+outputs:
+- keyframes
+- pacing_report
+decision_authority: Scores rubric dimensions and raises defects; cannot approve a release.
+constraints:
+- Judges rendered frames, not source
+- Never scores human-listening dimensions
+- Never reviews work it produced
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- creative
+- narrative-pacing
+escalation:
+  when: Cannot judge a dimension from the evidence available
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: FDE Design Reviewer

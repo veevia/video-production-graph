@@ -1,0 +1,7 @@
+{
+ "outcome": "pass",
+ "outputs": {
+  "sources": "sources.json",
+  "intake_notes": "intake-notes.md"
+ }
+}

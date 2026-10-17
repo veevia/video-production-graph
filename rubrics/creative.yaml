@@ -1,0 +1,160 @@
+# Creative critique (five lenses) — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: creative
+name: Creative critique (five lenses)
+reviewer: creative-critic
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: CRE-HOOK
+  name: Opening hook
+  brief_dimension: narrative_clarity
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: the first 5 s state the problem and why it matters
+  rule: R-DES-001
+  cases:
+    never:
+    - A slow logo sting with no stakes
+    always:
+    - An iconic title, then the problem
+- id: CRE-ONE-MESSAGE
+  name: One message per frame
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: at any moment the viewer can answer 'what am I looking at?'
+  rule: R-DEN-001
+  cases:
+    never:
+    - Dense node graphs
+    - Simultaneous animations
+    - Tiny labels
+    always:
+    - Progressive disclosure on the spoken cue
+- id: CRE-MOTION
+  name: Motion that explains
+  brief_dimension: motion_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: explanatory beats animate their causal elements
+  rule: R-MOT-001
+  cases:
+    never:
+    - A still illustration with a slow push-in as an explanation
+    always:
+    - Animate what the narration names, in order
+- id: CRE-TRANSITIONS
+  name: Purposeful transitions
+  brief_dimension: transition_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: one motivated transition per seam
+  rule: R-MOT-002
+  cases:
+    never:
+    - A decorative transition
+    - A new effect on every cut
+    always:
+    - Line-carry or match-frame seams
+- id: CRE-FOCUS
+  name: UI focus
+  brief_dimension: motion_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: rings and camera direct attention to the narrated UI element
+  rule: R-UI-003
+  cases:
+    never:
+    - A full product screen with no focus cue
+    always:
+    - Ring the element on its word, for at least 1 s
+- id: CRE-LENSES
+  name: Five-lens read
+  brief_dimension: audience_relevance
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: each review lens in evaluation.md can follow the story
+  rule: R-PRO-007
+  cases:
+    never:
+    - A lens left unscored
+    always:
+    - Score and quote evidence per lens
+- id: CRE-POLISH
+  name: Rendering polish
+  brief_dimension: rendering_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: no crops through text, collisions, flicker or artefacts
+  rule: R-UI-001
+  cases:
+    never:
+    - Product text cropped at the frame edge
+    - A blank or half-rendered frame
+    always:
+    - Crops land in empty gutters
+- id: CRE-ARC
+  name: Emotional arc
+  brief_dimension: narrative_clarity
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: tension → clarity → confidence, with space for key statements
+  rule: R-NAR-002
+  cases:
+    never:
+    - Constant high energy
+    - Overly dramatic scoring
+    always:
+    - Leave a beat of space after the key statement
+- id: VOI-ADULT
+  name: Adult professional voice (human listening)
+  brief_dimension: voice_quality
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei hears an adult tech professional, warm and confident
+  rule: R-VOI-001
+  cases:
+    never:
+    - A child-like or youthful read
+    always:
+    - Record Wei's listening decision; never claim it
+- id: CRE-MUSIC
+  name: Music supports the voice (human listening)
+  brief_dimension: audio_quality
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei hears music that supports rather than competes
+  rule: R-AUD-002
+  cases:
+    never:
+    - Music competing with narration
+    - An abrupt music cut
+    always:
+    - Duck under speech

@@ -1,0 +1,19 @@
+# Voice and audio — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: voice-audio
+name: Voice and audio
+reviewer: voice-audio
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: VOI-COMPLETE
+  name: Complete, unclipped narration
+  brief_dimension: voice_quality
+  level: MUST
+  check:
+    type: tool
+    fn: audio:check_voice
+  threshold: 1.0
+  target: every unit in order; no clipping; no masked speech
+  rule: R-VOI-002
+  cases:
+    never: []
+    always: []

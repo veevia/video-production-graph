@@ -1,0 +1,39 @@
+# Voice and Audio Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: voice-audio
+name: Voice and Audio Agent
+responsibility: Produce an adult-professional, identity-consistent narration stem with measured timings and an audio spec.
+nodes:
+- N12 Voice and audio production
+inputs_allowed:
+- artifact:script
+- control:creative
+- control:production
+- defects:rework
+controls:
+  read:
+  - creative
+  - production
+  write: []
+skills:
+- video-prototype
+tools:
+- Whisper ASR QC (offline)
+- ffmpeg
+- local TTS (identity-locked)
+outputs:
+- timings
+- voice
+- voice_direction
+decision_authority: Chooses the takes that pass QC; never decides that the voice 'sounds right'.
+constraints:
+- Never attenuate inside speech
+- Human listening stays pending
+- Single-flight on the TTS model
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- voice-audio
+escalation:
+  when: Voice identity cannot be held, or a unit fails 3 renders
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: none (local TTS pipeline)

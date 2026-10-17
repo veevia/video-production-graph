@@ -1,0 +1,202 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/sources",
+ "title": "sources",
+ "type": "object",
+ "properties": {
+  "sources": {
+   "items": {
+    "$ref": "#/$defs/SourceRef"
+   },
+   "type": "array",
+   "minItems": 1
+  },
+  "open_questions": {
+   "items": {
+    "$ref": "#/$defs/Question"
+   },
+   "type": "array"
+  }
+ },
+ "required": [
+  "sources"
+ ],
+ "additionalProperties": true,
+ "$defs": {
+  "Question": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "text": {
+     "title": "Text",
+     "type": "string"
+    },
+    "blocking": {
+     "default": false,
+     "title": "Blocking",
+     "type": "boolean"
+    },
+    "owner": {
+     "default": "Wei",
+     "title": "Owner",
+     "type": "string"
+    },
+    "status": {
+     "default": "open",
+     "enum": [
+      "open",
+      "answered",
+      "waived"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "answer": {
+     "default": "",
+     "title": "Answer",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "text"
+   ],
+   "title": "Question",
+   "type": "object"
+  },
+  "SourceRef": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "kind": {
+     "title": "Kind",
+     "type": "string"
+    },
+    "evidence": {
+     "enum": [
+      "observed",
+      "reported",
+      "assumed"
+     ],
+     "title": "Evidence",
+     "type": "string"
+    },
+    "sha256": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Sha256"
+    },
+    "bytes": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Bytes"
+    },
+    "confidential": {
+     "default": false,
+     "title": "Confidential",
+     "type": "boolean"
+    },
+    "notes": {
+     "default": "",
+     "title": "Notes",
+     "type": "string"
+    }
+   },
+   "required": [
+    "evidence",
+    "id",
+    "kind",
+    "path"
+   ],
+   "title": "SourceRef",
+   "type": "object"
+  }
+ },
+ "x-authored": {
+  "open_questions": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "blocking": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "id",
+     "text"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "sources": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "path": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "evidence": {
+      "enum": [
+       "observed",
+       "reported",
+       "assumed"
+      ]
+     },
+     "confidential": {
+      "type": "boolean"
+     },
+     "notes": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "path",
+     "kind",
+     "evidence"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "x-generated": "properties ['open_questions', 'sources'] are generated from vpg/models.py by `python -m vpg docs`; change the model or x-authored, not these properties"
+}

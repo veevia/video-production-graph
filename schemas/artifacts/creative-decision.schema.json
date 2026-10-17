@@ -1,0 +1,48 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/creative-decision",
+ "title": "creative-decision",
+ "type": "object",
+ "properties": {
+  "selected": {
+   "type": "string"
+  },
+  "rationale": {
+   "type": "string",
+   "minLength": 10
+  },
+  "rejected": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "reason": {
+      "type": "string",
+      "minLength": 5
+     }
+    },
+    "required": [
+     "id",
+     "reason"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "narrative_arc": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "minItems": 2
+  }
+ },
+ "required": [
+  "selected",
+  "rationale",
+  "rejected"
+ ],
+ "additionalProperties": true
+}

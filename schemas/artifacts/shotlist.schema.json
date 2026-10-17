@@ -1,0 +1,46 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/shotlist",
+ "title": "shotlist",
+ "type": "object",
+ "properties": {
+  "shots": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "beat": {
+      "type": "string"
+     },
+     "framing": {
+      "type": "string"
+     },
+     "motion": {
+      "type": "string"
+     },
+     "asset_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "id",
+     "beat",
+     "framing",
+     "motion"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "shots"
+ ],
+ "additionalProperties": true
+}

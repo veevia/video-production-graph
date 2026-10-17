@@ -1,0 +1,19 @@
+# Concept ideation — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: concepts
+name: Concept ideation
+reviewer: creative-director
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: CON-DIVERSE
+  name: Diverse directions
+  brief_dimension: narrative_clarity
+  level: MUST
+  check:
+    type: tool
+    fn: briefs:check_concepts
+  threshold: 1.0
+  target: ≥ 3 concepts with distinct anchors
+  rule: R-NAR-001
+  cases:
+    never: []
+    always: []

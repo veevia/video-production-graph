@@ -1,0 +1,34 @@
+# Design-System Reviewer — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: design-system-reviewer
+name: Design-System Reviewer
+responsibility: Trace everything drawn to design.md and judge visual coherence.
+nodes:
+- N17 Design-system compliance
+inputs_allowed:
+- artifact:assets
+- artifact:text_layers
+- control:design
+controls:
+  read:
+  - design
+  write: []
+skills:
+- design-review
+- design-system-as-infrastructure
+- drift-check
+- impeccable
+tools:
+- vpg.tools.design:compliance
+outputs:
+- design_report
+decision_authority: Scores design dimensions; tool findings are binding.
+constraints:
+- Cannot pass a tool-failed dimension
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- design-compliance
+escalation:
+  when: Tokens can't be traced
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: FDE Design Reviewer

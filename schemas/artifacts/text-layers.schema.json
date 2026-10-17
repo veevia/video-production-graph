@@ -1,0 +1,139 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/text-layers",
+ "title": "text-layers",
+ "type": "object",
+ "properties": {
+  "frame": {
+   "type": "object",
+   "properties": {
+    "w": {
+     "type": "integer"
+    },
+    "h": {
+     "type": "integer"
+    }
+   },
+   "required": [
+    "w",
+    "h"
+   ],
+   "additionalProperties": true
+  },
+  "layers": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "scene": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "text",
+       "logo",
+       "ring",
+       "redaction"
+      ],
+      "description": "text (counted for density and legibility), logo, ring (a highlight), or redaction (a bar over confidential UI, declared so the engine can check it)"
+     },
+     "text": {
+      "type": "string"
+     },
+     "font": {
+      "type": "string"
+     },
+     "font_px": {
+      "type": "number"
+     },
+     "bold": {
+      "type": "boolean"
+     },
+     "color": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+     },
+     "bg": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+     },
+     "bbox": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4
+     },
+     "start": {
+      "type": "number",
+      "minimum": 0
+     },
+     "end": {
+      "type": "number",
+      "minimum": 0
+     },
+     "opacity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "essential": {
+      "type": "boolean"
+     },
+     "asset": {
+      "type": "string"
+     },
+     "method": {
+      "enum": [
+       "bar",
+       "blur"
+      ],
+      "description": "a redaction layer: how the region is covered. Only an opaque bar hides a name for certain; a blur is refused (R-ACC-004)"
+     }
+    },
+    "required": [
+     "id",
+     "scene",
+     "bbox",
+     "start",
+     "end"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  },
+  "live_windows": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "start": {
+      "type": "number",
+      "minimum": 0
+     },
+     "end": {
+      "type": "number",
+      "minimum": 0
+     },
+     "what": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "additionalProperties": true
+   }
+  }
+ },
+ "required": [
+  "frame",
+  "layers"
+ ],
+ "additionalProperties": true
+}

@@ -1,0 +1,47 @@
+# Context Research Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: context-research
+name: Context Research Agent
+responsibility: Find, register and evidence-tag every source; detect context gaps; never invent context.
+nodes:
+- N01 Context discovery and intake
+- N02 Source validation and context-gap detection
+inputs_allowed:
+- control:memory
+- control:product
+- defects:open
+- state:inputs.brief
+- state:inputs.sources
+- state:production.open_questions
+controls:
+  read:
+  - memory
+  - product
+  write: []
+skills:
+- context-intake
+- context-pull
+- evidence-tagging
+- wiki-query
+- workiq-grounding
+tools:
+- WorkIQ MCP (read-only)
+- local file search
+- markitdown MCP
+- vpg.tools.sources:validate
+outputs:
+- gaps
+- intake_notes
+- sources
+- sources_validated
+decision_authority: Decides which sources are registered and how each is tagged. Cannot decide that a gap is acceptable (blocking gaps go to Wei).
+constraints:
+- Read-only on raw intake
+- Never quotes confidential meeting content or names
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- intake
+escalation:
+  when: Blocking gap, or 2 intake loops without closing the gaps
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Meeting Harvester

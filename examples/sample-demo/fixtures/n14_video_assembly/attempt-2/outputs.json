@@ -1,0 +1,6 @@
+{
+ "outcome": "pass",
+ "outputs": {
+  "assembly_params": "assembly-params.json"
+ }
+}

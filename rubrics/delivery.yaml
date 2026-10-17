@@ -1,0 +1,32 @@
+# Delivery — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: delivery
+name: Delivery
+reviewer: final-approval
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: DEL-MANIFEST
+  name: Verified package
+  brief_dimension: delivery_completeness
+  level: MUST
+  check:
+    type: tool
+    fn: package:check
+  threshold: 1.0
+  target: zip verifies against the per-file manifest
+  rule: R-PRO-005
+  cases:
+    never: []
+    always: []
+- id: DEL-DELIVERABLES
+  name: All deliverables
+  brief_dimension: delivery_completeness
+  level: MUST
+  check:
+    type: tool
+    fn: package:check
+  threshold: 1.0
+  target: every production.md deliverable present
+  rule: R-PRO-005
+  cases:
+    never: []
+    always: []

@@ -1,0 +1,120 @@
+# Narrative and pacing — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: narrative-pacing
+name: Narrative and pacing
+reviewer: creative-critic
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: PAC-RATE
+  name: Speaking rate
+  brief_dimension: pacing
+  level: MUST
+  check:
+    type: tool
+    fn: pacing:analyze
+  threshold: 1.0
+  target: 1.8–3.2 words/s per unit
+  rule: R-PRO-006
+  cases:
+    never: []
+    always: []
+- id: PAC-RUNTIME
+  name: Runtime cap
+  brief_dimension: pacing
+  level: MUST
+  check:
+    type: tool
+    fn: pacing:analyze
+  threshold: 1.0
+  target: ≤ brief.runtime_max_s
+  rule: R-PRO-006
+  cases:
+    never: []
+    always: []
+- id: PAC-READ
+  name: Reading time per beat
+  brief_dimension: pacing
+  level: MUST
+  check:
+    type: tool
+    fn: pacing:analyze
+  threshold: 1.0
+  target: each beat holds its on-screen words long enough
+  rule: R-LEG-003
+  cases:
+    never: []
+    always: []
+- id: NAR-CLARITY
+  name: Narrative clarity
+  brief_dimension: narrative_clarity
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: a first-time viewer can retell the story in one sentence
+  rule: R-NAR-002
+  cases:
+    never:
+    - A concept introduced before the viewer needs it
+    always:
+    - Each chapter answers the question the previous one raised
+- id: NAR-RELEVANCE
+  name: Audience relevance
+  brief_dimension: audience_relevance
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: every lens in evaluation.md sees its own value
+  rule: R-NAR-001
+  cases:
+    never:
+    - A chapter that serves no named lens
+    always:
+    - Name the business outcome for the executive lens
+- id: NAR-CONNECTION
+  name: Scene-to-scene connection
+  brief_dimension: transition_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: each seam carries an anchor from the scene before
+  rule: R-NAR-002
+  cases:
+    never:
+    - A hard reset between chapters
+    always:
+    - Carry a line, shape or word across the seam
+- id: NAR-PERSPECTIVE
+  name: Customer-as-protagonist perspective
+  brief_dimension: audience_relevance
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: the platform helps the customer's experts solve their problem
+  rule: R-NAR-001
+  cases:
+    never:
+    - A vendor feature tour
+    always:
+    - Say whose problem is solved and how
+- id: VOI-PRONUNCIATION
+  name: Pronunciation of product terms
+  brief_dimension: voice_quality
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: every product term is heard correctly in the master's transcript
+  rule: R-VOI-003
+  cases:
+    never:
+    - A product term the transcript renders as a different word
+    always:
+    - Rephrase terms that are misheard in most takes

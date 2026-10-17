@@ -1,0 +1,31 @@
+{
+ "reviewer": "design-system-reviewer (scripted)",
+ "scores": [
+  {
+   "dimension": "DES-COHERENCE",
+   "score": 4.5,
+   "evidence": "one type system across the three beats"
+  },
+  {
+   "dimension": "DES-CONSISTENCY",
+   "score": 4.5,
+   "evidence": "titles and labels keep their roles"
+  },
+  {
+   "dimension": "DES-COMPOSITION",
+   "score": 4.5,
+   "evidence": "one focal point per beat"
+  },
+  {
+   "dimension": "DES-SPECIFICITY",
+   "score": 4.5,
+   "evidence": "the diagram shows this plant's line and band"
+  },
+  {
+   "dimension": "DES-BOOKENDS",
+   "score": 4.5,
+   "evidence": "B1 is minimal: title, line, mark"
+  }
+ ],
+ "defects": []
+}

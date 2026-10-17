@@ -1,0 +1,14 @@
+{
+ "age": "adult",
+ "delivery": "calm, confident, precise; a tech professional explaining to operators",
+ "engine": "macOS say (example only)",
+ "voice": "system default",
+ "pronunciations": [
+  {
+   "term": "Northwind",
+   "say": "NORTH-wind"
+  }
+ ],
+ "human_listening": "pending",
+ "rate_wpm": 140
+}

@@ -1,0 +1,47 @@
+# Script — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: script
+name: Script
+reviewer: narrative-script
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: SCR-ACCURACY
+  name: Terms and claims
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: accuracy:check_script
+  threshold: 1.0
+  target: no prohibited terms; only verified claims
+  rule: R-ACC-001
+  cases:
+    never: []
+    always: []
+- id: SCR-RUNTIME
+  name: Runtime budget
+  brief_dimension: pacing
+  level: MUST
+  check:
+    type: tool
+    fn: pacing:estimate_script
+  threshold: 1.0
+  target: estimated runtime ≤ cap
+  rule: R-PRO-006
+  cases:
+    never: []
+    always: []
+- id: SCR-PERSPECTIVE
+  name: Perspective
+  brief_dimension: audience_relevance
+  level: SHOULD
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: the customer's experts are the protagonists (author's self-check; scored independently as NAR-PERSPECTIVE at N20)
+  rule: R-NAR-001
+  cases:
+    never:
+    - '''Our platform'' as the subject of every sentence'
+    always:
+    - Name the expert and the decision

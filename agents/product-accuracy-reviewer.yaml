@@ -1,0 +1,33 @@
+# Product Accuracy Reviewer — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: product-accuracy-reviewer
+name: Product Accuracy Reviewer
+responsibility: Check narration and on-screen text against product truth, UI integrity and demo depth.
+nodes:
+- N19 Product-accuracy validation
+inputs_allowed:
+- artifact:asset_plan
+- artifact:script
+- artifact:text_layers
+- control:product
+controls:
+  read:
+  - product
+  write: []
+skills:
+- evidence-tagging
+- grounding-critic-designer
+tools:
+- vpg.tools.accuracy:check_film
+outputs:
+- accuracy_report
+decision_authority: Scores accuracy dimensions; product truth itself is changed only by Wei through a change request.
+constraints:
+- Engineer terminology is the source of truth
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- product-accuracy
+escalation:
+  when: A claim needs a source owner
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: FDE Code Reviewer

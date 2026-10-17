@@ -1,0 +1,51 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/scenes",
+ "title": "scenes",
+ "type": "object",
+ "properties": {
+  "runtime_s": {
+   "type": "number"
+  },
+  "scenes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "beat": {
+      "type": "string"
+     },
+     "image": {
+      "type": "string"
+     },
+     "start": {
+      "type": "number",
+      "minimum": 0
+     },
+     "end": {
+      "type": "number",
+      "minimum": 0
+     },
+     "motion": {
+      "type": "string"
+     },
+     "transition": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "beat",
+     "image",
+     "start",
+     "end"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "scenes"
+ ],
+ "additionalProperties": true
+}

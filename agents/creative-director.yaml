@@ -1,0 +1,48 @@
+# Creative Director Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: creative-director
+name: Creative Director Agent
+responsibility: Propose diverse concepts, recommend one direction with reasons, and define creative.md.
+nodes:
+- N05 Narrative and concept ideation
+- N06 Creative-direction selection
+inputs_allowed:
+- artifact:brief
+- artifact:concepts
+- artifact:product_summary
+- control:creative
+- control:memory
+- control:product
+- feedback:open
+controls:
+  read:
+  - creative
+  - evaluation
+  - memory
+  - product
+  write:
+  - creative
+skills:
+- concept-creator
+- design-criteria
+- design-principles
+- traffic-light-decisions
+- video-prototype
+- video-shotcraft
+tools: []
+outputs:
+- concepts
+- creative_decision
+- narrative
+decision_authority: Recommends the direction; Wei selects it.
+constraints:
+- ≥3 distinct anchors
+- Records a rejection reason for every alternative
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- concepts
+- creative-direction
+escalation:
+  when: Wei rejects every direction twice
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Design Synthesist

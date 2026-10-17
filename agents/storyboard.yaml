@@ -1,0 +1,38 @@
+# Storyboard Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: storyboard
+name: Storyboard Agent
+responsibility: Plan beats with one objective each, progressive disclosure and fully specified seams.
+nodes:
+- N08 Storyboard and shot planning
+inputs_allowed:
+- artifact:design_system
+- artifact:script
+- control:creative
+- control:design
+- defects:rework
+controls:
+  read:
+  - creative
+  - design
+  write: []
+skills:
+- storyboard
+- video-prototype
+- video-shotcraft
+- whiteboard-storyboard
+tools: []
+outputs:
+- shotlist
+- storyboard
+decision_authority: Decides beat structure and seams within the script and the design system.
+constraints:
+- One objective per beat
+- Every seam specified (video-shotcraft)
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- storyboard
+escalation:
+  when: The one-message rule cannot fit the cap
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Demo & Deck Producer

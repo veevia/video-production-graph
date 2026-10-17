@@ -1,0 +1,54 @@
+{
+ "title": "Northwind Water Monitor teaser",
+ "runtime_target_s": 16,
+ "chapters": [
+  {
+   "id": "ch1",
+   "title": "The problem",
+   "objective": "Show that plants report water use but nobody sees the pattern.",
+   "units": [
+    {
+     "id": "u1",
+     "text": "Every plant reports its water use, but nobody sees the pattern in time.",
+     "claims": [],
+     "terms": []
+    }
+   ]
+  },
+  {
+   "id": "ch2",
+   "title": "The signal",
+   "objective": "Show the water-use signal against the plant's own range.",
+   "units": [
+    {
+     "id": "u2",
+     "text": "Northwind Water Monitor raises a water-use signal when a plant leaves its own expected range.",
+     "claims": [
+      "C01"
+     ],
+     "terms": [
+      "water-use signal",
+      "expected range"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch3",
+   "title": "The action",
+   "objective": "Show that the outlook lets the team act first.",
+   "units": [
+    {
+     "id": "u3",
+     "text": "A seven-day outlook from the production plan helps the team act first.",
+     "claims": [
+      "C02"
+     ],
+     "terms": [
+      "seven-day outlook"
+     ]
+    }
+   ]
+  }
+ ]
+}

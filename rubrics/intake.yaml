@@ -1,0 +1,34 @@
+# Source intake — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: intake
+name: Source intake
+reviewer: context-research
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: INT-REGISTRY
+  name: Complete source registry
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: sources:check_registry
+  threshold: 1.0
+  target: every source registered with an evidence tag
+  rule: R-PRO-003
+  cases:
+    never: []
+    always: []
+- id: INT-COVERAGE
+  name: Coverage
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: sources:validate
+  threshold: 1.0
+  target: brief, product evidence, brand authority and prior feedback present, judged by content (only files under sources/, not copies of control documents or templates; one file is evidence of one kind; assumed sources don't count); a missing one is a gap that loops to N01 or escalates
+  rule: R-ACC-002
+  cases:
+    never:
+    - Summarise a recording instead of registering it
+    always:
+    - Register what is missing as a gap

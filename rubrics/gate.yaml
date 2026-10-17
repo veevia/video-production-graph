@@ -1,0 +1,21 @@
+# Feedback interpretation and gate — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: gate
+name: Feedback interpretation and gate
+reviewer: production-orchestrator
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: GAT-TRACE
+  name: Traceable defects
+  brief_dimension: product_accuracy
+  level: MUST
+  check:
+    type: tool
+    fn: regen:check_traces
+  threshold: 1.0
+  target: every open blocking defect names a known node, a smallest fix and an acceptance check
+  rule: R-PRO-008
+  cases:
+    never:
+    - '''Make it better'' as a defect'
+    always:
+    - '''LEG-DENSITY: scene s3 shows 11 text elements → n13, reveal in 3 steps'''

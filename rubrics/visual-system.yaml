@@ -1,0 +1,34 @@
+# Visual system — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: visual-system
+name: Visual system
+reviewer: visual-design
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: VS-CONTRAST
+  name: Approved pairs meet contrast
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: design:check_palette
+  threshold: 1.0
+  target: every approved text pair ≥ WCAG threshold
+  rule: R-LEG-002
+  cases:
+    never: []
+    always: []
+- id: VS-BOOKENDS
+  name: Bookend system
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei approves the bookend system at N09
+  rule: R-DES-001
+  cases:
+    never:
+    - A bookend style that nothing else in the film uses
+    always:
+    - One type system for bookends and infographics
+    - Record Wei's visual-system decision

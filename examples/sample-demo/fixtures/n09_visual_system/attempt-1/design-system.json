@@ -1,0 +1,28 @@
+{
+ "palette": {
+  "ink": "#1A1F26",
+  "paper": "#FFFFFF",
+  "brand": "#0B5CAD",
+  "mist": "#EEF1F4",
+  "signal": "#E03E2D",
+  "slate": "#5A6572"
+ },
+ "fonts": [
+  "Mona Sans"
+ ],
+ "text_pairs": [
+  {
+   "fg": "paper",
+   "bg": "brand",
+   "use": "large"
+  },
+  {
+   "fg": "ink",
+   "bg": "paper",
+   "use": "body"
+  }
+ ],
+ "references": [
+  "sources/brand.md"
+ ]
+}

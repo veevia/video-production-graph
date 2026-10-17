@@ -1,0 +1,32 @@
+{
+ "shots": [
+  {
+   "id": "SH1",
+   "beat": "B1",
+   "framing": "full frame",
+   "motion": "slow push-in",
+   "asset_ids": [
+    "A1",
+    "A4"
+   ]
+  },
+  {
+   "id": "SH2",
+   "beat": "B2",
+   "framing": "full frame",
+   "motion": "slow push-in",
+   "asset_ids": [
+    "A2"
+   ]
+  },
+  {
+   "id": "SH3",
+   "beat": "B3",
+   "framing": "full product window",
+   "motion": "slow push-in, ring on the card",
+   "asset_ids": [
+    "A3"
+   ]
+  }
+ ]
+}

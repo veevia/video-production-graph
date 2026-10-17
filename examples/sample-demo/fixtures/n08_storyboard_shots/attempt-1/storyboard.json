@@ -1,0 +1,85 @@
+{
+ "beats": [
+  {
+   "id": "B1",
+   "chapter": "ch1",
+   "unit_ids": [
+    "u1"
+   ],
+   "objective": "Plants report, but the pattern is invisible",
+   "visual": "blue field, title, the signal line",
+   "source": {
+    "type": "rendered",
+    "ref": "A1"
+   },
+   "duration_s": 5.4,
+   "on_screen_text": [
+    "WATER DATA, EVERYWHERE",
+    "No one sees the pattern in time"
+   ],
+   "layout": "title",
+   "asset_ids": [
+    "A1",
+    "A4"
+   ],
+   "transition_out": {
+    "outgoing_anchor": "signal line",
+    "incoming_anchor": "range band",
+    "direction": "left-to-right",
+    "match_frame": "signal line height",
+    "duration_s": 0.4,
+    "audio_bridge": "music sustains under the pause"
+   }
+  },
+  {
+   "id": "B2",
+   "chapter": "ch2",
+   "unit_ids": [
+    "u2"
+   ],
+   "objective": "The signal leaves the plant's own range",
+   "visual": "range band with the flagged point",
+   "source": {
+    "type": "rendered",
+    "ref": "A2"
+   },
+   "duration_s": 5.4,
+   "on_screen_text": [
+    "Expected range",
+    "Water-use signal"
+   ],
+   "layout": "diagram",
+   "asset_ids": [
+    "A2"
+   ],
+   "transition_out": {
+    "outgoing_anchor": "flagged point",
+    "incoming_anchor": "outlook card",
+    "direction": "left-to-right",
+    "match_frame": "signal line height",
+    "duration_s": 0.4,
+    "audio_bridge": "music sustains under the pause"
+   }
+  },
+  {
+   "id": "B3",
+   "chapter": "ch3",
+   "unit_ids": [
+    "u3"
+   ],
+   "objective": "The outlook card lets the team act first",
+   "visual": "the captured product screen, ring on the outlook card",
+   "source": {
+    "type": "captured",
+    "ref": "S04"
+   },
+   "duration_s": 5.6,
+   "on_screen_text": [],
+   "layout": "ui",
+   "asset_ids": [
+    "A3"
+   ],
+   "transition_out": null
+  }
+ ]
+}

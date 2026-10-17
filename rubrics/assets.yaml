@@ -1,0 +1,19 @@
+# Assets — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: assets
+name: Assets
+reviewer: asset-generation
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: AS-SPEC
+  name: At spec
+  brief_dimension: rendering_quality
+  level: MUST
+  check:
+    type: tool
+    fn: assets:check_generated
+  threshold: 1.0
+  target: every planned asset at its w×h and format
+  rule: R-AST-001
+  cases:
+    never: []
+    always: []

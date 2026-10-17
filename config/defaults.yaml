@@ -1,0 +1,41 @@
+# Default production thresholds. Each value names the knowledge rule (knowledge/rules.json) whose evidence
+# justifies it; the rule's lifecycle state decides whether the check is enforced or advisory.
+# A project overrides values in controls/evaluation.md front-matter `thresholds:`. Changing a default here is a
+# learning-loop change: record it as a rule revision, never a silent edit.
+thresholds:
+  text:
+    min_font_px_at_1080: 22        # R-LEG-001  Round 07 accessibility audit v2 minimum
+    min_contrast_normal: 4.5       # R-LEG-002  WCAG 2.2 SC 1.4.3
+    min_contrast_large: 3.0        # R-LEG-002  WCAG large-scale text
+    large_text_px: 24              # WCAG large scale: 18 pt ≈ 24 px
+    large_text_bold_px: 18.66      # WCAG large scale: 14 pt bold ≈ 18.66 px
+    dwell_min_s: 1.0               # R-LEG-003  reading time: max(1.0 s, 0.24 s per word)
+    dwell_s_per_word: 0.24         # R-LEG-003
+    safe_area: {x0: 96, x1: 1824, y0: 54, y1: 1026}   # R-LEG-004  title-safe used in Round 07 (x 96–1824)
+    caption_band_top_px: 900       # R-LEG-005  nothing essential below y 900 while captioned
+    ghost_opacity_min_s: 0.3       # R-LEG-006  no partial-opacity "ghost" text; step down to a solid grey
+  highlight:
+    min_ring_s: 1.0                # R-UI-002   focus rings on real UI hold ≥ 1 s (critic, r07-v10)
+  captions:
+    max_lag_s: 0.0                 # R-CAP-001  a cue never starts after its first spoken word
+    max_chain_lead_s: 0.20         # R-CAP-001  mid-sentence lead ≤ 0.20 s
+    max_first_lead_s: 0.45         # R-CAP-001  sentence-first lead ≤ 0.45 s, into cleared time only
+    max_early_clear_s: 0.10        # R-CAP-001  never clear > 0.10 s before the last word ends
+    max_cps: 20.0                  # R-CAP-002  adult reading-rate ceiling
+    min_duration_s: 0.8            # R-CAP-002
+  audio:
+    integrated_lufs: -16.0         # R-AUD-001  online-delivery target used in Round 07
+    lufs_tolerance: 1.0            # R-AUD-001
+    true_peak_max_dbtp: -1.0       # R-AUD-001
+    voice_over_music_min_lu: 16.0  # R-AUD-002  voice over music p10 ≥ 16 LU (Round 07 mix evidence)
+    max_speech_dip_db: 6.0         # R-VOI-002  never attenuate inside speech by more than a 6 dB breath dip
+    unexplained_silence_s: 1.5     # R-AUD-003  silence longer than this must be a planned pause
+  flash:
+    max_flashes_per_s: 3           # R-LEG-007  WCAG 2.2 SC 2.3.1
+    luma_delta: 0.2                # frame-to-frame mean-luma swing counted as a flash transition
+  pacing:
+    wps_min: 1.8                   # R-PRO-006  speaking-rate band (an assumption; calibration pending)
+    wps_max: 3.2                   # R-PRO-006
+  density:
+    max_text_layers_per_scene: 8   # R-DEN-001  one message per frame (Wei, P1/P2); calibration pending
+    scene_limits: {}               # R-DEN-001  a scene's own limit, e.g. {B02: 18}; set in evaluation.md, never here

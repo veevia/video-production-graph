@@ -1,0 +1,38 @@
+# Accessibility Reviewer — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: accessibility-reviewer
+name: Accessibility Reviewer
+responsibility: Validate legibility, contrast, dwell, safe areas, captions and flashing.
+nodes:
+- N18 Accessibility and legibility validation
+inputs_allowed:
+- artifact:captions
+- artifact:master
+- artifact:text_layers
+- artifact:timings
+- control:design
+- control:evaluation
+controls:
+  read:
+  - design
+  - evaluation
+  write: []
+skills:
+- accessibility-verification
+- browser-testing-with-devtools
+tools:
+- caption sync
+- luminance flash scan
+- vpg.tools.legibility:check
+outputs:
+- accessibility_report
+decision_authority: Scores accessibility dimensions; tool findings are binding.
+constraints:
+- Cannot waive a legibility finding
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- accessibility
+escalation:
+  when: A check can't run
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: FDE Design Reviewer

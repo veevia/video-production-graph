@@ -1,0 +1,20 @@
+{
+ "lessons": [
+  {
+   "text": "A caption offset in assembly produced a lag that the caption-sync audit caught; the fix lived in assembly parameters only.",
+   "class": "reusable",
+   "evidence": [
+    "ACC-CAPTIONS defect",
+    "comparison after rework cycle 1"
+   ],
+   "rule": "R-CAP-001"
+  },
+  {
+   "text": "The word 'predicts' misdescribes a planned-range outlook for this product.",
+   "class": "project_specific",
+   "evidence": [
+    "n07 attempt 1 failure"
+   ]
+  }
+ ]
+}

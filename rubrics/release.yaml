@@ -1,0 +1,19 @@
+# Release verification — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: release
+name: Release verification
+reviewer: final-approval
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: REL-RECOMPUTED
+  name: Release conditions recomputed
+  brief_dimension: delivery_completeness
+  level: MUST
+  check:
+    type: tool
+    fn: verify:check_final
+  threshold: 1.0
+  target: passing gate, no blocking defects, reviewed hash unchanged, ledger verifies
+  rule: R-PRO-002
+  cases:
+    never: []
+    always: []

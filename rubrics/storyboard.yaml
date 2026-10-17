@@ -1,0 +1,35 @@
+# Storyboard — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: storyboard
+name: Storyboard
+reviewer: storyboard
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: SB-STRUCTURE
+  name: Coverage, objectives, seams
+  brief_dimension: transition_quality
+  level: MUST
+  check:
+    type: tool
+    fn: storyboard:check
+  threshold: 1.0
+  target: every unit covered; one objective per beat; complete seams
+  rule: R-MOT-002
+  cases:
+    never: []
+    always: []
+- id: SB-DISCLOSURE
+  name: Progressive disclosure
+  brief_dimension: visual_coherence
+  level: SHOULD
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: complex beats build step by step on spoken cues (author's self-check; scored independently as CRE-ONE-MESSAGE at N16, with density measured
+    by legibility:check at N18)
+  rule: R-DEN-001
+  cases:
+    never:
+    - A system diagram shown complete at first frame
+    always:
+    - One new element per cue

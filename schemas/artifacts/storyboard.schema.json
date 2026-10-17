@@ -1,0 +1,85 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/storyboard",
+ "title": "storyboard",
+ "type": "object",
+ "properties": {
+  "beats": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "chapter": {
+      "type": "string"
+     },
+     "unit_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "objective": {
+      "type": "string",
+      "minLength": 5
+     },
+     "visual": {
+      "type": "string"
+     },
+     "source": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "enum": [
+         "captured",
+         "supplied",
+         "generated",
+         "rendered"
+        ]
+       },
+       "ref": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "type"
+      ],
+      "additionalProperties": true
+     },
+     "duration_s": {
+      "type": "number",
+      "exclusiveMinimum": 0
+     },
+     "on_screen_text": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "transition_out": {
+      "type": [
+       "object",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "id",
+     "unit_ids",
+     "objective",
+     "visual",
+     "source",
+     "duration_s"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  }
+ },
+ "required": [
+  "beats"
+ ],
+ "additionalProperties": true
+}

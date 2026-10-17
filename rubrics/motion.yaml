@@ -1,0 +1,34 @@
+# Motion and scenes — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: motion
+name: Motion and scenes
+reviewer: motion-design
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: MO-MANIFEST
+  name: Scenes and manifest
+  brief_dimension: motion_quality
+  level: MUST
+  check:
+    type: tool
+    fn: scenes:check
+  threshold: 1.0
+  target: every beat rendered with a text-layer manifest
+  rule: R-DEN-001
+  cases:
+    never: []
+    always: []
+- id: MO-EXPLAIN
+  name: Motion explains
+  brief_dimension: motion_quality
+  level: SHOULD
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: causal elements animate on their cue (author's self-check; scored independently as CRE-MOTION at N16)
+  rule: R-MOT-001
+  cases:
+    never:
+    - A static plate with a pan
+    always:
+    - Animate in narration order

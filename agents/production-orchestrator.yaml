@@ -1,0 +1,53 @@
+# Production Orchestrator — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: production-orchestrator
+name: Production Orchestrator
+responsibility: 'Run the graph: define the brief with Wei, dispatch agents, interpret feedback, gate versions, plan targeted rework, keep lineage.'
+nodes:
+- N03 Objective and audience definition
+- N21 Feedback interpretation
+- N22 Targeted regeneration
+inputs_allowed:
+- control:evaluation
+- defects:open
+- feedback:open
+- knowledge:rules
+- reviews:current
+- state:inputs.brief
+- state:inputs.sources
+- state:runtime.rework_cycles
+controls:
+  read:
+  - creative
+  - evaluation
+  - product
+  write:
+  - evaluation
+skills:
+- alignment-playbook
+- debugging-and-error-recovery
+- extreme-clarity
+- goal-harness
+- problem-framing
+- success-metrics
+- traffic-light-decisions
+tools:
+- vpg.tools.regen:plan
+outputs:
+- brief
+- interpretation
+- regeneration_plan
+decision_authority: Gates versions against explicit rules. Cannot approve objectives, product truth, direction, design or release.
+constraints:
+- Parallel only where write sets and resources are disjoint
+- Bounded loops only
+- Tool > agent for MUST checks
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- brief
+- gate
+- regeneration
+escalation:
+  when: Gate blocked, a loop bound is exceeded, or an integrity violation
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: 'none (this engine: vpg)'

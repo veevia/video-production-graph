@@ -1,0 +1,153 @@
+# Accessibility and legibility — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+id: accessibility
+name: Accessibility and legibility
+reviewer: accessibility-reviewer
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+dimensions:
+- id: LEG-SIZE
+  name: Readable text size
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: ≥ 22 px at 1080p
+  rule: R-LEG-001
+  cases:
+    never: []
+    always: []
+- id: LEG-CONTRAST
+  name: Text contrast
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: ≥ 4.5:1 (≥ 3:1 large)
+  rule: R-LEG-002
+  cases:
+    never: []
+    always: []
+- id: LEG-DWELL
+  name: Reading time
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: ≥ max(1.0 s, 0.24 s × words)
+  rule: R-LEG-003
+  cases:
+    never: []
+    always: []
+- id: LEG-SAFE
+  name: Safe areas and caption band
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: title-safe; nothing essential below y 900 while captioned
+  rule: R-LEG-004
+  cases:
+    never: []
+    always: []
+- id: LEG-GHOST
+  name: No ghost text
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: no partial-opacity text held > 0.3 s
+  rule: R-LEG-006
+  cases:
+    never: []
+    always: []
+- id: LEG-DENSITY
+  name: One message per frame
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: ≤ 8 simultaneous text elements per scene, or the scene's own limit in evaluation.md
+  rule: R-DEN-001
+  cases:
+    never: []
+    always: []
+- id: LEG-RING
+  name: Highlight duration
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: rings ≥ 1 s
+  rule: R-UI-002
+  cases:
+    never: []
+    always: []
+- id: LEG-FLASH
+  name: No flashing
+  brief_dimension: accessibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: ≤ 3 flashes in any second
+  rule: R-LEG-007
+  cases:
+    never: []
+    always: []
+- id: ACC-CAPTIONS
+  name: Speech-locked captions
+  brief_dimension: accessibility
+  level: MUST
+  check:
+    type: tool
+    fn: legibility:check
+  threshold: 1.0
+  target: 0 lags; mid-sentence lead ≤ 0.20 s; early clear ≤ 0.10 s; ≤ 20 cps
+  rule: R-CAP-001
+  cases:
+    never: []
+    always: []
+- id: LEG-COLOR-CUE
+  name: Colour is never the only cue
+  brief_dimension: accessibility
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: every colour-coded state also has a label, shape or position
+  rule: R-LEG-007
+  cases:
+    never:
+    - Red vs green as the only difference between two states
+    always:
+    - Pair colour with a word, icon or position
+- id: LEG-LAPTOP
+  name: Readable at laptop size
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: keyframes readable at 1280 px wide
+  rule: R-LEG-001
+  cases:
+    never:
+    - Product text that needs zooming to read at 1280 px
+    always:
+    - Zoom the camera to the element the narration names

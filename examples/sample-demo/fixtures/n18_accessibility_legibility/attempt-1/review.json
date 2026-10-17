@@ -1,0 +1,16 @@
+{
+ "reviewer": "accessibility-reviewer (scripted)",
+ "scores": [
+  {
+   "dimension": "LEG-COLOR-CUE",
+   "score": 4.5,
+   "evidence": "the red point is labelled 'Water-use signal'"
+  },
+  {
+   "dimension": "LEG-LAPTOP",
+   "score": 4.5,
+   "evidence": "labels are \u2265 26 px at 1280 px wide"
+  }
+ ],
+ "defects": []
+}

@@ -1,0 +1,21 @@
+{
+ "reviewer": "product-accuracy-reviewer (scripted)",
+ "scores": [
+  {
+   "dimension": "ACC-DEPTH",
+   "score": 4.5,
+   "evidence": "B3 opens the plant and shows the outlook card"
+  },
+  {
+   "dimension": "ACC-BOUNDARIES",
+   "score": 4.5,
+   "evidence": "'Synthetic data' tag on the product frame"
+  },
+  {
+   "dimension": "ACC-UNTAGGED",
+   "score": 4.5,
+   "evidence": "u2 and u3 carry verified claims C01 and C02; u1 frames the problem and makes no product claim"
+  }
+ ],
+ "defects": []
+}

@@ -1,0 +1,118 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/timings",
+ "title": "timings",
+ "type": "object",
+ "properties": {
+  "units": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "unit": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "start": {
+      "type": "number",
+      "minimum": 0
+     },
+     "end": {
+      "type": "number",
+      "minimum": 0
+     }
+    },
+    "required": [
+     "unit",
+     "text",
+     "start",
+     "end"
+    ],
+    "additionalProperties": true
+   },
+   "minItems": 1
+  },
+  "planned_silences": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "start": {
+      "type": "number"
+     },
+     "end": {
+      "type": "number"
+     },
+     "why": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "sample_rate": {
+   "type": "integer"
+  },
+  "words": {
+   "type": "array",
+   "description": "Word times. Caption sync keeps the times of entries marked measured, when a unit's entries are its words in order and those times are consistent, and gives every other word of the unit the whole gap between the measured words around it; the time of an entry not marked measured is never read.",
+   "items": {
+    "type": "object",
+    "properties": {
+     "unit": {
+      "type": "string"
+     },
+     "i": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "word": {
+      "type": "string"
+     },
+     "start": {
+      "type": "number",
+      "minimum": 0
+     },
+     "end": {
+      "type": "number",
+      "minimum": 0
+     },
+     "measured": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "unit",
+     "word"
+    ],
+    "additionalProperties": true,
+    "if": {
+     "properties": {
+      "measured": {
+       "const": true
+      }
+     },
+     "required": [
+      "measured"
+     ]
+    },
+    "then": {
+     "required": [
+      "start",
+      "end"
+     ]
+    }
+   }
+  }
+ },
+ "required": [
+  "units"
+ ],
+ "additionalProperties": true
+}

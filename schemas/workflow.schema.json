@@ -1,0 +1,735 @@
+{
+ "$defs": {
+  "Check": {
+   "additionalProperties": false,
+   "description": "A completion criterion the engine verifies from disk and state (never from agent self-report).",
+   "properties": {
+    "type": {
+     "enum": [
+      "artifact",
+      "tool",
+      "state",
+      "feedback_interpreted",
+      "defects_valid",
+      "review_complete"
+     ],
+     "title": "Type",
+     "type": "string"
+    },
+    "key": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Key"
+    },
+    "schema": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Schema"
+    },
+    "fn": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Fn"
+    },
+    "args": {
+     "additionalProperties": true,
+     "title": "Args",
+     "type": "object"
+    },
+    "description": {
+     "title": "Description",
+     "type": "string"
+    }
+   },
+   "required": [
+    "type",
+    "description"
+   ],
+   "title": "Check",
+   "type": "object"
+  },
+  "ControlAccess": {
+   "additionalProperties": false,
+   "properties": {
+    "read": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Read",
+     "type": "array"
+    },
+    "write": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Write",
+     "type": "array"
+    },
+    "lock_on_approval": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Lock On Approval",
+     "type": "array"
+    }
+   },
+   "title": "ControlAccess",
+   "type": "object"
+  },
+  "EdgeDef": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "from": {
+     "title": "From",
+     "type": "string"
+    },
+    "to": {
+     "title": "To",
+     "type": "string"
+    },
+    "kind": {
+     "$ref": "#/$defs/EdgeKind"
+    },
+    "transition": {
+     "enum": [
+      "deterministic",
+      "conditional"
+     ],
+     "title": "Transition",
+     "type": "string"
+    },
+    "when": {
+     "title": "When",
+     "type": "string"
+    },
+    "transfers": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Transfers",
+     "type": "array"
+    },
+    "threshold": {
+     "title": "Threshold",
+     "type": "string"
+    },
+    "branching": {
+     "title": "Branching",
+     "type": "string"
+    },
+    "on_fail": {
+     "title": "On Fail",
+     "type": "string"
+    },
+    "max_traversals": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Max Traversals"
+    }
+   },
+   "required": [
+    "id",
+    "from",
+    "to",
+    "kind",
+    "transition",
+    "when",
+    "transfers",
+    "threshold",
+    "branching",
+    "on_fail"
+   ],
+   "title": "EdgeDef",
+   "type": "object"
+  },
+  "EdgeKind": {
+   "enum": [
+    "flow",
+    "loop",
+    "escalate"
+   ],
+   "title": "EdgeKind",
+   "type": "string"
+  },
+  "EscalationPolicy": {
+   "additionalProperties": false,
+   "properties": {
+    "after": {
+     "title": "After",
+     "type": "string"
+    },
+    "to": {
+     "title": "To",
+     "type": "string"
+    },
+    "report": {
+     "title": "Report",
+     "type": "string"
+    }
+   },
+   "required": [
+    "after",
+    "to",
+    "report"
+   ],
+   "title": "EscalationPolicy",
+   "type": "object"
+  },
+  "HumanReview": {
+   "additionalProperties": false,
+   "properties": {
+    "required": {
+     "title": "Required",
+     "type": "boolean"
+    },
+    "decision": {
+     "title": "Decision",
+     "type": "string"
+    },
+    "approver": {
+     "default": "Wei",
+     "title": "Approver",
+     "type": "string"
+    },
+    "outcomes": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Outcomes",
+     "type": "array"
+    },
+    "dry_run_auto": {
+     "default": true,
+     "title": "Dry Run Auto",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "required",
+    "decision"
+   ],
+   "title": "HumanReview",
+   "type": "object"
+  },
+  "NodeDef": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "num": {
+     "title": "Num",
+     "type": "integer"
+    },
+    "name": {
+     "title": "Name",
+     "type": "string"
+    },
+    "phase": {
+     "title": "Phase",
+     "type": "string"
+    },
+    "subgraph": {
+     "title": "Subgraph",
+     "type": "string"
+    },
+    "kind": {
+     "$ref": "#/$defs/NodeKind"
+    },
+    "purpose": {
+     "title": "Purpose",
+     "type": "string"
+    },
+    "inputs": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Inputs",
+     "type": "array"
+    },
+    "context": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Context",
+     "type": "array"
+    },
+    "state_read": {
+     "items": {
+      "type": "string"
+     },
+     "title": "State Read",
+     "type": "array"
+    },
+    "state_write": {
+     "items": {
+      "type": "string"
+     },
+     "title": "State Write",
+     "type": "array"
+    },
+    "agent": {
+     "title": "Agent",
+     "type": "string"
+    },
+    "skills": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Skills",
+     "type": "array"
+    },
+    "tools": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Tools",
+     "type": "array"
+    },
+    "instructions": {
+     "title": "Instructions",
+     "type": "string"
+    },
+    "prompt": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Prompt"
+    },
+    "outputs": {
+     "items": {
+      "$ref": "#/$defs/OutputSpec"
+     },
+     "title": "Outputs",
+     "type": "array"
+    },
+    "completion": {
+     "items": {
+      "$ref": "#/$defs/Check"
+     },
+     "title": "Completion",
+     "type": "array"
+    },
+    "rubric": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Rubric",
+     "type": "array"
+    },
+    "failure_conditions": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Failure Conditions",
+     "type": "array"
+    },
+    "retry": {
+     "$ref": "#/$defs/RetryPolicy"
+    },
+    "escalation": {
+     "$ref": "#/$defs/EscalationPolicy"
+    },
+    "human_review": {
+     "$ref": "#/$defs/HumanReview"
+    },
+    "provenance": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Provenance",
+     "type": "array"
+    },
+    "controls": {
+     "$ref": "#/$defs/ControlAccess"
+    },
+    "resources": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Resources",
+     "type": "array"
+    },
+    "map_over": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Map Over"
+    },
+    "outcomes": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Outcomes",
+     "type": "array"
+    },
+    "run": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/RunSpec"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    },
+    "gate": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Gate"
+    }
+   },
+   "required": [
+    "id",
+    "num",
+    "name",
+    "phase",
+    "subgraph",
+    "kind",
+    "purpose",
+    "inputs",
+    "context",
+    "state_read",
+    "state_write",
+    "agent",
+    "instructions",
+    "outputs",
+    "completion",
+    "rubric",
+    "failure_conditions",
+    "retry",
+    "escalation",
+    "human_review",
+    "provenance"
+   ],
+   "title": "NodeDef",
+   "type": "object"
+  },
+  "NodeKind": {
+   "enum": [
+    "agent",
+    "tool",
+    "review"
+   ],
+   "title": "NodeKind",
+   "type": "string"
+  },
+  "OutputSpec": {
+   "additionalProperties": false,
+   "properties": {
+    "key": {
+     "title": "Key",
+     "type": "string"
+    },
+    "kind": {
+     "title": "Kind",
+     "type": "string"
+    },
+    "description": {
+     "title": "Description",
+     "type": "string"
+    },
+    "schema": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Schema"
+    },
+    "state_path": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "State Path"
+    },
+    "state_fields": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "State Fields",
+     "type": "object"
+    },
+    "required": {
+     "default": true,
+     "title": "Required",
+     "type": "boolean"
+    },
+    "per_item": {
+     "default": false,
+     "title": "Per Item",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "key",
+    "kind",
+    "description"
+   ],
+   "title": "OutputSpec",
+   "type": "object"
+  },
+  "Policies": {
+   "additionalProperties": false,
+   "properties": {
+    "max_rework_cycles": {
+     "minimum": 1,
+     "title": "Max Rework Cycles",
+     "type": "integer"
+    },
+    "max_same_defect_failures": {
+     "minimum": 1,
+     "title": "Max Same Defect Failures",
+     "type": "integer"
+    },
+    "parallel_limit": {
+     "minimum": 1,
+     "title": "Parallel Limit",
+     "type": "integer"
+    },
+    "single_flight_resources": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Single Flight Resources",
+     "type": "array"
+    },
+    "blocking_severities": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Blocking Severities",
+     "type": "array"
+    },
+    "dry_run_actor": {
+     "title": "Dry Run Actor",
+     "type": "string"
+    },
+    "schema_version": {
+     "default": "vpg-state/v1",
+     "title": "Schema Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "max_rework_cycles",
+    "max_same_defect_failures",
+    "parallel_limit",
+    "single_flight_resources",
+    "blocking_severities",
+    "dry_run_actor"
+   ],
+   "title": "Policies",
+   "type": "object"
+  },
+  "RetryPolicy": {
+   "additionalProperties": false,
+   "properties": {
+    "max_attempts": {
+     "minimum": 1,
+     "title": "Max Attempts",
+     "type": "integer"
+    },
+    "behavior": {
+     "title": "Behavior",
+     "type": "string"
+    }
+   },
+   "required": [
+    "max_attempts",
+    "behavior"
+   ],
+   "title": "RetryPolicy",
+   "type": "object"
+  },
+  "RunSpec": {
+   "additionalProperties": false,
+   "properties": {
+    "tool": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Tool"
+    },
+    "command_hook": {
+     "default": false,
+     "title": "Command Hook",
+     "type": "boolean"
+    }
+   },
+   "title": "RunSpec",
+   "type": "object"
+  },
+  "Subgraph": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "name": {
+     "title": "Name",
+     "type": "string"
+    },
+    "pattern": {
+     "title": "Pattern",
+     "type": "string"
+    },
+    "purpose": {
+     "title": "Purpose",
+     "type": "string"
+    },
+    "nodes": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Nodes",
+     "type": "array"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "pattern",
+    "purpose",
+    "nodes"
+   ],
+   "title": "Subgraph",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "properties": {
+  "id": {
+   "title": "Id",
+   "type": "string"
+  },
+  "name": {
+   "title": "Name",
+   "type": "string"
+  },
+  "version": {
+   "title": "Version",
+   "type": "string"
+  },
+  "description": {
+   "title": "Description",
+   "type": "string"
+  },
+  "start": {
+   "default": "START",
+   "title": "Start",
+   "type": "string"
+  },
+  "end": {
+   "default": "END",
+   "title": "End",
+   "type": "string"
+  },
+  "nodes": {
+   "items": {
+    "$ref": "#/$defs/NodeDef"
+   },
+   "title": "Nodes",
+   "type": "array"
+  },
+  "edges": {
+   "items": {
+    "$ref": "#/$defs/EdgeDef"
+   },
+   "title": "Edges",
+   "type": "array"
+  },
+  "subgraphs": {
+   "items": {
+    "$ref": "#/$defs/Subgraph"
+   },
+   "title": "Subgraphs",
+   "type": "array"
+  },
+  "policies": {
+   "$ref": "#/$defs/Policies"
+  }
+ },
+ "required": [
+  "id",
+  "name",
+  "version",
+  "description",
+  "nodes",
+  "edges",
+  "subgraphs",
+  "policies"
+ ],
+ "title": "Workflow",
+ "type": "object"
+}

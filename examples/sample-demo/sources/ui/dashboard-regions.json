@@ -1,0 +1,28 @@
+{
+ "source": "sources/ui/dashboard.png",
+ "frame": [
+  1920,
+  1080
+ ],
+ "note": "measured boxes in capture pixels",
+ "regions": {
+  "outlook_card": [
+   1200,
+   650,
+   680,
+   360
+  ],
+  "signal": [
+   1570,
+   240,
+   60,
+   60
+  ],
+  "plant_list": [
+   28,
+   190,
+   364,
+   422
+  ]
+ }
+}

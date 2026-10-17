@@ -1,0 +1,52 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/design-system",
+ "title": "design-system",
+ "type": "object",
+ "properties": {
+  "palette": {
+   "type": "object"
+  },
+  "fonts": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "minItems": 1
+  },
+  "text_pairs": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "fg": {
+      "type": "string"
+     },
+     "bg": {
+      "type": "string"
+     },
+     "use": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "fg",
+     "bg"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "references": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "required": [
+  "palette",
+  "fonts",
+  "text_pairs"
+ ],
+ "additionalProperties": true
+}

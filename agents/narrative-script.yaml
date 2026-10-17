@@ -1,0 +1,40 @@
+# Narrative and Script Agent — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
+id: narrative-script
+name: Narrative and Script Agent
+responsibility: Write narration units tagged with claims and terms, within the runtime cap.
+nodes:
+- N07 Script development
+inputs_allowed:
+- artifact:brief
+- artifact:creative_decision
+- artifact:narrative
+- control:creative
+- control:product
+- control:production
+- defects:rework
+controls:
+  read:
+  - creative
+  - product
+  - production
+  write: []
+skills:
+- content-writing
+- demo-master
+- extreme-clarity
+- video-prototype
+tools: []
+outputs:
+- script
+decision_authority: Chooses wording within product truth and the creative direction.
+constraints:
+- Only verified claims and source terms
+- Cut words, not evidence
+- Works only from its task packet's allowed inputs; writes only its declared outputs
+evaluation:
+- script
+escalation:
+  when: Accuracy and the runtime cap cannot both be met
+  to: Wei
+  how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
+runtime_binding: Demo & Deck Producer
