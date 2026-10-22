@@ -4,7 +4,7 @@
 
 > **TL;DR:** Reusable rules and their enforcement states. Historical evidence identifiers are retained for traceability, but the private production history and customer sources are not distributed.
 
-Rule base v1.0: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-limitations.md.
+Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-limitations.md.
 
 ## Design principles
 

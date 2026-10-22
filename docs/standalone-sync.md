@@ -40,8 +40,7 @@ git diff --stat
 # Stage reviewed explicit paths, including .vpg-sync.json; never bulk-copy the private workspace.
 git add -- <reviewed-paths>
 git diff --cached
-git commit -m "feat: describe the reviewed update" \
-  -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git commit -m "feat: describe the reviewed update"
 git push origin main
 ```
 

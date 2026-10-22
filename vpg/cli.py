@@ -74,7 +74,7 @@ def _since_last_approval(eng, nid: str) -> list[str]:
     if last is None:
         return []
     if not last.outputs:
-        return [f"    last decided {last.at[:16]} by {last.actor} ({last.decision}); that record predates output hashes (v1.7)"]
+        return [f"    last decided {last.at[:16]} by {last.actor} ({last.decision}); that record predates output hashes"]
     rt = eng.rt(nid)
     now_out = {k: sha[:16] for k, (_, sha) in eng._attempt_outputs(nid, rt.attempts).items()}
     changed = sorted(k for k in set(now_out) | set(last.outputs) if now_out.get(k) != last.outputs.get(k))
@@ -113,7 +113,7 @@ def cmd_validate(args) -> int:
     from .graph import load_workflow, validate
     wf = load_workflow(args.workflow)
     errs = validate(wf)
-    print(f"{wf.id} v{wf.version}: {len(wf.nodes)} nodes, {len(wf.edges)} edges, {len(wf.subgraphs)} subgraphs — "
+    print(f"{wf.id}: {len(wf.nodes)} nodes, {len(wf.edges)} edges, {len(wf.subgraphs)} subgraphs — "
           + ("valid" if not errs else f"{len(errs)} errors"))
     for e in errs:
         print("  -", e)

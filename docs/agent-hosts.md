@@ -18,12 +18,12 @@ environment is active, so `python` resolves to it.
 
 ## Verified
 
-Checked on 2026-10-17 against vpg 1.0.0, in fresh projects built from the fictional sample sources:
+Checked in fresh projects built from the fictional sample sources:
 
 - **Any shell-capable agent.** A worker using only file writes and the packet's Submit command passed N01,
   and N02 then passed. The same steps passed in a macOS sandbox that allowed writes only inside the project
   and blocked the network; the checkout stayed read-only.
-- **GitHub Copilot CLI 1.0.74.** Given only the packet path, it completed N01 in about a minute and
+- **GitHub Copilot CLI.** Given only the packet path, it completed N01 in about a minute and
   submitted as `agent:context-research`; N02 then passed. With `--allow-tool 'shell(python:*)'`, the rule
   `--deny-tool 'shell(python -m vpg approve:*)'` blocked `vpg approve` and still let `vpg status` run.
   Without the trailing `:*`, the rule did not match.
@@ -32,7 +32,7 @@ Checked on 2026-10-17 against vpg 1.0.0, in fresh projects built from the fictio
   `vpg tasks`, stopped, and reported the decision, approver and evidence. This was one run on one model.
 
 Claude Code, Codex, OpenCode, Gemini CLI and Cursor were not run. Their rows below follow each vendor's
-documentation as of October 2026; check them against your version.
+documentation; check them against your host environment.
 
 ## Two ways to launch an agent
 

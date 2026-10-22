@@ -178,7 +178,7 @@ def svg(wf: Workflow) -> str:
              '<marker id="l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
              '<path d="M0,0 L10,5 L0,10 z" fill="#C4151C"/></marker></defs>',
              f'<rect width="100%" height="100%" fill="#FAFBFC"/>',
-             f'<text x="{PAD}" y="{PAD + 10}" font-size="22" font-weight="700" fill="#1A1F26">{html.escape(wf.name)} v{wf.version}</text>',
+             f'<text x="{PAD}" y="{PAD + 10}" font-size="22" font-weight="700" fill="#1A1F26">{html.escape(wf.name)}</text>',
              f'<text x="{PAD}" y="{PAD + 36}" font-size="13" fill="#5A6572">solid = flow (join = all) · dashed red = bounded loop · dotted = escalate · '
              'white = agent · grey = tool · amber = review · thick red border = human gate</text>']
 
@@ -283,7 +283,7 @@ def principles() -> str:
            "> **TL;DR:** Wei's quality bar, as he stated it, turned into rules that a tool or a reviewer can check. Each rule cites its evidence "
            "(case-study iterations and Wei's messages) and its lifecycle state. Enforced rules block the gate; advisory ones are reported "
            "and wait for Wei's approval.", "",
-           f"Rule base v{rb.data['version']}: {len(rb.rules)} rules — "
+           f"Rule base: {len(rb.rules)} rules — "
            + ", ".join(f"{k} {v}" for k, v in sorted(__import__('collections').Counter(r['lifecycle']['state'] for r in rb.rules).items())) + ".",
            "Evidence ids resolve to `knowledge/case-studies/platform-film-2026-09/production-history_TENANT.json`. `wei:Mn` is Wei's message n in the "
            "production session, and `task:` marks evidence from building this workflow. Calibration of every numeric threshold against Wei's own "
@@ -292,7 +292,7 @@ def principles() -> str:
         out = [GEN.replace("graph/workflow.yaml", "knowledge/rules.json"), "# Design principles and craft-feedback library", "",
                "> **TL;DR:** Reusable rules and their enforcement states. Historical evidence identifiers are retained for "
                "traceability, but the private production history and customer sources are not distributed.", "",
-               f"Rule base v{rb.data['version']}: {len(rb.rules)} rules. Numeric thresholds remain uncalibrated; "
+               f"Rule base: {len(rb.rules)} rules. Numeric thresholds remain uncalibrated; "
                "see docs/gaps-and-limitations.md.", ""]
     for cat, title in CATEGORY_TITLES.items():
         rules = [r for r in rb.rules if r["category"] == cat]
