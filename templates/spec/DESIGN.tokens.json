@@ -1,0 +1,36 @@
+{
+ "$description": "Design tokens in the W3C Design Tokens format (2025.10). DESIGN.md names their roles; tools read these exact values.",
+ "color": {
+  "$type": "color",
+  "ground": {"$value": {"colorSpace": "srgb", "components": [0.118, 0.133, 0.157], "hex": "#1e2228"}, "$description": "<fill: the quiet ground>"},
+  "figure": {"$value": {"colorSpace": "srgb", "components": [0.957, 0.961, 0.969], "hex": "#f4f5f7"}, "$description": "text and figures on the ground"},
+  "muted": {"$value": {"colorSpace": "srgb", "components": [0.62, 0.65, 0.69], "hex": "#9ea6b0"}, "$description": "de-emphasised text, a solid grey, never partial opacity"},
+  "accent": {"$value": {"colorSpace": "srgb", "components": [0.0, 0.0, 0.0], "hex": "#000000"}, "$description": "<fill: the one accent>"}
+ },
+ "font": {
+  "$type": "fontFamily",
+  "primary": {"$value": ["<fill: family>", "sans-serif"]}
+ },
+ "space": {
+  "$type": "dimension",
+  "margin": {"$value": {"value": 96, "unit": "px"}},
+  "gutter": {"$value": {"value": 24, "unit": "px"}}
+ },
+ "type": {
+  "$type": "typography",
+  "display": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 88, "unit": "px"}, "fontWeight": 800, "letterSpacing": {"value": 0, "unit": "px"}, "lineHeight": 1.05}},
+  "title": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 56, "unit": "px"}, "fontWeight": 700, "letterSpacing": {"value": 0, "unit": "px"}, "lineHeight": 1.1}},
+  "body": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 34, "unit": "px"}, "fontWeight": 500, "letterSpacing": {"value": 0, "unit": "px"}, "lineHeight": 1.3}},
+  "label": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 26, "unit": "px"}, "fontWeight": 600, "letterSpacing": {"value": 0.5, "unit": "px"}, "lineHeight": 1.2}}
+ },
+ "duration": {
+  "$type": "duration",
+  "fast": {"$value": {"value": 200, "unit": "ms"}},
+  "base": {"$value": {"value": 400, "unit": "ms"}},
+  "hold": {"$value": {"value": 1.5, "unit": "s"}}
+ },
+ "easing": {
+  "$type": "cubicBezier",
+  "standard": {"$value": [0.2, 0.0, 0.0, 1.0]}
+ }
+}

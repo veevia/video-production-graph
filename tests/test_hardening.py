@@ -203,6 +203,49 @@ def test_intake_loop_brings_the_gap_report_back_to_intake(tmp_path):
     assert eng.fingerprint(n01) != with_gaps
 
 
+def test_init_from_copies_safety_keys_and_reports_omissions(tmp_path, capsys):
+    src = tmp_path / "source"
+    dst = tmp_path / "child"
+    assert cli.main(["init", str(src), "--name", "source"]) == 0
+    source_cfg = yaml.safe_load((src / "vpg.project.yaml").read_text())
+    source_cfg.update({
+        "privacy": {"names": "names.json"},
+        "reviews": {"binding": "require", "independence": "require"},
+        "loop_budget": {"profile": "quality-first"},
+        "command_deps": {"n13_video_render": ["pipeline/**"]},
+        "humans": ["Wei"],
+        "autonomy": {"mode": "gated", "principal": "Wei"},
+    })
+    (src / "names.json").write_text(json.dumps(["Jane Placeholder"]))
+    (src / "vpg.project.yaml").write_text(yaml.safe_dump(source_cfg, sort_keys=False))
+    assert cli.main(["init", str(dst), "--name", "child", "--from", str(src)]) == 0
+    out = capsys.readouterr().out
+    cfg = yaml.safe_load((dst / "vpg.project.yaml").read_text())
+    assert cfg["privacy"]["names"] == str((src / "names.json").resolve())
+    for key in ("reviews", "loop_budget", "command_deps", "humans", "autonomy"):
+        assert cfg[key] == source_cfg[key]
+    assert "safety keys copied: privacy, reviews, loop_budget, command_deps, humans, autonomy" in out
+    assert "preflight (not in source)" in out
+    before = (dst / "vpg.project.yaml").read_text()
+    assert cli.main(["init", str(dst), "--from", str(src)]) == 1
+    assert (dst / "vpg.project.yaml").read_text() == before
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "vpg.project.yaml").write_text("id: [unclosed\n")
+    with pytest.raises(SystemExit, match="cannot parse"):
+        cli.main(["init", str(tmp_path / "bad-child"), "--from", str(bad)])
+
+
+def test_status_warns_when_privacy_names_are_not_declared(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    assert any("no privacy name list is declared" in w for w in eng.status()["warnings"])
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["privacy"] = {"names": "none", "reason": "synthetic sample"}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    assert not any("privacy:" in w for w in Engine(proj, executor=FnExecutor()).status()["warnings"])
+
+
 def test_unblock_grants_the_spent_loop_a_fresh_budget(tmp_path):
     proj = make_project(tmp_path, human_b=True)
     eng = Engine(proj, executor=FnExecutor())

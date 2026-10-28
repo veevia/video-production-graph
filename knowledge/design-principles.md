@@ -4,7 +4,7 @@
 
 > **TL;DR:** Reusable rules and their enforcement states. Historical evidence identifiers are retained for traceability, but the private production history and customer sources are not distributed.
 
-Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-limitations.md.
+Rule base v1.1: 54 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-limitations.md.
 
 ## Design principles
 
@@ -98,6 +98,14 @@ Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-l
 - **Evidence:** R07-v10, R07-v13 — critic r07-v10 P3-1 and r07-v13 P3-C
 - **Lifecycle:** validated (advisory)
 
+### R-REG-005 — When a baseline master is configured, creative review must compare baseline-vs-candidate strips and confirm no beat is worse.
+
+- **Testable form:** reviewer cases; threshold review score ≥ 4 when applicable; rubric dimensions REG-VERDICT
+  - **Never:** score the candidate without baseline comparison
+  - **Always:** cite strip frames
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: reviewers saw stills and metrics, not baseline side-by-side motion.
+- **Lifecycle:** validated (advisory)
+
 ## Legibility and accessibility
 
 ### R-CAP-001 — Captions are speech-locked: never after the first spoken word; mid-sentence lead ≤ 0.20 s; sentence-first lead ≤ 0.45 s into cleared time; never clear &gt; 0.10 s before the last word.
@@ -154,6 +162,30 @@ Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-l
 - **Evidence:** R07-v01, wei:M6
 - **Lifecycle:** adopted (enforced)
 
+### R-LAY-001 — No text, chip or card may overlap another, and no line may run through text in the rendered layout.
+
+- **Testable form:** tool `layout:check`; threshold zero TEXT_OVERLAP, BOX_OVERLAP or LINE_THROUGH_TEXT runs; rubric dimensions LEG-OVERLAP
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: overlapping pills and line-through text passed still-frame review.
+- **Lifecycle:** validated (advisory)
+
+### R-LAY-002 — Held text may not be clipped by its mask, viewport or panel.
+
+- **Testable form:** tool `layout:check`; threshold zero TEXT_CLIPPED runs; rubric dimensions LEG-CLIP
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: product demo cut to crops and labels clipped/removed.
+- **Lifecycle:** validated (advisory)
+
+### R-LAY-003 — Text and text-bearing panels stay inside the stage; off-frame zooms are regressions.
+
+- **Testable form:** tool `layout:check`; threshold zero OFFSTAGE runs; rubric dimensions LEG-OFFSTAGE
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: tiers zoomed 11% off-frame.
+- **Lifecycle:** validated (advisory)
+
+### R-CAP-003 — Captions must contain the same words as the approved script after normalization; missing caption words are accessibility regressions.
+
+- **Testable form:** tool `layout:check_caption_script`; threshold zero missing or extra caption words; rubric dimensions CAP-SCRIPT
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: one caption word was missing.
+- **Lifecycle:** validated (advisory)
+
 ## Visual consistency and detail
 
 ### R-DES-002 — Typography is one system: section titles, infographics and the bookends share the same families in defined roles.
@@ -167,6 +199,12 @@ Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-l
 - **Testable form:** tool `design:compliance`; rubric dimensions DES-TOKENS
 - **Evidence:** R07-v10, wei:M9
 - **Lifecycle:** adopted (enforced)
+
+### R-LAY-004 — A panel may not sit empty after its title appears; empty-tier holds are regressions.
+
+- **Testable form:** tool `layout:check`; threshold zero EMPTY_PANEL runs; rubric dimensions LEG-EMPTY
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: tiers were empty for 6.6 s.
+- **Lifecycle:** validated (advisory)
 
 ## Voice, sound, tone, pacing and transitions
 
@@ -224,6 +262,12 @@ Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-l
 - **Evidence:** R06-e2e-v02, R06-e2e-v07, wei:M3, wei:M6
 - **Lifecycle:** adopted (enforced)
 
+### R-VOI-004 — Narration seams must be silent and continuous: no hard cuts, loud tails into the next unit, overlaps or hard onsets.
+
+- **Testable form:** tool `audio:check_seams`; threshold see config/defaults.yaml thresholds.audio.seams; rubric dimensions VOI-SEAMS
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: six voice seams cut mid-sound.
+- **Lifecycle:** validated (advisory)
+
 ## Storytelling and product demonstrations
 
 ### R-ACC-001 — The engineers' terminology is the source of truth: never invent a term, and map requested terms that have no source instead of adopting them.
@@ -268,6 +312,12 @@ Rule base: 46 rules. Numeric thresholds remain uncalibrated; see docs/gaps-and-l
 - **Testable form:** tool `evaluation:gate (reviews must be current-version)`; rubric dimensions CRE-LENSES
 - **Evidence:** R06-e2e-v01, R06-e2e-v03, R06-e2e-v04, R06-e2e-v05, R06-e2e-v06, R07-v04, wei:M6 — R07-v04 was a self-audited intermediate with no critic row
 - **Lifecycle:** adopted (enforced)
+
+### R-REG-001 — Compare each candidate with the released baseline; undeclared removals, content loss and demo regressions fail the gate.
+
+- **Testable form:** tool `regress:check`; threshold content_retained ≥ 0.7; demo metrics within configured thresholds; rubric dimensions REG-BASELINE
+- **Evidence:** task:b3-regression-harness, task:b3-calibration — Water r08 v4 regression RCA: all review gates passed while the released baseline regressed.
+- **Lifecycle:** validated (advisory)
 
 ## Effective corrective actions
 

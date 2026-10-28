@@ -9,8 +9,8 @@ verified. A writable engine keeps those records in `.vpg/sources/verified.json`,
 recordings. A file changed in the last RACY_S seconds is hashed but not recorded, because on a file system with coarse
 timestamps a second edit within the same tick would keep its identity (git's "racy clean" rule). The records only save
 work: copies are verified on the bytes copied, and N23 re-hashes every frozen source.
-The store holds a `.gitignore` of "*", so the copies (full sources, confidential ones included) never enter a commit of
-`.vpg/` by accident; a project that wants one in git adds it with `git add -f`.
+The store writes only a comment-only `.gitignore` note. Source exclusions come from the workspace root policy, not from
+a nested blanket rule.
 Warnings name a source by its id, never its path, because a file name can carry a person's name."""
 
 from __future__ import annotations
@@ -79,11 +79,15 @@ class SourceStore:
         return h.hexdigest()
 
     def _ensure_dir(self) -> None:
-        """Create the store with its `.gitignore` ("*", which also ignores itself); put the file back if it is missing."""
+        """Create the store and a comment-only `.gitignore` note if it is missing."""
         self.dir.mkdir(parents=True, exist_ok=True)
         ignore = self.dir / ".gitignore"
         if not os.path.lexists(ignore):
-            ignore.write_text("*\n")
+            ignore.write_text(
+                "# Source snapshots may be versioned when they contain no credentials.\n"
+                "# Secret exclusions are owned by the repository root policy.\n"
+                "# This file intentionally contains no active ignore rules.\n"
+            )
 
     def _record(self, path: Path, sha256: str) -> None:
         """Record a copy the engine itself just wrote and verified, under the project lock (exempt from RACY_S)."""

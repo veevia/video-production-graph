@@ -22,8 +22,9 @@ from pathlib import Path
 from typing import Any
 
 from .context import NodeContext, NodeResult
+from .controls import rel_path
 from .models import Finding
-from .util import PKG_ROOT, glob_files, open_regular, read_json, rel, sha256_json, write_json_atomic
+from .util import PKG_ROOT, artifact_identity, glob_files, open_regular, read_json, rel, sha256_json, write_json_atomic
 
 
 class Executor:
@@ -71,8 +72,154 @@ def minimal_example(schema: dict[str, Any], root: dict[str, Any] | None = None) 
     return None
 
 
+def _resolver(schema: dict[str, Any]) -> Any:
+    """Follow local `$ref`s (`#/...`) in `schema`. A loop stops at its first repeat and a missing or non-object target
+    resolves to {}, so a malformed schema can never hang or crash a packet."""
+    def resolve(sub: Any) -> dict[str, Any]:
+        seen: set[str] = set()
+        while isinstance(sub, dict) and isinstance(sub.get("$ref"), str) and sub["$ref"].startswith("#/") and sub["$ref"] not in seen:
+            seen.add(sub["$ref"])
+            target: Any = schema
+            try:
+                for part in sub["$ref"][2:].split("/"):
+                    target = target[part]
+            except (KeyError, IndexError, TypeError):
+                return {}
+            sub = target
+        return sub if isinstance(sub, dict) else {}
+    return resolve
+
+
+def _group(label: str) -> str:
+    return f"({label})" if " or " in label or " and " in label else label
+
+
+def _type_label(sub: Any, resolve: Any, depth: int = 0) -> str:
+    """#165: a schema node's type as a packet reads it: `string`, `one of "P1"|"nit"`, `string or null`,
+    `array of (string or object)`, `map of string`, `array of [string, number]`."""
+    if depth > 3:
+        return "…"
+    sub = resolve(sub) if isinstance(sub, dict) else {}
+    if isinstance(sub.get("$ref"), str):   # a reference outside this schema, or a loop
+        return f"ref {sub['$ref']}"
+    if isinstance(sub.get("enum"), list):
+        vals = [json.dumps(v, ensure_ascii=False) for v in sub["enum"]]
+        return "one of " + "|".join(vals[:8]) + ("|…" if len(vals) > 8 else "")
+    if "const" in sub:
+        return f"exactly {json.dumps(sub['const'], ensure_ascii=False)}"
+    own = any(k in sub for k in ("type", "items", "prefixItems", "properties", "additionalProperties"))
+    for key, joiner in (("anyOf", " or "), ("oneOf", " or "), ("allOf", " and ")):
+        if isinstance(sub.get(key), list) and sub[key]:
+            labels = list(dict.fromkeys(_type_label(x, resolve, depth + 1) for x in sub[key]))
+            typed = [x for x in labels if x != "any"]
+            if key == "allOf":   # untyped members only constrain (minLength, required): the node's own type decides
+                if typed and not own:
+                    return joiner.join(map(_group, typed))
+            elif len(typed) == len(labels):
+                return joiner.join(map(_group, labels))
+            elif not own:
+                return "any"   # one alternative accepts any value
+            break
+    kind = sub.get("type")
+    if isinstance(kind, list):
+        return " or ".join(map(str, kind))
+    if kind == "array" or "items" in sub or "prefixItems" in sub:
+        fixed = _tuple_items(sub)
+        if fixed is not None:
+            return "array of [" + ", ".join(_type_label(x, resolve, depth + 1) for x in fixed) + "]"
+        if isinstance(sub.get("items"), dict) and sub["items"]:
+            return f"array of {_group(_type_label(sub['items'], resolve, depth + 1))}"
+        return "array"
+    if kind == "object" or "properties" in sub or "additionalProperties" in sub:
+        extra = sub.get("additionalProperties")
+        if not sub.get("properties") and isinstance(extra, dict) and extra:
+            return f"map of {_group(_type_label(extra, resolve, depth + 1))}"   # e.g. defect id → its fix
+        return "object"
+    return str(kind or "any")
+
+
+def _tuple_items(sub: dict[str, Any]) -> list[Any] | None:
+    if isinstance(sub.get("prefixItems"), list):
+        return sub["prefixItems"]
+    return sub["items"] if isinstance(sub.get("items"), list) else None
+
+
+def _object_forms(node: Any, resolve: Any) -> list[tuple[str, dict[str, Any]]]:
+    """The object shapes a schema node allows, with fields: the node itself, or each object option of its anyOf/oneOf."""
+    node = resolve(node) if isinstance(node, dict) else {}
+    if isinstance(node.get("properties"), dict) and node["properties"]:
+        return [("", node)]
+    return [(", when an object", opt) for key in ("anyOf", "oneOf") for opt in map(resolve, node.get(key) or [])
+            if isinstance(opt.get("properties"), dict) and opt["properties"]]
+
+
+def _fields(obj: dict[str, Any], resolve: Any) -> str:
+    req = obj.get("required", [])
+    strict = "; no other keys" if obj.get("additionalProperties") is False else ""
+    return ("; ".join(f"{f}{'*' if f in req else ''} {_type_label(p, resolve)}" for f, p in obj["properties"].items())
+            + f" (* required{strict})")
+
+
+def _walk(node: Any, path: str, resolve: Any, depth: int = 0, top: bool = False) -> list[str]:
+    """Every object inside an output, by path (`chapters[].units`, `beats[].source`, `samples[]` element 2), with its
+    fields' types, three levels deep (#165). A top-level array of objects is described by `contract_block`'s own two
+    lines, so its item line is skipped here (`top`)."""
+    node = resolve(node) if isinstance(node, dict) else {}
+    out: list[str] = []
+    if depth > 3:
+        return out
+
+    def inside(obj: dict[str, Any], prefix: str) -> list[str]:
+        return [x for k, sub in obj["properties"].items() for x in _walk(sub, f"{prefix}{k}", resolve, depth + 1)]
+    if node.get("type") == "array" or "items" in node or "prefixItems" in node:
+        fixed = _tuple_items(node)
+        for i, element in enumerate(fixed or []):
+            for form, obj in _object_forms(element, resolve):
+                out.append(f"`{path}` element {i + 1}{form}: {_fields(obj, resolve)}")
+                out += inside(obj, f"{path}[{i + 1}].")
+        items = node.get("items") if fixed is None else None
+        for form, obj in _object_forms(items, resolve):
+            if not (top and not form):
+                out.append(f"each `{path}` item{form}: {_fields(obj, resolve)}")
+            out += inside(obj, f"{path}[].")
+        if isinstance(items, dict) and not _object_forms(items, resolve):
+            out += _walk(items, f"{path}[]", resolve, depth + 1)   # an array of arrays (or of tuples)
+        return out
+    for form, obj in _object_forms(node, resolve):
+        out.append(f"`{path}`{form} fields: {_fields(obj, resolve)}")
+        out += inside(obj, f"{path}.")
+    return out
+
+
+def contract_block(key: str, path: Path | str, schema: dict[str, Any]) -> str:
+    """One schema-bound output's contract: where its schema lives, its required fields, every field's type down to three
+    levels of nesting (#165), and a minimal valid example."""
+    resolve = _resolver(schema)
+    props = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
+    lines = []
+    for k, sub in props.items():   # every array of objects, required or not
+        sub = resolve(sub) if isinstance(sub, dict) else {}
+        is_array = sub.get("type") == "array" or "items" in sub or "prefixItems" in sub
+        item = resolve(sub["items"]) if is_array and isinstance(sub.get("items"), dict) else {}
+        if item.get("properties"):
+            fields = ", ".join(f + ("*" if f in item.get("required", []) else "") for f in item["properties"])
+            strict = "; no other keys" if item.get("additionalProperties") is False else ""
+            lines.append(f"each `{k}` item: {fields} (* required{strict})")
+            lines.append(f"`{k}` item types: " + "; ".join(f"{f} {_type_label(p, resolve)}" for f, p in item["properties"].items()))
+        lines += _walk(sub, k, resolve, top=bool(item.get("properties")))
+    types = "; ".join(f"{k} {_type_label(v, resolve)}" for k, v in props.items())
+    try:
+        example = f"`{json.dumps(minimal_example(schema), ensure_ascii=False)}`"
+    except (KeyError, IndexError, TypeError, RecursionError):
+        example = "unavailable: the schema has a broken reference"
+    return (f"- `{key}` → schema `{path}`\n  - required: {', '.join(schema.get('required', [])) or 'none'}"
+            + (f"\n  - types: {types}" if types else "")
+            + "".join(f"\n  - {x}" for x in lines)
+            + f"\n  - minimal valid shape: {example}")
+
+
 def output_contracts(ctx: NodeContext) -> str:
-    """For each schema-bound output: where the schema lives, its required fields, and a minimal valid example."""
+    """For each schema-bound output, its contract (`contract_block`)."""
     blocks = []
     for o in ctx.node.outputs:
         if not o.schema_name:
@@ -80,26 +227,7 @@ def output_contracts(ctx: NodeContext) -> str:
         path = ctx.pkg_root / "schemas" / "artifacts" / f"{o.schema_name}.schema.json"
         if not path.exists():
             continue
-        schema = read_json(path)
-        req = schema.get("required", [])
-
-        def resolve(sub: dict[str, Any]) -> dict[str, Any]:
-            while isinstance(sub, dict) and "$ref" in sub and sub["$ref"].startswith("#/"):
-                target: Any = schema
-                for part in sub["$ref"][2:].split("/"):
-                    target = target[part]
-                sub = target
-            return sub
-        items = []
-        for k, sub in schema.get("properties", {}).items():   # every array of objects, required or not
-            item = resolve(sub.get("items", {})) if sub.get("type") == "array" else {}
-            if item.get("properties"):
-                fields = ", ".join(f + ("*" if f in item.get("required", []) else "") for f in item["properties"])
-                strict = "; no other keys" if item.get("additionalProperties") is False else ""
-                items.append(f"each `{k}` item: {fields} (* required{strict})")
-        blocks.append(f"- `{o.key}` → schema `{path}`\n  - required: {', '.join(req) or 'none'}"
-                      + "".join(f"\n  - {x}" for x in items)
-                      + f"\n  - minimal valid shape: `{json.dumps(minimal_example(schema), ensure_ascii=False)}`")
+        blocks.append(contract_block(o.key, path, read_json(path)))
     return "\n".join(blocks) or "- no schema-bound outputs"
 
 
@@ -127,7 +255,7 @@ def prompt_values(ctx: NodeContext) -> dict[str, Any]:
             paths = [rel(p, ctx.project_dir) for p in ctx.artifact_paths(name)]
             inputs.append(f"- `{ref}` → {', '.join(paths) or 'not yet produced'}")
         elif kind == "control":
-            inputs.append(f"- `{ref}` → controls/{name}.md")
+            inputs.append(f"- `{ref}` → {rel_path(name)}")
         elif kind == "files":
             found = [rel(f, ctx.project_dir) for f in glob_files(ctx.project_dir, name)]
             inputs.append(f"- `{ref}` → {len(found)} file(s): {', '.join(found[:12]) or 'none yet'}{' …' if len(found) > 12 else ''}")
@@ -160,6 +288,30 @@ def tool_outputs(ctx: NodeContext) -> set[str]:
     return set((ctx.pre_result.outputs if getattr(ctx, "pre_result", None) else {}) or {})
 
 
+def regression_harness_section(ctx: NodeContext) -> str:
+    if ctx.node.id not in {"n16_creative_critique", "n17_design_compliance", "n20_narrative_pacing"}:
+        return ""
+    relevant = [f for f in ctx.pre_findings if f.dimension.startswith(("REG-", "LEG-", "CAP-", "VOI-"))]
+    outputs = getattr(ctx, "pre_result", None).outputs if getattr(ctx, "pre_result", None) else {}
+    lines = ["## Regression harness"]
+    lines += [f"- [{f.severity}] {f.dimension}: {f.message}" for f in relevant[:20]] or ["- no regression-harness findings measured in this packet"]
+    if outputs:
+        lines.append("- Reports: " + ", ".join(f"`{k}` → `{v}`" for k, v in outputs.items()
+                                               if k in {"regression_report", "layout_report", "baseline_strips"}))
+    seams = ctx.artifact_path("voice_seams")
+    if seams and seams.exists():
+        try:
+            from .util import read_json, rel
+            data = read_json(seams)
+            lines.append(f"- `voice_seams` → `{rel(seams, ctx.project_dir)}`")
+            flagged = [u for u in data.get("units", []) if u.get("flags")]
+            lines += [f"  - listen at {float(u.get('end') or 0):.2f}s for `{u.get('unit')}` ({', '.join(map(str, u.get('flags') or []))})"
+                      for u in flagged[:12]] or ["  - no flagged seam units"]
+        except Exception as exc:
+            lines.append(f"- voice_seams report unreadable: {type(exc).__name__}")
+    return "\n".join(lines) + "\n"
+
+
 class TaskPacketExecutor(Executor):
     name = "task-packet"
 
@@ -173,6 +325,9 @@ class TaskPacketExecutor(Executor):
                   + " ".join(f"--output {o.key}=<path>" for o in ctx.node.outputs if o.key not in tool_outputs(ctx))
                   + (" --review <review.json>" if ctx.node.kind.value == "review" else ""))
         budget = ctx.node.retry.max_attempts
+        rt = ctx.state.runtime.nodes[ctx.node.id]
+        current_notes = list(rt.task_notes) + list(rt.task_notes_by_attempt.get(ctx.attempt, []))
+        notes = "\n".join(f"- {n}" for n in current_notes) or "- none"
         from .tools.sources import waivers_in_effect
         waived = waivers_in_effect(ctx.state.inputs.waivers, ctx.load("gaps"))
         waived_line = ("\n- **Waived intake gaps:** " + "; ".join(f"{w.gap}, waived by {w.by}: {w.reason}" for w in waived)
@@ -215,6 +370,11 @@ Submit as your own identity (`--actor agent:<you>`): a reviewer that produced wh
 
 ## Deterministic findings already measured for this attempt
 {pre}
+
+{regression_harness_section(ctx)}
+
+## Human/provisional review notes for this attempt
+{notes}
 {bind}
 ## Submit
 Relative `--output` and `--review` paths are resolved against the work directory (`{rel(ctx.workdir, ctx.project_dir)}`); absolute
@@ -283,6 +443,9 @@ def run_command(ctx: NodeContext, command: str, result: NodeResult, timeout_s: i
                    for ref in ctx.node.inputs if ref.startswith("artifact:")},
         "inputs_items": {ref.split(":", 1)[1]: {(a.item or a.id): str(ctx.project_dir / a.path) for a in ctx.current(ref.split(":", 1)[1])}
                          for ref in ctx.node.inputs if ref.startswith("artifact:")},
+        # #171: each input's identity (its bytes plus the files it names), for a command's own reuse decision
+        "inputs_identity": {ref.split(":", 1)[1]: [artifact_identity(a) for a in ctx.current(ref.split(":", 1)[1])]
+                            for ref in ctx.node.inputs if ref.startswith("artifact:")},
         "controls": {doc: str(ctx.control_path(doc)) for doc in ctx.node.controls.read},
         "defects": [d.model_dump() for d in ctx.defects],
         "producer": {"node": ctx.node.id, "attempt": ctx.attempt, "command": command, "code": code,

@@ -1,7 +1,7 @@
 {
  "schema": "vpg-rules/v1",
- "version": "1.0",
- "updated": "2026-09-26",
+ "version": "1.1",
+ "updated": "2026-10-02",
  "note": "Governed cross-project rule base. Lifecycle and gates: vpg/memory.py. Seeded from knowledge/case-studies/platform-film-2026-09 (evidence ids = history iterations; wei:Mx = Wei's recovered messages).",
  "protected_scopes": [
   "product_truth",
@@ -3585,6 +3585,514 @@
        "Wei M7 (Round 07 final loop P1–P6) (final quality pass lenses)"
       ],
       "reason": "Wei stated this requirement explicitly"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-LAY-001",
+   "statement": "No text, chip or card may overlap another, and no line may run through text in the rendered layout.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: overlapping pills and line-through text passed still-frame review.",
+   "check": {
+    "type": "tool",
+    "fn": "layout:check",
+    "test": "tests/test_b3_regression_harness.py::test_layout_rows_from_synthetic_audit_and_not_measured"
+   },
+   "threshold": "zero TEXT_OVERLAP, BOX_OVERLAP or LINE_THROUGH_TEXT runs",
+   "rubric_dimensions": [
+    "LEG-OVERLAP"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-LAY-002",
+   "statement": "Held text may not be clipped by its mask, viewport or panel.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: product demo cut to crops and labels clipped/removed.",
+   "check": {
+    "type": "tool",
+    "fn": "layout:check",
+    "test": "tests/test_b3_regression_harness.py::test_layout_rows_from_synthetic_audit_and_not_measured"
+   },
+   "threshold": "zero TEXT_CLIPPED runs",
+   "rubric_dimensions": [
+    "LEG-CLIP"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-LAY-003",
+   "statement": "Text and text-bearing panels stay inside the stage; off-frame zooms are regressions.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: tiers zoomed 11% off-frame.",
+   "check": {
+    "type": "tool",
+    "fn": "layout:check",
+    "test": "tests/test_b3_regression_harness.py::test_layout_rows_from_synthetic_audit_and_not_measured"
+   },
+   "threshold": "zero OFFSTAGE runs",
+   "rubric_dimensions": [
+    "LEG-OFFSTAGE"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-LAY-004",
+   "statement": "A panel may not sit empty after its title appears; empty-tier holds are regressions.",
+   "category": "visual_consistency_detail",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: tiers were empty for 6.6 s.",
+   "check": {
+    "type": "tool",
+    "fn": "layout:check",
+    "test": "tests/test_b3_regression_harness.py::test_layout_rows_from_synthetic_audit_and_not_measured"
+   },
+   "threshold": "zero EMPTY_PANEL runs",
+   "rubric_dimensions": [
+    "LEG-EMPTY"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-REG-001",
+   "statement": "Compare each candidate with the released baseline; undeclared removals, content loss and demo regressions fail the gate.",
+   "category": "recurring_failure_patterns",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: all review gates passed while the released baseline regressed.",
+   "check": {
+    "type": "tool",
+    "fn": "regress:check",
+    "test": "tests/test_b3_regression_harness.py::test_regression_baseline_detects_removals_departures_scope_and_content_loss"
+   },
+   "threshold": "content_retained ≥ 0.7; demo metrics within configured thresholds",
+   "rubric_dimensions": [
+    "REG-BASELINE"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-REG-005",
+   "statement": "When a baseline master is configured, creative review must compare baseline-vs-candidate strips and confirm no beat is worse.",
+   "category": "craft_quality",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: reviewers saw stills and metrics, not baseline side-by-side motion.",
+   "check": {
+    "type": "review",
+    "always": [
+     "cite strip frames"
+    ],
+    "never": [
+     "score the candidate without baseline comparison"
+    ]
+   },
+   "threshold": "review score ≥ 4 when applicable",
+   "rubric_dimensions": [
+    "REG-VERDICT"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-VOI-004",
+   "statement": "Narration seams must be silent and continuous: no hard cuts, loud tails into the next unit, overlaps or hard onsets.",
+   "category": "voice_sound_pacing_transitions",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: six voice seams cut mid-sound.",
+   "check": {
+    "type": "tool",
+    "fn": "audio:check_seams",
+    "test": "tests/test_b3_regression_harness.py::test_voice_seams_clean_hard_cut_loud_tail_and_overlap"
+   },
+   "threshold": "see config/defaults.yaml thresholds.audio.seams",
+   "rubric_dimensions": [
+    "VOI-SEAMS"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-CAP-003",
+   "statement": "Captions must contain the same words as the approved script after normalization; missing caption words are accessibility regressions.",
+   "category": "legibility_accessibility",
+   "scope": "production_default",
+   "origin": "Water r08 v4 regression RCA: one caption word was missing.",
+   "check": {
+    "type": "tool",
+    "fn": "layout:check_caption_script",
+    "test": "tests/test_b3_regression_harness.py::test_caption_script_exact_match_and_missing_word"
+   },
+   "threshold": "zero missing or extra caption words",
+   "rubric_dimensions": [
+    "CAP-SCRIPT"
+   ],
+   "evidence": [
+    "task:b3-regression-harness",
+    "task:b3-calibration"
+   ],
+   "lifecycle": {
+    "state": "validated",
+    "history": [
+     {
+      "state": "candidate",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "task:water-v4-regression-rca",
+       "F011",
+       "F012",
+       "F013",
+       "F014",
+       "F015",
+       "F016"
+      ],
+      "reason": "Water v4 passed review gates but regressed against the released baseline; Wei rejected it at 2026-10-02 10:03 CT."
+     },
+     {
+      "state": "observed_again",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "F011-F016",
+       "task:water-v4-regression-rca"
+      ],
+      "reason": "Independent evidence: Wei v4 rejection feedback and the Water v4 RCA."
+     },
+     {
+      "state": "validated",
+      "at": "2026-10-02",
+      "by": "vpg v1.8 batch 3",
+      "human": false,
+      "evidence": [
+       "tests/test_b3_regression_harness.py",
+       "task:b3-calibration"
+      ],
+      "reason": "Synthetic tests exercise the check and real calibration distinguishes r07/baseline from v4 regressions."
      }
     ]
    }

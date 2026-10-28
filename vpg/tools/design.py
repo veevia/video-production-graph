@@ -17,6 +17,7 @@ from PIL import Image
 from ..context import CheckResult, NodeResult
 from ..util import open_regular, sha256_file, write_json_atomic
 from ._common import contrast, finding, thresholds
+from . import regress
 
 
 def _fm(ctx) -> dict:
@@ -96,7 +97,9 @@ def compliance(ctx) -> NodeResult:
             if a.get("sha256") and sha256_file(path) != a["sha256"]:
                 findings.append(finding("design:logo", "DES-LOGO", "P1", f"{where}: logo file differs from the approved asset",
                                         traced="n11_asset_generation", key="assets", element=layer["id"]))
-    report = {"layers": len(layers), "findings": [f.model_dump() for f in findings]}
+    reg = regress.check(ctx)
+    findings += reg.findings
+    report = {"layers": len(layers), "regression": reg.data, "findings": [f.model_dump() for f in findings]}
     ctx.workdir.mkdir(parents=True, exist_ok=True)
     write_json_atomic(ctx.workdir / "design-report.json", report)
-    return NodeResult(outputs={"design_report": "design-report.json"}, findings=findings)
+    return NodeResult(outputs={"design_report": "design-report.json", **reg.outputs}, findings=findings)

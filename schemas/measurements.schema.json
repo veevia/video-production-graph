@@ -1,0 +1,35 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/measurements",
+ "title": "vpg craft measurements (vpg-measurements/v1)",
+ "description": "Written by `vpg measure` (vpg/tools/craft.py:measure). Every record names its metric, version and basis hash (vpg/metrics.py); a value of null carries not_measured with the reason. Evidence holds timecodes (seconds), frames and file paths.",
+ "type": "object",
+ "required": ["schema", "measurements"],
+ "properties": {
+  "schema": {"const": "vpg-measurements/v1"},
+  "inputs": {"type": "object", "additionalProperties": {"type": "string"}},
+  "measurements": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": ["metric", "version", "basis", "unit", "value"],
+    "properties": {
+     "metric": {"type": "string"},
+     "version": {"type": "integer", "minimum": 1},
+     "basis": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+     "unit": {"type": "string"},
+     "value": {"type": ["number", "null"]},
+     "not_measured": {"type": "string"},
+     "evidence": {"type": "object"}
+    },
+    "additionalProperties": false
+   }
+  },
+  "frames": {
+   "type": "array",
+   "description": "Per sampled frame: t (seconds) and its colourfulness, ground_colourfulness, coverage and ground_share.",
+   "items": {"type": "object", "required": ["t"]}
+  }
+ },
+ "additionalProperties": false
+}

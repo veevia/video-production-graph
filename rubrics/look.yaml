@@ -1,0 +1,34 @@
+# Look development (quality workflow, N26; docs/quality-workflow.md). The look gate enforces the project's own approved
+# spec family against its pinned benchmark registry; the taste decision stays a named human's.
+id: look
+name: Look development
+reviewer: visual-design
+scale: tool dimensions pass/fail; human dimensions are decided by a named human
+dimensions:
+- id: LOOK-GATES
+  name: Style frames inside the approved envelopes
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: tool
+    fn: look:check
+  threshold: 1.0
+  target: every look-stage gate in GATES.yaml passes for every style-frame role against the pinned registry; the motion test runs its MOTION.md length without flashing
+  rule: R-PRO-004
+  cases:
+    never: []
+    always: []
+- id: LOOK-APPROVED
+  name: The look is a named human's decision
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei approves the style frames and the motion test at N26 before any asset is built
+  rule: R-PRO-002
+  cases:
+    never:
+    - Treat a passing look gate as taste approval
+    always:
+    - Record the named human's look decision

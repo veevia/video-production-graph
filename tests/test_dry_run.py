@@ -41,6 +41,8 @@ def test_dry_run_without_macos_speech_is_explicitly_degraded(tmp_path, monkeypat
     import json
     outputs = json.loads((tmp_path / "run/work/n12_voice_audio/a1/outputs.json").read_text())
     assert outputs["data"]["degraded"] is True
+    seams = json.loads((tmp_path / "run/work/n12_voice_audio/a1/voice-seams-report.json").read_text())
+    assert seams["units"] and all(set(u["flags"]) <= {"HARD_ONSET"} for u in seams["units"])
     state = json.loads((tmp_path / "run/.vpg/state.json").read_text())
     assert all(not a["human"] for a in state["history"]["approvals"])
 

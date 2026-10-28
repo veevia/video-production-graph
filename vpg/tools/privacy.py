@@ -70,6 +70,17 @@ class PrivacyScanError(RuntimeError):
     pass
 
 
+def privacy_feature_enabled(config: dict[str, Any] | None, key: str) -> bool:
+    val = (((config or {}).get("privacy") or {}).get(key, "off"))
+    if isinstance(val, bool):
+        return val
+    return isinstance(val, str) and val.strip().lower() in {"on", "true", "yes"}
+
+
+def privacy_feature_value_ok(val: Any) -> bool:
+    return isinstance(val, bool) or (isinstance(val, str) and val.strip().lower() in {"on", "off", "true", "false", "yes", "no"})
+
+
 def _rate(value: Any) -> float | None:
     if isinstance(value, (int, float)) and value > 0:
         return float(value)
@@ -168,6 +179,64 @@ def fold(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)).lower()
 
 
+def folded_spelling(text: str) -> str:
+    """ASCII-ish spelling used for text artifacts: NFC/NFD-insensitive, diacritics folded, punctuation as spaces."""
+    return " ".join(re.sub(r"[^\w]+", " ", fold(unicodedata.normalize("NFC", text))).split())
+
+
+def text_privacy_hits(text: str, names: list[str]) -> tuple[list[int], list[int]]:
+    """(full-entry hits, part-only hits) by 1-based name-list index.
+
+    Full entries use the same folded spelling discipline as the frame matcher: every name part must appear contiguously
+    after folding. Individual name parts are warnings only; they never refuse a run.
+    """
+    folded = folded_spelling(text)
+    compact = re.sub(r"[\s_\-'\u2019]+", "", folded)
+    haystack = f" {folded} "
+    full: list[int] = []
+    parts_only: list[int] = []
+    for idx, name in enumerate(names, 1):
+        parts = _parts(name)
+        if not parts:
+            continue
+        phrase = " ".join(parts)
+        merged = "".join(parts)
+        reversed_phrase = " ".join(reversed(parts))
+        comma_reversed = (len(parts) >= 2 and "," in text
+                          and re.search(rf"(?<!\w){re.escape(' '.join(parts[1:]))}\s+{re.escape(parts[0])}(?!\w)", folded))
+        if (re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", folded)
+                or re.search(rf"(?<!\w){re.escape(reversed_phrase)}(?!\w)", folded) and "," in text
+                or merged in compact
+                or comma_reversed):
+            full.append(idx)
+        elif any(len(p) >= 4 and re.search(rf"(?<!\w){re.escape(p)}(?!\w)", haystack) for p in parts):
+            parts_only.append(idx)
+    return full, parts_only
+
+
+def iter_json_strings(value: Any) -> Iterator[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(k, str):
+                yield k
+            yield from iter_json_strings(v)
+    elif isinstance(value, list):
+        for item in value:
+            yield from iter_json_strings(item)
+
+
+def text_for_privacy_scan(path: Path, *, json_mode: bool = False) -> str:
+    """Decode a text artifact for privacy scanning. Undecodable text fails closed."""
+    raw = path.read_bytes()
+    text = raw.decode("utf-8")
+    if not json_mode:
+        return text
+    data = json.loads(text)
+    return "\n".join(iter_json_strings(data))
+
+
 def _parts(name: str) -> list[str]:
     return [p for p in (re.sub(r"[^\w]", "", w) for w in fold(name).split()) if p]
 
@@ -183,6 +252,10 @@ def load_names(project_dir: Path, config: dict[str, Any]) -> tuple[list[str], li
     rel = ((config or {}).get("privacy") or {}).get("names")
     if not rel:
         return [], []
+    if rel == "none":
+        return [], []
+    if not isinstance(rel, str):
+        raise PrivacyConfigError("privacy.names must be a string path, or 'none' with a reason")
     try:
         data = json.loads((Path(project_dir) / str(rel)).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -194,6 +267,31 @@ def load_names(project_dir: Path, config: dict[str, Any]) -> tuple[list[str], li
     if len(skipped) == len(names):
         raise PrivacyConfigError(f"the name list {rel} has no checkable entry (a single-word entry needs 4 or more letters)")
     return names, skipped
+
+
+def none_declared(config: dict[str, Any]) -> bool:
+    """True when the project explicitly declares that no privacy name list exists, with a reason."""
+    privacy = (config or {}).get("privacy")
+    return isinstance(privacy, dict) and privacy.get("names") == "none" and bool(str(privacy.get("reason", "")).strip())
+
+
+def declaration_problem(config: dict[str, Any]) -> str | None:
+    """Fail-closed message for projects that did not declare what privacy names should be scanned."""
+    privacy = (config or {}).get("privacy")
+    if not isinstance(privacy, dict):
+        return ("no privacy name list is declared; set privacy.names to a JSON list path, or explicitly set "
+                "privacy: {names: none, reason: \"...\"}")
+    names = privacy.get("names")
+    if names == "none":
+        if none_declared(config):
+            return None
+        return "privacy.names is none but privacy.reason is missing; explain why no name list is required"
+    if names is not None and not isinstance(names, str):
+        return "privacy.names must be a string path, or 'none' with a reason"
+    if names:
+        return None
+    return ("no privacy name list is declared; set privacy.names to a JSON list path, or explicitly set "
+            "privacy: {names: none, reason: \"...\"}")
 
 
 def tesseract_words(image: Image.Image) -> list[Word]:
@@ -449,6 +547,11 @@ def describe(window: dict[str, Any]) -> str:
 def release_problem(ctx, master: Path, registered_sha: str) -> str | None:
     """N23: a readable listed name, or a declared list that cannot be checked, makes the version unreleasable. Every
     failure is a problem, never a pass; the report kept in the attempt's workdir carries no name and is never re-used."""
+    undeclared = declaration_problem(ctx.config)
+    if undeclared:
+        return f"{undeclared}, so readable names cannot be ruled out"
+    if none_declared(ctx.config):
+        return None
     try:
         names, skipped = load_names(ctx.project_dir, ctx.config)
     except PrivacyConfigError as exc:

@@ -56,6 +56,19 @@ dimensions:
   cases:
     never: []
     always: []
+- id: REG-BASELINE
+  name: Released-baseline regression check
+  brief_dimension: delivery_completeness
+  level: MUST
+  check:
+    type: tool
+    fn: regress:check
+  threshold: 1.0
+  target: no undeclared removals, content loss or demo regression versus the released baseline
+  rule: R-REG-001
+  cases:
+    never: []
+    always: []
 - id: DES-COHERENCE
   name: One visual system
   brief_dimension: visual_coherence

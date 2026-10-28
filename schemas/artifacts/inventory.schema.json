@@ -1,0 +1,44 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/inventory",
+ "title": "inventory",
+ "type": "object",
+ "properties": {
+  "film": {"type": "string"},
+  "fps": {"type": "number"},
+  "chapters": {
+   "type": "array",
+   "items": {
+    "type": "array",
+    "prefixItems": [{"type": "string"}, {"type": "number"}, {"type": "number"}],
+    "minItems": 3,
+    "maxItems": 3
+   }
+  },
+  "samples": {
+   "type": "array",
+   "items": {
+    "type": "array",
+    "prefixItems": [
+     {"type": "number"},
+     {
+      "type": "object",
+      "properties": {
+       "texts": {"type": "array", "items": {"type": "string"}},
+       "cap": {"type": ["string", "null"]},
+       "zoom": {"type": ["number", "null"]},
+       "pointer": {"type": "boolean"},
+       "ring": {"type": "boolean"}
+      },
+      "required": ["texts", "cap", "zoom", "pointer", "ring"],
+      "additionalProperties": true
+     }
+    ],
+    "minItems": 2,
+    "maxItems": 2
+   }
+  }
+ },
+ "required": ["film", "fps", "chapters", "samples"],
+ "additionalProperties": true
+}

@@ -1,0 +1,97 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/benchmark-registry",
+ "title": "vpg benchmark registry (vpg-benchmarks/v1)",
+ "description": "The films a production is judged against, with their media and measurements. Envelopes are computed from the reference entries (vpg/benchmarks.py); degraded anchors are negative controls; one live previous_best is the ratchet's accepted baseline. Paths are relative to the registry file.",
+ "type": "object",
+ "required": ["schema", "id", "entries"],
+ "properties": {
+  "schema": {"const": "vpg-benchmarks/v1"},
+  "id": {"type": "string", "minLength": 1},
+  "title": {"type": "string"},
+  "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
+  "envelope_policy": {
+   "type": "object",
+   "description": "Per metric id: override its defect side or tolerance, or add an absolute floor or ceiling.",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "sides": {"enum": ["both", "lower", "upper"]},
+     "tolerance": {"type": "number", "minimum": 0},
+     "floor": {"type": "number"},
+     "ceiling": {"type": "number"},
+     "why": {"type": "string"}
+    },
+    "additionalProperties": false
+   }
+  }
+ },
+ "additionalProperties": false,
+ "$defs": {
+  "file": {
+   "type": "object",
+   "required": ["path"],
+   "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+   "additionalProperties": false
+  },
+  "measurement": {
+   "type": "object",
+   "required": ["metric", "version", "basis", "unit", "value"],
+   "properties": {
+    "metric": {"type": "string"},
+    "version": {"type": "integer", "minimum": 1},
+    "basis": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "unit": {"type": "string"},
+    "value": {"type": ["number", "null"]},
+    "not_measured": {"type": "string"},
+    "evidence": {"type": "object"}
+   },
+   "additionalProperties": false
+  },
+  "act": {
+   "type": "object",
+   "required": ["by", "at"],
+   "properties": {"by": {"type": "string", "minLength": 1}, "at": {"type": "string"}, "reason": {"type": "string"}},
+   "additionalProperties": false
+  },
+  "entry": {
+   "type": "object",
+   "required": ["id", "kind", "media", "measurements"],
+   "properties": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "kind": {"enum": ["reference", "degraded_anchor", "previous_best"]},
+    "title": {"type": "string"},
+    "evidence": {"enum": ["observed", "reported", "assumed"]},
+    "media": {
+     "type": "object",
+     "properties": {
+      "master": {"$ref": "#/$defs/file"}, "voice": {"$ref": "#/$defs/file"}, "music": {"$ref": "#/$defs/file"},
+      "text_layers": {"$ref": "#/$defs/file"}, "narration": {"$ref": "#/$defs/file"}
+     },
+     "additionalProperties": false
+    },
+    "style_frames": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": ["role", "path"],
+      "properties": {
+       "role": {"enum": ["title", "product_ui", "data_callout", "closing", "other"]},
+       "path": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+       "t": {"type": "number", "minimum": 0}, "approved": {"$ref": "#/$defs/act"}
+      },
+      "additionalProperties": false
+     }
+    },
+    "measurements": {"type": "object", "additionalProperties": {"$ref": "#/$defs/measurement"}},
+    "measured_at": {"type": "string"},
+    "degrades": {"type": "string", "description": "degraded_anchor only: the reference it degrades"},
+    "how": {"type": "string", "description": "degraded_anchor only: what was degraded"},
+    "added": {"$ref": "#/$defs/act"},
+    "accepted": {"$ref": "#/$defs/act", "description": "previous_best only: the named human who accepted it as the baseline"},
+    "superseded_by": {"type": "string"}
+   },
+   "additionalProperties": false
+  }
+ }
+}

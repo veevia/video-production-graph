@@ -28,7 +28,8 @@ A node may add `human_review.required`. After it validates, it waits in WAITING_
 
 ## Validation rules (`python -m vpg validate`)
 
-1. Unique ids, nodes numbered 1–25 in brief order, and every edge endpoint known.
+1. Unique ids, nodes numbered 1 to N without gaps (the 25 brief stages in order, then only the optional stages: Look
+   development and Animatic, used by the [quality workflow](quality-workflow.md)), and every edge endpoint known.
 2. Flow edges are acyclic, with no duplicate flow edge between the same two nodes. Every loop edge has `max_traversals` ≥ 1 and goes upstream. Escalate edges target `@escalate`. `blocking_severities` starts at P1 and includes every more severe level.
 3. Every node is reachable from START, and END is reachable from every node.
 4. No dead-end outcome: every outcome has an outgoing edge. Every human-gate outcome is also a node outcome, so a human decision always fires an edge. A `target:` edge counts only for the regeneration node, which escalates at runtime when its plan has no target.
@@ -40,6 +41,7 @@ A node may add `human_review.required`. After it validates, it waits in WAITING_
    - The validator builds this relation between the control writers and rejects any cycle. An example is two unordered writers that each read the other's document; they would re-run each other with no loop edge to bound them.
    - Fix it by ordering the nodes in the flow, or by removing one of the reads.
 7. Every node's 19 fields are non-empty. State paths exist in the typed model. Prompts, tools, schemas and rubrics resolve.
+   Control documents are the six, or the spec family's ids (`spec-design` … `spec-gates`); any other name is refused.
 8. A MUST review dimension sits only on a review node, and a MUST human dimension only on a human-gated or review node, so no MUST criterion goes unscored.
 
 Before it opens a run, the engine runs checks 1–6 and 8, plus the reference part of check 7 (state paths, prompts, tools, schemas, rubrics and control documents resolve). It refuses a graph that fails them. The documentation part of check 7 (every field filled in) is `vpg validate`'s alone.
@@ -59,6 +61,10 @@ At runtime:
 | review | N15–N20 | Fan-out of six reviewers, fan-in at N21 |
 | iteration | N21 → N22 | Tri-state gate, then a bounded targeted-rework loop to N07–N14 |
 | delivery | N23 → N24 → N25 | Human release gate, package, governed learning |
+
+The opt-in quality workflow (`graph/workflow-quality.yaml`, generated) changes only the planning subgraph:
+N07 ∥ N09 → N26 look gate → N08 → N27 animatic gate → N10 ∥ N12. Its [node catalog](quality-node-catalog.md) and
+[edge catalog](quality-edge-catalog.md) are generated like the default's.
 
 ## All 25 nodes
 

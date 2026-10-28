@@ -470,7 +470,8 @@ def test_frozen_sources_are_kept_by_content_and_drift_is_reported_by_id(tmp_path
     for src in eng.state.inputs.sources:
         copy = store / src.sha256
         assert copy.read_bytes() == (proj / src.path).read_bytes() and not copy.stat().st_mode & stat.S_IWUSR
-    assert (store / ".gitignore").read_text() == "*\n"                                # #79: copies never enter a commit by accident
+    active = [line for line in (store / ".gitignore").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    assert active == []                                                               # #79, M-004: no nested active ignore rule
     assert not [w for w in eng.status()["warnings"] if w.startswith("source ")]
     by_id = {s.id: s for s in eng.state.inputs.sources}
     elsewhere = tmp_path / "other-project-spec.md"
@@ -516,13 +517,14 @@ def test_a_run_frozen_before_v15_gets_copies_of_the_sources_that_still_match(tmp
 
 def test_a_store_made_before_v151_gets_its_gitignore_at_the_next_step(tmp_path):
     """#79: v1.5 wrote full copies of the sources into a folder git did not ignore. A store it made keeps its copies and
-    gains the .gitignore at the next step, though nothing needs copying."""
+    gains the comment-only .gitignore note at the next step, though nothing needs copying."""
     proj, eng = _frozen(tmp_path)
     ignore = proj / ".vpg/sources/.gitignore"
     ignore.unlink()
     eng = Engine(proj, executor=TaskPacketExecutor())
     eng.step()
-    assert ignore.read_text() == "*\n" and len(events(proj, "sources_kept")) == 1          # nothing was copied again
+    active = [line for line in ignore.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    assert active == [] and len(events(proj, "sources_kept")) == 1          # nothing was copied again
 
 
 def test_a_damaged_copy_is_not_trusted_and_a_crashed_copy_is_removed(tmp_path):
@@ -554,7 +556,9 @@ def test_a_blocked_run_still_gets_copies_of_its_sources(tmp_path):
     eng = Engine(proj, executor=TaskPacketExecutor())
     assert eng.step() == [] and eng.state.runtime.status.value == "BLOCKED"
     assert len(list((proj / ".vpg/sources").glob("[0-9a-f]" * 64))) == 3
-    assert (proj / ".vpg/sources/.gitignore").read_text() == "*\n"                   # put back once the store is written
+    active = [line for line in (proj / ".vpg/sources/.gitignore").read_text().splitlines()
+              if line.strip() and not line.lstrip().startswith("#")]
+    assert active == []                                                              # put back once the store is written
     assert Engine(proj, read_only=True).state.runtime.status.value == "BLOCKED"
 
 
@@ -606,6 +610,26 @@ def test_a_file_changed_in_the_last_seconds_is_hashed_but_not_recorded(tmp_path,
     monkeypatch.setattr(SourceStore, "RACY_S", 0)
     store.digest(f)
     assert store._verified["spec.md"][4] == sha256_file(f)
+
+
+def test_fresh_source_store_gitignore_has_no_active_rules(tmp_path):
+    from vpg.source_store import SourceStore
+
+    store = SourceStore(tmp_path, tmp_path / ".vpg")
+    store._ensure_dir()
+    lines = (tmp_path / ".vpg/sources/.gitignore").read_text().splitlines()
+    active = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
+    assert active == []
+
+
+def test_source_store_never_overwrites_existing_gitignore(tmp_path):
+    from vpg.source_store import SourceStore
+
+    existing = tmp_path / ".vpg/sources/.gitignore"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("*\n")
+    SourceStore(tmp_path, tmp_path / ".vpg")._ensure_dir()
+    assert existing.read_text() == "*\n"
 
 
 def test_a_command_node_without_a_defects_input_is_still_checked_for_its_code(tmp_path):

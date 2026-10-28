@@ -1,0 +1,33 @@
+# Quality gates on the master (quality workflow, N15; docs/quality-workflow.md). Both dimensions cite R-REG-001, which is
+# advisory until a named human adopts it (`vpg memory promote`), so their findings are nits until then.
+id: quality-gates
+name: Spec gates and ratchet
+reviewer: technical-qa
+scale: tool dimensions pass/fail
+dimensions:
+- id: GAT-SPEC
+  name: Build-stage gates of the approved spec
+  brief_dimension: technical_correctness
+  level: MUST
+  check:
+    type: tool
+    fn: qualitygates:technical_qa
+  threshold: 1.0
+  target: every build-stage gate in GATES.yaml passes on the master, its stems and its text layers
+  rule: R-REG-001
+  cases:
+    never: []
+    always: []
+- id: GAT-RATCHET
+  name: No regression against the accepted baseline
+  brief_dimension: cross_scene_consistency
+  level: MUST
+  check:
+    type: tool
+    fn: qualitygates:technical_qa
+  threshold: 1.0
+  target: no ratchet metric is worse than the registry's accepted baseline beyond its tolerance, unless a named human waived it in GATES.yaml
+  rule: R-REG-001
+  cases:
+    never: []
+    always: []

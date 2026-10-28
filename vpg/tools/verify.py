@@ -23,25 +23,38 @@ It also lays out what the release approver must judge personally, as warnings th
 
 from __future__ import annotations
 
+import hashlib
+import html
+import json
+import math
+import random
 import re
+import shlex
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from ..context import CheckResult, NodeResult
+from ..controls import doc_label, rel_path
 from ..provenance import Ledger
-from ..util import is_human_name, read_json, sha256_file, write_json_atomic
-from .privacy import PrivacyConfigError, load_names, masker, release_problem
+from ..util import PKG_ROOT, is_human_name, read_json, rel, sha256_file, write_json_atomic
+from .privacy import (PrivacyConfigError, load_names, masker, privacy_feature_enabled, release_problem, text_for_privacy_scan,
+                      text_privacy_hits)
 
 FAST_S = 60                  # a human answer faster than this is flagged, never refused
 REVIEW_BATCH_S = 10          # three reviews submitted within this window are flagged
 _DELEGATION = re.compile(r"delegat|standing instruction|on behalf of", re.I)
+_REDACTION_SETTING = re.compile(r"names?_count$|_ratio$|_threshold$")   # #170: sizes and settings, not drawn redactions
 _TAKES_REASON = {"decision", "config_accepted", "unblocked", "ledger_break_accepted", "gap_waived", "defect_resolved",
                  "change_request_rejected", "change request deferred", "grant issued", "grant revoked"}
 _FLAG_TEXT = {"fast": "answered in {latency} s", "no_reason": "no reason recorded", "shared": "reason shared with other actions",
               "delegation": "cites delegation", "agent_filed": "filed by an agent", "no_actor": "no named actor",
               "released": "released a hold", "held": "held: it led to no open blocking defect",
               "adopted": "kept a pass on the actor's word (--adopt-code)",
-              "granted": "an agent acting under {grant}, not the human"}
+              "granted": "an agent acting under {grant}, not the human",
+              "relayed": "relayed by an agent for {principal}, not the human's own act",
+              "undeclared": "actor is not one of the declared humans",
+              "provisional": "provisional approval for release confirmation"}
 
 
 def _seconds(start: str | None, end: str | None) -> int | None:
@@ -56,13 +69,14 @@ def _text(value: Any) -> str:
 
 
 def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Callable[[str], str] = lambda t: t,
-                 dry_run_actor: str = "dry-run-auto") -> list[dict]:
+                 dry_run_actor: str = "dry-run-auto", declared_humans: Iterable[str] = ()) -> list[dict]:
     """Every ledger action recorded under a human name, with the prompt it answered, its latency, reason and flags.
 
     Latency pairs each answer with its own prompt: a decision with its gate opening, a change-request approval or rejection
     with its filing, an unblock with its node's escalation, an accepted configuration or a restored control document with the
     integrity escalation. Feedback is listed by id only, and listed names in free text are masked."""
     feedback_actor = {getattr(f, "id", None): getattr(f, "actor", "") for f in feedback}
+    declared = {str(h).strip() for h in declared_humans}
     awaiting: dict[str, str] = {}
     filed: dict[str, tuple[str, str]] = {}
     escalated: dict[str, str] = {}
@@ -78,6 +92,8 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
         if t == "awaiting_human":
             awaiting[_text(d.get("node"))] = ts
             continue
+        if t in ("fork_recorded", "build_verdict"):
+            continue
         if t == "feedback_held":   # an engine event: the feedback it names is flagged on its own row below
             held.add(_text(d.get("id")))
             continue
@@ -87,10 +103,21 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
         if t == "change_request":
             filed[_text(d.get("id"))] = (ts, _text(d.get("by")))
         row = None
-        if t == "decision" and (d.get("human", True) or d.get("grant")):
+        if t == "decision" and (d.get("human", True) or d.get("grant") or d.get("relayed") or d.get("provisional")):
             node = _text(d.get("node"))
             row = {"action": "decision", "subject": f"{node} → {_text(d.get('decision'))}", "actor": _text(d.get("actor")),
                    "since": awaiting.get(node), "prompt": "gate opened", "reason": _text(d.get("reason"))}
+            if d.get("provisional"):
+                row["provisional"] = True
+        elif t == "human_choice":
+            row = {"action": "human choice", "subject": _text(d.get("fork_id")), "actor": _text(d.get("actor")),
+                   "since": None, "prompt": "end review", "reason": _text(d.get("why"))}
+        elif t in ("provisional_confirmed", "provisional_rejected"):
+            row = {"action": t.replace("_", " "), "subject": _text(d.get("node")), "actor": _text(d.get("actor")),
+                   "since": None, "prompt": "release review", "reason": _text(d.get("feedback"))}
+        elif t == "feedback_pending_confirmation":
+            row = {"action": "feedback pending confirmation", "subject": _text(d.get("id")), "actor": _text(d.get("actor")),
+                   "since": None, "prompt": "end review", "reason": _text(d.get("reason"))}
         elif t == "change_request":
             row = {"action": "change request filed", "subject": f"{_text(d.get('id'))} on {_text(d.get('doc'))}.md",
                    "actor": _text(d.get("by")), "since": None, "prompt": "", "reason": _text(d.get("reason"))}
@@ -113,7 +140,8 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
             acts = d.get("actions") if isinstance(d.get("actions"), list) else []
             row = {"action": t.replace("_", " "), "subject": (f"{_text(d.get('id'))}: {_text(d.get('grantee'))} may "
                    f"{', '.join(map(_text, acts))} until {_text(d.get('expires'))}" if t == "grant_issued" else _text(d.get("id"))),
-                   "actor": _text(d.get("grantor") if t == "grant_issued" else d.get("by")), "since": None, "prompt": "",
+                   "actor": _text(d.get("actor") or (d.get("grantor") if t == "grant_issued" else d.get("by"))),
+                   "since": None, "prompt": "",
                    "reason": _text(d.get("reason"))}
         elif t == "feedback_triaged":
             row = {"action": f"agent's note {_text(d.get('outcome'))}", "subject": f"{_text(d.get('id'))} by {_text(d.get('author'))}",
@@ -135,7 +163,7 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
                    "reason": _text(d.get("note")), "released": released}
         elif t in ("config_accepted", "control_restored"):
             since = escalated.pop("integrity", None) or (escalated.pop("control-integrity", None) if t == "control_restored" else None)
-            row = {"action": t, "subject": "configuration change" if t == "config_accepted" else f"controls/{_text(d.get('doc'))}.md",
+            row = {"action": t, "subject": "configuration change" if t == "config_accepted" else rel_path(_text(d.get('doc'))),
                    "actor": _text(d.get("actor")), "since": since, "prompt": "escalation",
                    "reason": _text(d.get("reason")) if t == "config_accepted" else ""}
             if t == "config_accepted" and adopted:
@@ -160,15 +188,21 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
             reason = _text(d.get("reason"))
             head, sep, tail = reason.rpartition("(requested by ")
             actor = tail[:-1].strip() if sep and tail.endswith(")") else ""
-            if actor and (not actor.lower().startswith("agent") or d.get("grant")):
+            if (actor and (not actor.lower().startswith("agent") or d.get("grant"))) or d.get("relayed"):
                 targets = d.get("targets") if isinstance(d.get("targets"), list) else []
-                row = {"action": "invalidate", "subject": ", ".join(map(_text, targets)), "actor": actor, "since": None,
+                row = {"action": "invalidate", "subject": ", ".join(map(_text, targets)), "actor": actor or _text(d.get("actor")), "since": None,
                        "prompt": "", "reason": reason}
         granted = _text(d.get("grant")) if row is not None else ""
-        if row is None or (row["actor"] != "cli" and not is_human_name(row["actor"], dry_run_actor) and not granted):
+        relayed = bool(d.get("relayed")) if row is not None else False
+        if row is None or (row["actor"] != "cli" and not is_human_name(row["actor"], dry_run_actor) and not granted and not relayed):
             continue
         if granted:   # stamped at append by the engine (Ledger.stamp): an agent's act on a human's delegation
             row["grant"] = f"grant {granted} from {_text(d.get('grantor')) or 'unknown'}"
+        if relayed:
+            row["relayed"] = True
+            row["principal"] = _text(d.get("principal"))
+            row["instruction"] = _text(d.get("instruction"))
+            row["instruction_at"] = _text(d.get("instruction_at"))
         row["at"] = ts
         row["latency_s"] = _seconds(row.pop("since"), ts)
         row["subject"], row["reason"] = mask(row["subject"]), mask(row["reason"])
@@ -184,7 +218,7 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
             codes.append("no_reason")
         if key and keys.count(key) > 1:
             codes.append("shared")
-        if _DELEGATION.search(row["reason"]):
+        if _DELEGATION.search(row["reason"]) and not row.get("relayed"):
             codes.append("delegation")
         if row["action"] == "change_request_approved" and row.get("filer", "").lower().startswith("agent"):
             codes.append("agent_filed")
@@ -192,12 +226,19 @@ def human_record(events: Iterable[dict], feedback: Iterable[Any] = (), mask: Cal
             codes.append("adopted")
         if row.pop("released", None):
             codes.append("released")
+        if row.pop("provisional", None):
+            codes.append("provisional")
         if row["action"] == "feedback" and row["subject"] in held:
             codes.append("held")
         if row.get("grant"):
             codes.append("granted")
+        if row.get("relayed"):
+            codes.append("relayed")
+        if declared and is_human_name(row["actor"], dry_run_actor) and row["actor"] not in declared:
+            codes.append("undeclared")
         row["codes"] = codes
-        row["flags"] = [_FLAG_TEXT[c].format(latency=row["latency_s"], grant=row.get("grant", "")) for c in codes]
+        row["flags"] = [_FLAG_TEXT[c].format(latency=row["latency_s"], grant=row.get("grant", ""),
+                                             principal=row.get("principal", "")) for c in codes]
     return rows
 
 
@@ -211,6 +252,8 @@ def release_warnings(ctx, wf, events: list[dict]) -> list[str]:
     only, never the content of a declared field."""
     st = ctx.state
     warnings = []
+    if hasattr(ctx, "config") and "humans" not in (ctx.config or {}):
+        warnings.append("humans is not declared, so relayed human-only acts cannot be distinguished from free-text human actors")
     if st.inputs.frozen:
         drifted, missing = [], []
         for s in st.inputs.sources:
@@ -225,6 +268,11 @@ def release_warnings(ctx, wf, events: list[dict]) -> list[str]:
                                                     f"missing {', '.join(missing)}" if missing else "") if x))
     for nid, rt in st.runtime.nodes.items():
         for key, value in (rt.result_data or {}).items():
+            # #170: a number declares redactions unless its key names a list size or a setting (the privacy scan list's
+            # `redaction_name_count`, a `*_ratio`); `veil_frames: 120` or `redactions: 3` still says some were drawn
+            if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                    and _REDACTION_SETTING.search(key.lower()) and not re.search(r"redacted|veiled", key.lower())):
+                continue
             if ("redact" in key.lower() or "veil" in key.lower()) and value:
                 what = (f"{len(value)} entries" if isinstance(value, (list, tuple)) else
                         f"{len(value)} fields" if isinstance(value, dict) else "declared")
@@ -273,6 +321,21 @@ def release_warnings(ctx, wf, events: list[dict]) -> list[str]:
         warnings.append(f"reviews submitted without a reviewer identity, so their independence is unknown: {', '.join(anonymous)}")
     if older:
         warnings.append(f"reviews recorded before v1.7, so not bound to the bytes they judged: {', '.join(older)}")
+    current_version = getattr(st.runtime, "current_version", None)
+    blocking_severities = set(getattr(getattr(wf, "policies", None), "blocking_severities", []))
+    open_defects = {d.id: d for d in getattr(getattr(st, "evaluation", None), "defects", [])
+                    if getattr(d, "status", "") in ("open", "persisting", "in_rework")}
+    for item in getattr(st.runtime, "end_review_items", []):
+        if item.get("version") != current_version:
+            continue
+        severities = item.get("severities") if isinstance(item.get("severities"), dict) else {}
+        serious = {d: s for d, s in severities.items() if d in open_defects and s in blocking_severities}
+        if serious:
+            warnings.append(f"end-review item {item.get('id')} holds {', '.join(f'{d} {s}' for d, s in serious.items())}; "
+                            "acknowledge before release")
+    for f in getattr(getattr(st, "evaluation", None), "feedback", []):
+        if getattr(f, "hold", ""):
+            warnings.append(f"feedback hold {f.id}: {f.hold}; acknowledge before release")
     warnings += _source_byte_warnings(st, events)
     return warnings
 
@@ -329,6 +392,375 @@ def engine_decisions(events: Iterable[dict], mask: Callable[[str], str] = lambda
     return out
 
 
+def _release_node(wf) -> str | None:
+    gate = next((n for n in wf.nodes if n.gate == "review_gate"), None)
+    if gate is None:
+        return None
+    children = {e.target for e in wf.edges if e.source == gate.id and e.kind.value == "flow" and e.when == "pass"}
+    return next((n.id for n in wf.nodes if n.id in children and n.human_review.required), None)
+
+
+def _blind_candidates(fork: dict, mask: Callable[[str], str]) -> list[dict]:
+    rng = random.Random(hashlib.sha256(str(fork.get("fork_id", "")).encode()).hexdigest())
+    candidates = [{"id": c.get("id"), "description": c.get("description") or {"logline": c.get("label", ""), "structure": []}}
+                  for c in (fork.get("candidates") or []) if c.get("passes_rubric", True)]
+    rng.shuffle(candidates)
+    for i, c in enumerate(candidates, 1):
+        c["neutral_label"] = f"Option {i}"
+        d = c["description"] if isinstance(c["description"], dict) else {}
+        c["text"] = mask(f"{d.get('logline', '')}; structure: {', '.join(map(str, d.get('structure') or []))}".strip("; "))
+    return candidates
+
+
+def _review_packet(ctx, forks: list[dict], verification: dict, warnings: list[str], pending_human: list[str],
+                   standing_provisional: list[Any], end_review_items: list[dict], masters: list[Any],
+                   mask: Callable[[str], str]) -> tuple[str, dict]:
+    film_paths = [m.path for m in masters]
+    departures = _declared_departures(ctx, mask)
+    lines = ["# End review packet", "", "## 1. The film (paths)",
+             *([f"- {p}" for p in sorted(set(film_paths))] or ["- no film artifact registered"]), "",
+             "## 1b. Declared baseline departures",
+             *departures,
+             "",
+             "## 1c. Regression harness",
+             *_harness_lines(ctx, mask),
+             "",
+             "## 2. Blind fork candidates"]
+    decision = {"forks": {}, "release": "approve|changes", "ack_warnings": "all|[…]", "signoffs": [],
+                "confirm_provisional": "all|[…]", "reject_provisional": {}, "confirm_items": [], "reject_items": [],
+                "feedback": "", "item_map": {}}
+    for fork in forks:
+        fid = str(fork.get("fork_id"))
+        blind_candidates = _blind_candidates(fork, mask)
+        decision["forks"][fid] = {"sha256": fork.get("sha256"),
+                                  "option_map": {c["neutral_label"]: c["id"] for c in blind_candidates},
+                                  "ranking": [], "ratings": {}, "why": ""}
+        lines += ["", f"### {fid} ({fork.get('fork_type')})"]
+        for c in blind_candidates:
+            lines.append(f"- {c['neutral_label']}: {c['text'] or 'description not provided'}")
+    principal = _principal(ctx)
+    model = _current_model(principal)
+    lines += ["", "## 4. Standing provisional approvals to confirm",
+              *([f"- {a.node}: {a.decision} by {a.actor}" for a in standing_provisional] or ["- none"]),
+              "", "## 5. End-review items",
+              *([f"- {i.get('id')}: {i.get('node')} defects {', '.join(i.get('defects') or []) or 'none'}" for i in end_review_items]
+                or ["- none"]),
+              "", "## 6. Human-judged dimensions to sign",
+              *([f"- {d}" for d in pending_human] or ["- none"]),
+              "", "## 7. Warnings to acknowledge",
+              *([f"- W{i}: {mask(w)}" for i, w in enumerate(warnings, 1)] or ["- none"]),
+              "", "## 8. How to answer",
+              "Relay the principal's words in chat with `vpg review record <project> --from decision.json`, or fill in "
+              "`decision.template.json` as `decision.json` and record that file.",
+              "", "## 9. Reveal: agent scores, rationale and prediction",
+              f"- Current model: v{model.get('version')} metrics {json.dumps(model.get('metrics') or {}, sort_keys=True)}"]
+    if model.get("warnings"):
+        lines.append(f"- Model warning: {'; '.join(map(str, model.get('warnings') or []))}")
+    for fork in forks:
+        scored = fork.get("scored") or {}
+        lines += ["", f"### {fork.get('fork_id')} — model v{scored.get('model_version')} · band {scored.get('band')} · "
+                  f"confidence {scored.get('confidence')}"]
+        lines.append(f"- Predicted probabilities: {json.dumps(scored.get('predicted') or {}, sort_keys=True)}")
+        if scored.get("agent_pick") or scored.get("model_top"):
+            lines.append(f"- Agent pick: {scored.get('agent_pick') or '-'}; model top: {scored.get('model_top') or '-'}")
+        lines.append(f"- Built candidate ids: {', '.join(scored.get('build') or []) or 'none'}")
+        for c in fork.get("candidates") or []:
+            lines.append(mask(f"- `{c.get('id')}` {c.get('label', '')}: scores {json.dumps(c.get('scores') or {}, sort_keys=True)}; "
+                              f"rationale: {c.get('rationale', '')}"))
+    return "\n".join(lines) + "\n", decision
+
+
+def _time_label(value: Any) -> str:
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if seconds < 0 or not math.isfinite(seconds):
+        return ""
+    return f"{int(seconds // 60)}:{int(seconds % 60):02d}"
+
+
+def _watch_lines(ctx, st, version: int, masters: list[Any], end_review_items: list[dict], mask: Callable[[str], str]) -> list[str]:
+    film = sorted({m.path for m in masters})[:1]
+    out = [f"- Film: {film[0]}" if film else "- Film: no film artifact registered"]
+    candidates: list[str] = []
+    for fb in st.evaluation.feedback:
+        if fb.version == version:
+            label = _time_label(fb.at)
+            text = mask(fb.text)
+            status = {"resolved_pending_confirmation": "resolved, pending principal confirmation",
+                      "confirmed": "confirmed", "reopened": "reopened"}.get(fb.status, fb.status)
+            candidates.append(f"{label + ' — ' if label else ''}{text} ({status})")
+    for item in end_review_items:
+        for did in item.get("defects") or []:
+            d = next((x for x in st.evaluation.defects if x.id == did), None)
+            if d is not None:
+                candidates.append(mask(f"{d.id} — {d.description}"))
+    for rec in candidates[:6]:
+        out.append(f"- {rec}")
+    return out
+
+
+def _decision_digest(ctx, forks: list[dict], template: dict, verification: dict, warnings: list[str], pending_human: list[str],
+                     standing_provisional: list[Any], end_review_items: list[dict], masters: list[Any],
+                     mask: Callable[[str], str]) -> str:
+    st, version = ctx.state, verification["version"]
+    item_map = template.setdefault("item_map", {})
+    departures = _declared_departures(ctx, mask)
+    lines = [f"# Decision digest — {st.project.name}, version {version}", "", "## 0. TL;DR"]
+    feedback = [f for f in st.evaluation.feedback if f.version <= version]
+    changed = "; ".join(mask(f"{f.text} → {('pending confirmation' if f.status == 'resolved_pending_confirmation' else f.status)}")
+                        for f in feedback[:2]) or "release checks and review packet prepared"
+    defect_by_id = {d.id: d for d in st.evaluation.defects}
+    eri_defects = [defect_by_id[d] for item in end_review_items for d in (item.get("defects") or []) if d in defect_by_id]
+    blocking_eri = [d for d in eri_defects if d.status in ("open", "persisting", "in_rework") and d.severity in ("P1", "P2")]
+    recommendation = "iterate" if blocking_eri else ("release" if verification.get("ok") else "iterate")
+    if blocking_eri:
+        why = "end-review item holds " + ", ".join(f"{d.id} {d.severity}" for d in blocking_eri)
+    elif eri_defects:
+        why = "release would accept " + ", ".join(f"{d.id} {d.severity}" for d in eri_defects)
+    else:
+        why = "all recomputed release checks pass" if verification.get("ok") else "; ".join(verification.get("problems") or [])
+    lines += [f"- v{version}: {changed}", f"- Recommendation: {recommendation} — {mask(why)}", "", "## 1. Watch",
+              *_watch_lines(ctx, st, version, masters, end_review_items, mask), "", "## 2. Decide (human-only)"]
+    dno = 1
+    if pending_human:
+        item_map[f"D{dno}"] = {"section": "decide", "target": "signoffs", "options": pending_human}
+        lines.append(f"- D{dno}: Sign off listening dimensions ({', '.join(pending_human)}). Answer: ok, or name changes.")
+        dno += 1
+    for fid, answer in sorted(template.get("forks", {}).items()):
+        labels = list((answer.get("option_map") or {}).keys())
+        item_map[f"D{dno}"] = {"section": "decide", "target": f"forks.{fid}.ranking", "options": labels}
+        lines.append(f"- D{dno}: Rank {fid} blind options ({', '.join(labels) or 'none'}). Answer: best > next > last, with why.")
+        dno += 1
+    item_map[f"D{dno}"] = {"section": "decide", "target": "release", "options": ["approve", "changes"]}
+    lines.append(f"- D{dno}: Release v{version}? Answer: release or iterate.")
+    lines += ["", "## 2b. Declared baseline departures", *departures,
+              "", "## 2c. Regression harness", *_harness_lines(ctx, mask),
+              "", "## 3. Confirm or reject (the agent's provisional calls)"]
+    pno = 1
+    for a in standing_provisional:
+        pid = f"P{pno}"
+        item_map[pid] = {"section": "confirm", "target": f"confirm_provisional.{a.node}", "default": "confirm"}
+        lines.append(f"- {pid}: Confirm {a.node} → {a.decision} by {a.actor}; evidence approval:{a.node}. Default: confirm.")
+        pno += 1
+    for item in end_review_items:
+        pid = f"P{pno}"
+        sev = ", ".join(f"{d.id} {d.severity}" for d in (defect_by_id[x] for x in item.get("defects") or [] if x in defect_by_id))
+        entry = {"section": "confirm", "target": f"end_review_items.{item.get('id')}"}
+        if not any((defect_by_id[x].severity in ("P1", "P2") and defect_by_id[x].status in ("open", "persisting", "in_rework"))
+                   for x in item.get("defects") or [] if x in defect_by_id):
+            entry["default"] = "confirm"
+        item_map[pid] = entry
+        lines.append(f"- {pid}: Decide {item.get('id')} from {item.get('node')}; evidence {item.get('gate_result')}"
+                     + (f"; defects {sev}" if sev else "") + ".")
+        pno += 1
+    for fb in st.evaluation.feedback:
+        if fb.status == "resolved_pending_confirmation":
+            pid = f"P{pno}"
+            item_map[pid] = {"section": "confirm", "target": f"feedback.{fb.id}", "default": "confirm"}
+            evidence = ", ".join(fb.defect_ids) or mask(fb.no_action_reason)
+            lines.append(f"- {pid}: Confirm {fb.id} was resolved by the agent; evidence {evidence}. Default: confirm.")
+            pno += 1
+    for rec in verification.get("human_record") or []:
+        if rec.get("relayed"):
+            pid = f"P{pno}"
+            act_id = hashlib.sha256(json.dumps({k: rec.get(k) for k in ("action", "subject", "actor", "at")},
+                                               sort_keys=True).encode()).hexdigest()[:12]
+            item_map[pid] = {"section": "confirm", "target": f"relayed.{act_id}", "default": "confirm"}
+            lines.append(f"- {pid}: Confirm relayed {mask(str(rec.get('action', 'act')))} {mask(str(rec.get('subject', '')))} "
+                         f"for {mask(str(rec.get('principal', '')))}. Default: confirm.")
+            pno += 1
+    if pno == 1:
+        lines.append("- none")
+    lines += ["", "## 4. Acknowledge (known non-blocking issues and warnings)"]
+    if warnings:
+        for i, w in enumerate(warnings, 1):
+            kid = f"K{i}"
+            item_map[kid] = {"section": "ack", "target": f"ack_warnings.{i}", "severity": "warning", "default": "ack"}
+            lines.append(f"- {kid}: warning — {mask(w)}. Default: ack.")
+    else:
+        lines.append("- none")
+    lines += ["", "## 5. Your feedback → status"]
+    if feedback:
+        for i, fb in enumerate(feedback, 1):
+            fid = f"F{i}"
+            status = {"resolved_pending_confirmation": "resolved, pending principal confirmation",
+                      "confirmed": "confirmed", "reopened": "reopened"}.get(fb.status, fb.status)
+            item_map[fid] = {"section": "feedback", "target": f"feedback.{fb.id}", "status": status}
+            lines.append(f"- {fid}: {mask(fb.text)} → {status}" + (f" ({', '.join(fb.defect_ids)})" if fb.defect_ids else ""))
+    else:
+        lines.append("- none")
+    lines += ["", "## 6. How to answer",
+              "- Example: `D1 ok · D2 Option 2 > Option 1 (why...) · confirm all · ack all · release`"]
+    return "\n".join(lines) + "\n"
+
+
+def _current_model(principal: str) -> dict:
+    from .. import scoring
+    return scoring.load_current(scoring.preference_store(PKG_ROOT, principal))
+
+
+def _review_html(packet_lines: list[str], decision: dict) -> str:
+    blind, reveal = [], []
+    target = blind
+    for line in packet_lines:
+        if "Reveal: agent scores" in line:
+            target = reveal
+        target.append(line if target is reveal else html.escape(line))
+    template = html.escape(json.dumps(decision, indent=2))
+    reveal_json = json.dumps("\n".join(reveal)).replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
+    return f"""<!doctype html>
+<meta charset=\"utf-8\">
+<title>End review</title>
+<style>body{{font:16px/1.45 system-ui;margin:2rem;max-width:72rem}}pre{{white-space:pre-wrap;background:#f6f6f6;padding:1rem}}button{{padding:.6rem 1rem}}</style>
+<h1>End review</h1>
+<section><h2>Blind review first</h2><pre>{chr(10).join(blind)}</pre></section>
+<button onclick=\"const r=document.getElementById('reveal-section');r.hidden=false;r.querySelector('pre').textContent=JSON.parse(document.getElementById('reveal').textContent)\">Reveal scores</button>
+<script id=\"reveal\" type=\"application/json\">{reveal_json}</script>
+<section id=\"reveal-section\" hidden><h2>Reveal</h2><pre></pre></section>
+<section><h2>decision.json template</h2><textarea id=\"decision\" style=\"width:100%;height:22rem\">{template}</textarea>
+<p><button onclick=\"const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.getElementById('decision').value],{{type:'application/json'}}));a.download='decision.json';a.click()\">Export decision.json</button></p></section>
+"""
+
+
+def _declared_departures(ctx, mask: Callable[[str], str] = lambda s: s) -> list[str]:
+    block = ctx.config.get("regression") if isinstance(ctx.config, dict) else None
+    path = (block or {}).get("departures") if isinstance(block, dict) else None
+    if not path:
+        return ["- none"]
+    p = Path(path)
+    p = p if p.is_absolute() else ctx.project_dir / p
+    try:
+        data = read_json(p)
+    except Exception as exc:
+        return [f"- departures file unreadable: {type(exc).__name__}: {mask(str(exc))}"]
+    rows = []
+    for d in data.get("removals") or []:
+        cites = ", ".join(map(str, d.get("cites") or [])) or "NO CITATIONS"
+        rows.append(f"- {mask(str(d.get('chapter') or '*'))}: /{mask(str(d.get('match') or ''))}/ — "
+                    f"{mask(str(d.get('why') or ''))} (cites: {cites})")
+    return rows or ["- none"]
+
+
+def _governed_warnings(events: list[dict], st, version: int, rubrics: dict[str, Any], rule_states: dict[str, str],
+                       principal: str, mask: Callable[[str], str] = lambda s: s) -> list[str]:
+    """#162: the reviewers' P1–P3 findings that the rubric's levels demoted to nits or dropped, in each review node's
+    current judgment of this version, one warning per dimension. A carried-forward review is judged by the review it
+    copies, and a re-run on the same version replaces its earlier attempt. Whether the dimension should block is the
+    principal's call at the end review: the warning gives the steps the rule's current state allows, or says it's a
+    rubric change. `rubrics` are the package's own (a dropped dimension isn't in the effective ones)."""
+    by_node: dict[str, str] = {}
+    for r in st.evaluation.reviews:
+        if r.version <= version and not r.carried_forward:
+            by_node[r.node] = r.id
+    judging = set(by_node.values())
+    rows = [e["data"] for e in events if isinstance(e, dict) and e.get("type") == "finding_governed"
+            and isinstance(e.get("data"), dict) and e["data"].get("review") in judging]
+    attempt = lambda d: d.get("attempt") if isinstance(d.get("attempt"), int) else 0   # noqa: E731
+    passed = {str(e["data"].get("node")): attempt(e["data"]) for e in events   # a review node's latest judgment
+              if isinstance(e, dict) and e.get("type") == "node_passed" and isinstance(e.get("data"), dict)}
+    last_attempt: dict[str, int] = {}
+    for d in rows:
+        last_attempt[str(d.get("review"))] = max(last_attempt.get(str(d.get("review")), 0), attempt(d))
+    closed = {x.id for x in st.evaluation.defects if x.status in ("resolved", "waived")}
+    by_dim: dict[str, list[dict]] = {}
+    for d in rows:
+        current = passed.get(str(d.get("node")), last_attempt[str(d.get("review"))])
+        if attempt(d) == current and d.get("defect") not in closed:
+            by_dim.setdefault(str(d.get("dimension")), []).append(d)
+    out = []
+    for dim, items in sorted(by_dim.items()):
+        last = items[-1]
+        found = ", ".join(dict.fromkeys(f"{_text(d.get('defect')) or 'not recorded'} (filed {_text(d.get('filed'))} by "
+                                        f"{_text(d.get('review'))})" for d in items))
+        what = "dropped" if last.get("to") == "dropped" else "counted as nits"
+        out.append(mask(f"{dim} {what} reviewer-filed blocking findings ({_text(last.get('reason'))}): {found}; "
+                        + _block_steps(dim, _text(last.get("rule")), rule_states, rubrics, principal, _text(last.get("review")))))
+    return out
+
+
+def _block_steps(dim: str, rule: str, rule_states: dict[str, str], rubrics: dict[str, Any], principal: str, review: str) -> str:
+    if not rule:
+        return f"making {dim} block is a rubric change"
+    state = rule_states.get(rule, "not in the rule base")
+    rubric = next((rid for rid, rub in rubrics.items() if any(x.get("id") == dim for x in rub.get("dimensions", []))), "<rubric>")
+    cmd, by = f"python -m vpg memory promote --rule {rule}", shlex.quote(principal)
+    adopt = f"`{cmd} --to adopted --by {by} --human --evidence {review} --adopted-in rubrics/{rubric}.yaml`"
+    accept = "; then accept the configuration change (`vpg accept-config`), so the reviews judge this version again"
+    if state == "validated":
+        return (f"to make {dim} block, promote rule {rule} to approved, then adopted: `{cmd} --to approved --by {by} "
+                f"--human --evidence {review}`, then {adopt}{accept}")
+    if state == "approved":
+        return f"to make {dim} block, promote rule {rule} to adopted: {adopt}{accept}"
+    if state in ("adopted", "monitored"):
+        return f"rule {rule} is already {state}{accept}"
+    if state in ("retired", "not in the rule base"):
+        return f"rule {rule} is {state}: making {dim} block needs a new rule or a rubric change"
+    return (f"rule {rule} is {state}: it needs evidence and validation before it can be approved and adopted "
+            "(SOP, Rule lifecycle)")
+
+
+def _principal(ctx) -> str:
+    autonomy = ctx.config.get("autonomy") if isinstance(ctx.config, dict) else None
+    return (autonomy.get("principal") if isinstance(autonomy, dict) else None) or "Wei"
+
+
+def _harness_lines(ctx, mask: Callable[[str], str] = lambda s: s) -> list[str]:
+    out = []
+    for key in ("regression_report", "layout_report", "voice_seams", "accessibility_report"):
+        recs = ctx.current(key) if hasattr(ctx, "current") else []
+        if not recs:
+            if key != "accessibility_report":
+                out.append(f"- {key}: not measured")
+            continue
+        try:
+            data = read_json(ctx.project_dir / recs[-1].path)
+        except Exception as exc:
+            out.append(f"- {key}: unreadable ({type(exc).__name__})")
+            continue
+        if key == "voice_seams":
+            flagged = [u for u in data.get("units", []) if u.get("flags")]
+            if flagged:
+                out.append(f"- voice_seams: {len(flagged)} flagged unit(s)")
+                out += [f"  - {mask(str(u.get('unit')))} at {float(u.get('end') or 0):.2f}s: {', '.join(map(str, u.get('flags') or []))}"
+                        for u in flagged[:12]]
+            else:
+                out.append("- voice_seams: no flagged units")
+            continue
+        if key == "accessibility_report":
+            cap = data.get("caption_script") if isinstance(data.get("caption_script"), dict) else {}
+            missing, extra = cap.get("missing") or [], cap.get("extra") or []
+            if missing or extra:
+                out.append("- CAP-SCRIPT: caption/script word mismatch")
+                if missing:
+                    out.append("  - missing: " + ", ".join(mask(str(x)) for x in missing[:12]))
+                if extra:
+                    out.append("  - extra: " + ", ".join(mask(str(x)) for x in extra[:12]))
+            elif cap.get("caption_script_measured") is True:   # "match" only when it was measured, never by default
+                out.append("- CAP-SCRIPT: captions match the script")
+            else:
+                out.append("- CAP-SCRIPT: not measured")
+            continue
+        findings = data.get("findings") or []
+        if findings:
+            out.append(f"- {key}: {len(findings)} finding(s)")
+            out += [f"  - {mask(str(f.get('dimension', f.get('check', 'finding'))))}: {mask(str(f.get('message', '')))}"
+                    for f in findings[:8]]
+        else:
+            out.append(f"- {key}: no findings")
+        if key == "regression_report":
+            for cid, nums in sorted((data.get("seam_chrome_ignored") or {}).items()):
+                out.append(f"  - seam chrome ignored in {mask(str(cid))}: {', '.join(mask(str(n)) for n in nums)} "
+                           "(the previous chapter's number at the seam)")
+            for d in data.get("declared_departures") or []:
+                absorbed = d.get("absorbed") or []
+                if absorbed:
+                    out.append(f"  - departure /{mask(str(d.get('match')))}/ absorbed {len(absorbed)} text(s): "
+                               + ", ".join(mask(str(x)) for x in absorbed[:8]))
+    return out or ["- none"]
+
+
 def final(ctx) -> NodeResult:
     st = ctx.state
     v = st.runtime.current_version
@@ -336,11 +768,14 @@ def final(ctx) -> NodeResult:
     gates = [g for g in st.evaluation.gate_results if g.version == v]
     if not gates or gates[-1].outcome != "pass":
         problems.append(f"no passing gate for version {v}")
-    from ..graph import load_workflow
+    from ..graph import WORKFLOWS, load_workflow
     wf_ref = ctx.config.get("workflow")
-    wf = load_workflow(None if not wf_ref or wf_ref == "default" else ctx.project_dir / wf_ref)
+    wf = load_workflow(WORKFLOWS[wf_ref] if wf_ref in WORKFLOWS else (ctx.project_dir / wf_ref if wf_ref else None))
     policies_blocking = set(wf.policies.blocking_severities)
-    open_blocking = [d.id for d in st.evaluation.defects if d.status in ("open", "persisting") and d.severity in policies_blocking]
+    end_review_defects = {d for item in getattr(st.runtime, "end_review_items", [])
+                          if item.get("version") == v for d in item.get("defects", [])}
+    open_blocking = [d.id for d in st.evaluation.defects if d.status in ("open", "persisting")
+                     and d.severity in policies_blocking and d.id not in end_review_defects]
     if open_blocking:
         problems.append(f"open blocking defects: {open_blocking}")
     masters = [a for a in st.artifacts.values() if a.key == "master" and a.status == "current"]
@@ -377,7 +812,7 @@ def final(ctx) -> NodeResult:
     if tail_problem:
         problems.append(tail_problem)
     approvals = [a.model_dump() for a in st.history.approvals]
-    auto = [a["node"] for a in approvals if not a["human"] and not a.get("grant")]
+    auto = [a["node"] for a in approvals if not a["human"] and not a.get("grant") and not a.get("relayed") and not a.get("provisional")]
     delegated = [f"{a['node']} → {a['decision']} by {a['actor']} under {a['grant']}" for a in approvals if a.get("grant")]
     triage = [f.id for f in st.evaluation.feedback if getattr(f, "triage", "") == "pending"]
     if triage:
@@ -396,15 +831,50 @@ def final(ctx) -> NodeResult:
     except PrivacyConfigError:   # already a release problem; free text is then shown as recorded
         listed, skipped = [], []
     mask = masker(listed) if listed else (lambda text: text)
-    record = human_record(events, st.evaluation.feedback, mask, wf.policies.dry_run_actor)
+    declared_humans = (ctx.config or {}).get("humans") if isinstance((ctx.config or {}).get("humans"), list) else []
+    record = human_record(events, st.evaluation.feedback, mask, wf.policies.dry_run_actor, declared_humans)
     warnings = release_warnings(ctx, wf, events)
+    warnings = [w for w in warnings if not str(w).startswith("end-review item ")]
+    warnings += [mask(_text((e.get("data") or {}).get("warning"))) for e in events if e.get("type") == "privacy_text_warning"]
+    from ..evaluation import load_rubrics
+    from ..memory import RuleBase
+    try:
+        rule_states = {r["id"]: r["lifecycle"]["state"] for r in RuleBase(Path(st.knowledge.rules_path)).rules}
+    except Exception:   # an unreadable rule base gives the generic step instead of a wrong one
+        rule_states = {}
+    warnings += _governed_warnings(events, st, v, load_rubrics(PKG_ROOT), rule_states, _principal(ctx), mask)
+    if listed:
+        text_scan_on = privacy_feature_enabled(ctx.config, "text_scan")
+        spec_docs = [ctx.control_path(d) for d in getattr(ctx.controls, "docs", []) if d.startswith("spec-")]
+        for doc in sorted((ctx.project_dir / "controls").glob("*.md")) + spec_docs:
+            try:
+                full, part = text_privacy_hits(text_for_privacy_scan(doc, json_mode=doc.suffix == ".json"), listed)
+            except Exception:
+                continue
+            hits = full or (part if text_scan_on else [])
+            if hits:
+                name = doc.name if doc.parent.name == "controls" else rel(doc, ctx.project_dir)
+                warnings.append(f"control doc {name} contains privacy-name text: "
+                                + ", ".join(f"[list entry #{i}]" for i in hits))
     if skipped:
         warnings.append(f"privacy list entries #{', #'.join(map(str, skipped))} are too short to check (a single word needs 4+ letters)")
     flagged = [r for r in record if r["codes"]]
+    relayed = [r for r in record if r.get("relayed")]
+    provisional = [a for a in st.history.approvals if getattr(a, "provisional", False)]
+    standing_provisional = [a for a in provisional if not getattr(a, "confirmed_at", "") and not getattr(a, "rejected_at", "")]
+    end_review_items = getattr(st.runtime, "end_review_items", [])
     actors = sorted({str(r["actor"]) for r in record})
     count = lambda code: sum(code in r["codes"] for r in record)
     review_note = (f" Before deciding, review the {len(warnings)} warning(s) and the {len(flagged)} flagged human action(s) below."
                    if warnings or flagged else "")
+    release_node = _release_node(wf)
+    n06_claimed = any(a["node"] == "n06_creative_direction" and (a.get("relayed") or a.get("provisional")) for a in approvals)
+    release_claimed = any(a["node"] == release_node and a.get("relayed") for a in approvals) if release_node else False
+    unclaimed = ["human listening to voice and music"]
+    if not n06_claimed:
+        unclaimed.append("taste approval")
+    if not release_claimed:
+        unclaimed.append("release approval")
     summary = [
         f"# Release decision — {st.project.name}, version {v}", "",
         f"**TL;DR:** version {v} {'passes every recomputed release check' if not problems else 'is NOT releasable: ' + '; '.join(problems)}. "
@@ -423,9 +893,28 @@ def final(ctx) -> NodeResult:
         + (", ".join(f"{d} ({names.get(d, d)})" for d in pending_human) or "none recorded by the reviews"),
         "- Human decisions covered only by a dry-run auto-approval (NOT human): "
         + (", ".join(f"{d} ({names.get(d, d)})" for d in auto_human) or "none"),
-        "- Not claimed by any agent: human listening to voice and music, taste approval, release approval.",
+        f"- Not claimed by any agent: {', '.join(unclaimed)}.",
+        "", "## Declared baseline departures",
+        *_declared_departures(ctx, mask),
+        "", "## Regression harness",
+        *_harness_lines(ctx, mask),
         "", "## Warnings (non-blocking; judge them yourself)",
-        *([f"- {w}" for w in warnings] or ["- none"]),
+        *([f"- W{i}: {w}" for i, w in enumerate(warnings, 1)] or ["- none"]),
+        "", "## Human dimension signoffs",
+        f"- Pending from reviews: {', '.join(f'{d} ({names.get(d, d)})' for d in pending_human) or 'none'}",
+        "", "## Relayed human-only acts",
+        *([f"- {r['at'][:19].replace('T', ' ')}: {r['action']} {r['subject']} by {r['actor']} for {r.get('principal', '-')}; "
+           f"instruction{(' at ' + r.get('instruction_at')) if r.get('instruction_at') else ''}: {_cell(mask(r.get('instruction', '')), 160)}"
+           for r in relayed] or ["- none"]),
+        "", "## Provisional approvals",
+        *([f"- {a.node}: {a.decision} by {a.actor} for {a.principal or '-'} at {a.at[:19].replace('T', ' ')}"
+           + (f"; confirmed {a.confirmed_at[:19].replace('T', ' ')}" if a.confirmed_at else "")
+           + (f"; rejected {a.rejected_at[:19].replace('T', ' ')}: {_cell(mask(a.rejection_feedback), 160)}" if a.rejected_at else "")
+           for a in provisional] or ["- none"]),
+        f"- Standing unconfirmed: {', '.join(a.node for a in standing_provisional) or 'none'}",
+        "", "## End review items",
+        *([f"- {item.get('id')}: {item.get('node')} v{item.get('version')} defects {', '.join(item.get('defects') or []) or 'none'} — "
+           f"{_cell('; '.join(item.get('reasons') or []), 180)}" for item in end_review_items] or ["- none"]),
         "", "## Human record",
         "The engine cannot tell who typed a human name. Review the flagged rows (fast, reasonless, shared-reason, delegated or "
         "agent-filed) yourself before releasing.",
@@ -448,19 +937,44 @@ def final(ctx) -> NodeResult:
                     + f". Reason: {_cell(mask(g.reason), 200)}" for g in grants]
     if st.history.change_requests:
         summary += ["", "## Change requests to approved documents"]
-        summary += [f"- {c.id} on {c.doc}.md: rejected; filed by {c.requested_by}; the human record gives who declined it and why. "
+        summary += [f"- {c.id} on {doc_label(c.doc)}: rejected; filed by {c.requested_by}; the human record gives who declined it and why. "
                     f"Request: {_cell(mask(c.reason), 200)}" if c.status == "rejected" else
-                    f"- {c.id} on {c.doc}.md: deferred until: {_cell(mask(c.revisit), 120)}; filed by {c.requested_by}. "
+                    f"- {c.id} on {doc_label(c.doc)}: deferred until: {_cell(mask(c.revisit), 120)}; filed by {c.requested_by}. "
                     f"Request: {_cell(mask(c.reason), 200)}" if c.status == "deferred" else
-                    f"- {c.id} on {c.doc}.md: {c.status}; filed by {c.requested_by}, approved by {c.approved_by or '-'}: {_cell(mask(c.reason), 200)}"
+                    f"- {c.id} on {doc_label(c.doc)}: {c.status}; filed by {c.requested_by}, approved by {c.approved_by or '-'}: {_cell(mask(c.reason), 200)}"
                     for c in st.history.change_requests]
     ctx.workdir.mkdir(parents=True, exist_ok=True)
     (ctx.workdir / "release-summary.md").write_text("\n".join(summary) + "\n")
-    write_json_atomic(ctx.workdir / "verification.json", {"version": v, "ok": not problems, "problems": problems,
-                                                          "ledger_events": n, "auto_approvals": auto, "delegated_decisions": delegated,
-                                                          "pending_human": pending_human, "auto_approved_human_dimensions": auto_human,
-                                                          "warnings": warnings, "human_record": record})
-    return NodeResult(outputs={"verification": "verification.json", "release_summary": "release-summary.md"},
+    verification = {"version": v, "ok": not problems, "problems": problems,
+                    "ledger_events": n, "auto_approvals": auto, "delegated_decisions": delegated,
+                    "pending_human": pending_human, "auto_approved_human_dimensions": auto_human,
+                    "warnings": warnings, "human_record": record}
+    write_json_atomic(ctx.workdir / "verification.json", verification)
+    from ..review_forks import offered_review_forks
+    answered_forks = {str(e["data"].get("fork_id")) for e in events if e.get("type") == "human_choice"}
+    unreadable: list[str] = []
+    try:   # the graph's node ids, as the validator uses: a node dropped from the graph keeps its runtime entry
+        forks = offered_review_forks(ctx.project_dir, getattr(st.production, "forks_ref", {}) or {}, st.artifacts.values(),
+                                     answered_forks, {n.id for n in wf.nodes},
+                                     {nid: rt.attempts for nid, rt in st.runtime.nodes.items()}, unreadable=unreadable)
+    except (OSError, ValueError) as exc:
+        forks = []
+        warnings.append(f"fork records are unreadable; acknowledge before release ({exc.__class__.__name__})")
+    if unreadable:
+        warnings.append(f"fork records are unreadable; acknowledge before release ({', '.join(unreadable)})")
+    packet, template = _review_packet(ctx, forks, verification, warnings, pending_human, standing_provisional,
+                                      end_review_items, masters, mask)
+    digest = _decision_digest(ctx, forks, template, verification, warnings, pending_human, standing_provisional,
+                              end_review_items, masters, mask)
+    review_html = _review_html(packet.splitlines(), template)
+    (ctx.workdir / "decision-digest.md").write_text(digest)
+    (ctx.workdir / "review-packet.md").write_text(packet)
+    write_json_atomic(ctx.workdir / "decision.template.json", template)
+    (ctx.workdir / "review.html").write_text(review_html)
+    return NodeResult(outputs={"verification": "verification.json", "release_summary": "release-summary.md",
+                               "decision_digest": "decision-digest.md",
+                               "review_packet": "review-packet.md", "decision_template": "decision.template.json",
+                               "review_html": "review.html"},
                       data={"ok": not problems, "problems": problems})
 
 

@@ -24,6 +24,35 @@ from .models import ChangeRequest, ControlDocState, NodeDef, ProjectState
 from .util import now, read_text, sha256_file
 
 CONTROL_DOCS = ["product", "creative", "design", "production", "evaluation", "memory"]
+# Spec documents a workflow may register as control documents (the quality workflow does): id → path in the project.
+# The registry is exact: a workflow naming any other document is refused (graph validation), and the default workflow
+# names none, so its runs keep exactly the six documents above.
+SPEC_CONTROL_DOCS: dict[str, str] = {
+    "spec-design": "spec/DESIGN.md", "spec-tokens": "spec/DESIGN.tokens.json", "spec-motion": "spec/MOTION.md",
+    "spec-story": "spec/STORY.md", "spec-voice": "spec/VOICE.md", "spec-music": "spec/MUSIC.md", "spec-mix": "spec/MIX.md",
+    "spec-gates": "spec/GATES.yaml",
+}
+KNOWN_DOCS = CONTROL_DOCS + list(SPEC_CONTROL_DOCS)
+BAR_DOCS = {"evaluation", "spec-gates"}   # documents that set the quality bar: only a named human changes them mid-run
+
+
+def rel_path(doc: str) -> str:
+    """A control document's path relative to the project."""
+    return SPEC_CONTROL_DOCS.get(doc, f"controls/{doc}.md")
+
+
+def doc_label(doc: str) -> str:
+    """How messages name a document: `design.md` for the six (as always), its project path for a spec document."""
+    return SPEC_CONTROL_DOCS.get(doc, f"{doc}.md")
+
+
+def docs_for(wf: Any) -> list[str]:
+    """The control documents a workflow's runs track: the six, plus every spec document a node reads, writes or locks."""
+    used: set[str] = set()
+    for n in getattr(wf, "nodes", []):
+        used |= set(n.controls.read) | set(n.controls.write) | set(n.controls.lock_on_approval)
+        used |= {ref.partition(":")[2] for ref in n.inputs if ref.startswith("control:")}
+    return CONTROL_DOCS + [d for d in SPEC_CONTROL_DOCS if d in used]
 
 # Required body sections per document (the brief's §6 lists).
 REQUIRED_SECTIONS: dict[str, list[str]] = {
@@ -74,13 +103,13 @@ def sections(body: str) -> dict[str, str]:
 def missing_sections(doc: str, text: str) -> list[str]:
     _, body = split_front_matter(text)
     have = sections(body)
-    return [s for s in REQUIRED_SECTIONS[doc] if s not in have]
+    return [s for s in REQUIRED_SECTIONS.get(doc, []) if s not in have]
 
 
 def placeholder_sections(doc: str, text: str) -> list[str]:
     _, body = split_front_matter(text)
     have = sections(body)
-    return [s for s in REQUIRED_SECTIONS[doc] if s in have and (not have[s].strip() or PLACEHOLDER.search(have[s]))]
+    return [s for s in REQUIRED_SECTIONS.get(doc, []) if s in have and (not have[s].strip() or PLACEHOLDER.search(have[s]))]
 
 
 class IntegrityViolation(Exception):
@@ -88,27 +117,47 @@ class IntegrityViolation(Exception):
 
 
 class ControlStore:
-    def __init__(self, project_dir: Path, state: ProjectState, vpg_dir: Path):
+    def __init__(self, project_dir: Path, state: ProjectState, vpg_dir: Path, docs: list[str] | None = None):
         self.dir = Path(project_dir) / "controls"
         self.vpg = Path(vpg_dir)
         self.state = state
+        self.docs = list(docs or CONTROL_DOCS)
+        unknown = [d for d in self.docs if d not in KNOWN_DOCS]
+        if unknown:
+            raise ValueError(f"unknown control document(s): {', '.join(unknown)}")
 
     def path(self, doc: str) -> Path:
-        return self.dir / f"{doc}.md"
+        return self.dir.parent / SPEC_CONTROL_DOCS[doc] if doc in SPEC_CONTROL_DOCS else self.dir / f"{doc}.md"
+
+    def rel(self, doc: str) -> str:
+        return rel_path(doc)
+
+    def label(self, doc: str) -> str:
+        return doc_label(doc)
+
+    @staticmethod
+    def suffix(doc: str) -> str:
+        return Path(SPEC_CONTROL_DOCS[doc]).suffix if doc in SPEC_CONTROL_DOCS else ".md"
 
     def front_matter(self, doc: str) -> dict[str, Any]:
         p = self.path(doc)
-        return split_front_matter(read_text(p))[0] if p.exists() else {}
+        if not p.exists():
+            return {}
+        if doc in SPEC_CONTROL_DOCS and p.suffix in (".json", ".yaml", ".yml"):
+            import json
+            data = json.loads(read_text(p)) if p.suffix == ".json" else yaml.safe_load(read_text(p))
+            return data if isinstance(data, dict) else {}
+        return split_front_matter(read_text(p))[0]
 
     def register_all(self) -> None:
-        for doc in CONTROL_DOCS:
+        for doc in self.docs:
             p = self.path(doc)
             st = self.state.controls.get(doc) or ControlDocState(doc=doc, path=str(p.relative_to(self.dir.parent)))
             st.sha256 = sha256_file(p) if p.exists() else None
             self.state.controls[doc] = st
 
     def hashes(self) -> dict[str, str | None]:
-        return {doc: (sha256_file(self.path(doc)) if self.path(doc).exists() else None) for doc in CONTROL_DOCS}
+        return {doc: (sha256_file(self.path(doc)) if self.path(doc).exists() else None) for doc in self.docs}
 
     def _open_cr(self, doc: str) -> ChangeRequest | None:
         for cr in self.state.history.change_requests:
@@ -117,10 +166,10 @@ class ControlStore:
         return None
 
     def accepted_copy(self, doc: str) -> Path:
-        return self.vpg / "controls" / f"{doc}.accepted.md"
+        return self.vpg / "controls" / f"{doc}.accepted{self.suffix(doc)}"
 
     def version_copy(self, doc: str, sha: str) -> Path:
-        return self.vpg / "controls" / f"{doc}@{sha[:16]}.md"
+        return self.vpg / "controls" / f"{doc}@{sha[:16]}{self.suffix(doc)}"
 
     def _accept(self, doc: str) -> None:
         st = self.state.controls[doc]
@@ -139,7 +188,7 @@ class ControlStore:
         return None
 
     def accept_all(self) -> None:
-        for doc in CONTROL_DOCS:
+        for doc in self.docs:
             if self.path(doc).exists():
                 self._accept(doc)
 
@@ -153,14 +202,14 @@ class ControlStore:
         unattributable, never charged to a sibling that may be innocent.
         """
         violations, ambiguous = [], []
-        for doc in CONTROL_DOCS:
+        for doc in self.docs:
             p = self.path(doc)
             st = self.state.controls[doc]
             if not p.is_file():   # deleted, or replaced by a directory, pipe or device
                 if st.sha256 is None and not os.path.lexists(p):
                     continue       # never accepted and still absent
                 restored = self._recreate(doc)
-                what = f"deleted controls/{doc}.md or replaced it with something that is not a regular file"
+                what = f"deleted {self.rel(doc)} or replaced it with something that is not a regular file"
                 if others_inflight:
                     ambiguous.append(doc)
                 else:
@@ -174,12 +223,12 @@ class ControlStore:
                 if others_inflight:
                     ambiguous.append(doc)
                 else:
-                    violations.append(f"unauthorized control change: {node.id} may not edit {doc}.md (reverted)")
+                    violations.append(f"unauthorized control change: {node.id} may not edit {self.label(doc)} (reverted)")
                 continue
             if st.status == "approved":
                 cr = self._open_cr(doc)
                 if cr is None:
-                    violations.append(f"approved {doc}.md changed without an approved change request (reverted)")
+                    violations.append(f"approved {self.label(doc)} changed without an approved change request (reverted)")
                     self._revert(doc)
                     continue
                 cr.status = "applied"
@@ -216,17 +265,17 @@ class ControlStore:
         if accepted is None or (p.is_file() and sha256_file(p) == accepted):
             return False, None
         if p.is_dir() and not p.is_symlink():
-            raise IntegrityViolation(f"controls/{doc}.md is a directory; move it out of the way, then restore the document")
+            raise IntegrityViolation(f"{self.rel(doc)} is a directory; move it out of the way, then restore the document")
         src = self._accepted_source(doc)
         if src is None:
-            raise IntegrityViolation(f"no copy of the accepted {doc}.md is kept in .vpg/controls/ (they may have been deleted); "
+            raise IntegrityViolation(f"no copy of the accepted {self.label(doc)} is kept in .vpg/controls/ (they may have been deleted); "
                                      f"restore it from a backup")
         keep = None
         if p.is_file():
-            keep, n = self.vpg / "controls" / f"{doc}.{tag}.md", 1
+            keep, n = self.vpg / "controls" / f"{doc}.{tag}{self.suffix(doc)}", 1
             while keep.exists():   # never overwrite text kept earlier
                 n += 1
-                keep = self.vpg / "controls" / f"{doc}.{tag}-{n}.md"
+                keep = self.vpg / "controls" / f"{doc}.{tag}-{n}{self.suffix(doc)}"
             keep.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(p, keep)
         if before_change:
@@ -242,7 +291,7 @@ class ControlStore:
         """Put every document back to the version the state accepted (after a rollback). `on_restored(doc, kept)` runs
         right after each one, so a failure partway can still undo the documents already restored."""
         out = []
-        for doc in CONTROL_DOCS:
+        for doc in self.docs:
             restored, keep = self.restore_one(doc, tag, before_change=(lambda k, d=doc: on_restored(d, k)) if on_restored else None)
             if restored:
                 out.append((doc, keep))
@@ -263,7 +312,7 @@ class ControlStore:
         """Changes since the last accepted version that no in-flight node may account for (edits outside the workflow).
         A deleted accepted document counts: every later check would otherwise read an empty document and pass."""
         out = []
-        for doc in CONTROL_DOCS:
+        for doc in self.docs:
             if doc in inflight_writers:
                 continue
             p, accepted = self.path(doc), self.state.controls[doc].sha256
@@ -296,7 +345,7 @@ class ControlStore:
         st.sha256 = st.approved_sha256
         st.approved_by = actor
         st.approved_at = now()
-        snap = self.vpg / "controls" / f"{doc}@v{st.version}.md"
+        snap = self.vpg / "controls" / f"{doc}@v{st.version}{self.suffix(doc)}"
         snap.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(self.path(doc), snap)
         st.snapshot = str(snap.relative_to(self.dir.parent))

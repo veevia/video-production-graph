@@ -8,6 +8,9 @@ fixtures: fixtures
 dry_run: true
 brief: sources/brief.md
 constraints: ["fictional product, synthetic data", "runtime ≤ 20 s", "local media tools only"]
+privacy:
+  names: none
+  reason: fictional sample uses synthetic UI names only
 commands:
   n11_asset_generation: "{python} pipeline/assets.py"
   n12_voice_audio: "{python} pipeline/voice.py"

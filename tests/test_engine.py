@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 import pytest
+import yaml
 
 from tests.conftest import FnExecutor, flag, mini_workflow
 from vpg.engine import Engine, EngineError, StaleSubmission
@@ -91,6 +92,27 @@ def test_persisting_defect_escalates_after_three_failures(project):
     assert "persisted through 3 corrections" in " ".join(eng.state.evaluation.gate_results[-1].reasons)
     report = next((proj / ".vpg/escalations").glob("g_gate-*.md")).read_text()
     assert "Rework history" in report and "NOT resolved" in report
+
+
+def test_persisting_defect_continues_to_end_review_in_provisional_mode(project, monkeypatch):
+    import vpg.engine as ve
+    proj, wf = project
+    monkeypatch.setattr(ve, "autonomy_precondition_problems", lambda config: [])
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({
+        "humans": ["Wei"],
+        "privacy": {"names": "none", "reason": "synthetic"},
+        "loop_budget": {"on_exhaust": "extend_if_converging"},
+        "autonomy": {"mode": "provisional", "principal": "Wei"},
+    })
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    flag(proj, "defect")
+    eng = run(proj)
+    assert eng.state.runtime.status.value == "RUN_PASS"
+    assert eng.state.evaluation.gate_results[-1].outcome == "pass"
+    assert eng.state.runtime.end_review_items and eng.state.runtime.end_review_items[-1]["node"] == "g_gate"
+    assert list(Ledger(proj / ".vpg/ledger.jsonl").events("end_review_item"))
+    assert not list((proj / ".vpg/escalations").glob("g_gate-*.md"))
 
 
 def test_node_retry_then_escalate(project):

@@ -66,7 +66,8 @@
        "type": "number"
       },
       "minItems": 4,
-      "maxItems": 4
+      "maxItems": 4,
+      "description": "[x, y, w, h] in frame pixels: the text's own line box (the union of its lines when it wraps), never its container. The overlap, safe-area and caption-band audits read it, so a container box reports overlaps that are not there."
      },
      "start": {
       "type": "number",

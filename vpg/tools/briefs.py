@@ -66,6 +66,17 @@ def check_concepts(ctx) -> CheckResult:
     for x in c:
         if not x.get("risks") or not x.get("structure"):
             msgs.append(f"concept {x.get('id')} needs a structure and named risks")
+        scores = x.get("scores")
+        if scores is not None:
+            from .. import scoring
+            expected = {d["id"] for d in scoring.CONCEPT_FORK_DIMS}
+            if set(scores) != expected:
+                msgs.append(f"concept {x.get('id')} scores must cover exactly {sorted(expected)}")
+            bad = [d for d, v in scores.items() if not isinstance(v, (int, float)) or isinstance(v, bool) or not 1 <= float(v) <= 5]
+            if bad:
+                msgs.append(f"concept {x.get('id')} has scores outside 1–5: {bad}")
+            if not x.get("score_rationale"):
+                msgs.append(f"concept {x.get('id')} needs score_rationale with its scores")
     return CheckResult(not msgs, msgs)
 
 

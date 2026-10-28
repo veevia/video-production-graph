@@ -23,7 +23,8 @@ python -m vpg run <project>          # dispatches task packets / runs tools unti
 1. The command runs in the project directory. `VPG_CONTEXT` holds the path of `<workdir>/context.json`, which contains:
    - `node`, `attempt`, `workdir`;
    - `producer`: the node, attempt, code file hashes and `code_sha256` for the command producer;
-   - `inputs` (paths per artifact key) and `inputs_items` (per map item);
+   - `inputs` (paths per artifact key), `inputs_items` (per map item) and `inputs_identity` (each input's hash plus the
+     files it names, for reuse decisions; v1.8, #171);
    - `agent_outputs`, `controls` (paths), `defects` (the rework defects to fix) and `items`.
 2. It writes `<workdir>/outputs.json`: `{"outputs": {key: relative path or list}, "data": {...}, "findings": [...], "outcome": "pass"}`.
    A finding about one scene, unit or item should carry `element` (its id). The defect lists the items its latest review
@@ -57,11 +58,23 @@ python -m vpg run <project>          # dispatches task packets / runs tools unti
      The key covers the node, its command line and its code, but not your inputs: compare those yourself. `vpg status`
      warns, per file, when a code file reads earlier attempts (`work/<node>/a<N>`, or a glob over `a*` folders) without
      importing `vpg.reuse`. It is advisory because the engine can see source text, not intent.
-7. A recorded walkthrough is one planned asset with `spec.format: take`: a JSON manifest in which every entry with
+7. A JSON output's references count too (v1.8, #171). When an output names other files by path, as `scenes.json`'s
+   `"video": "film.mp4"` does, the engine records them with it (`named_files`), and its consumers' fingerprints cover
+   them. When a producer re-renders `film.mp4` but writes the same `scenes.json`, assembly re-runs instead of
+   memo-skipping.
+   - A file over 1 GiB counts by size and modification time.
+   - After the first 256 files, the rest are folded into one digest of their sizes and modification times, and the
+     ledger says so (`manifest_refs_folded`).
+   - The record is made when the producer registers its output. An in-place edit to a named file afterwards isn't
+     seen, so let the producer re-run.
+   - Still declare a file the consumers read as an output of its own where you can.
+   - When deciding reuse, compare `inputs_identity` from `VPG_CONTEXT`, which holds each input's hash plus the files it
+     names, rather than the input files' own bytes.
+8. A recorded walkthrough is one planned asset with `spec.format: take`: a JSON manifest in which every entry with
    `file` and `sha256` (at any depth, paths relative to the manifest) must exist inside the project and match. Its
    hash changes with every new take, so nothing downstream memo-skips onto an old one. A video asset takes an
    mp4/mov/webm/mkv/m4v `spec.format` and is checked with ffprobe (size, optional `duration_s`).
-8. A voice command's `timings` may carry word times, `words: [{unit, i, word, start, end, measured}]`, in the same
+9. A voice command's `timings` may carry word times, `words: [{unit, i, word, start, end, measured}]`, in the same
    time base as `units` (seconds from the start of the voice track). Caption sync (N18) then judges a unit's cues on
    them when the entries are its words in order (split as vpg splits spoken text: a run of letters or digits, with
    inner hyphens and apostrophes; an entry with no letter or digit, such as a lone dash, is ignored), at least one is
@@ -74,7 +87,7 @@ python -m vpg run <project>          # dispatches task packets / runs tools unti
    the word was not measured). Any other unit keeps the character-length estimate over its whole
    span, which at a clause break can be most of a second off real speech. Chunk captions on the same measured onsets,
    and start and end cues on measured words.
-9. Worked examples: `examples/sample-demo/pipeline/`.
+10. Worked examples: `examples/sample-demo/pipeline/`.
 
 ## Declare live windows for privacy scans
 
@@ -150,7 +163,9 @@ Every command that changes a run imports the graph's tools, mid-run as well as a
    A node whose tool reads a control document (`ctx.fm("<doc>")`, or `thresholds(ctx)` for evaluation) must list it in
    `controls.read`; the engine refuses the graph otherwise.
 
-   For stage numbering, the validator enforces the 25 brief stages; a new stage needs `REQUIRED_STAGES` in `vpg/graph.py` extended too.
+   For stage numbering, the validator enforces the 25 brief stages in order; a new core stage needs `REQUIRED_STAGES` in
+   `vpg/graph.py` extended too. Nodes numbered after the 25 may only be the optional stages in `OPTIONAL_STAGES` (the
+   quality workflow's Look development and Animatic), each at most once.
 2. Wire its edges: every outcome needs an outgoing edge, join predecessors need loop or escalate edges for non-joining outcomes, and loops need `max_traversals`.
 3. Add `prompts/<node>.md` (placeholders are checked) and bind a rubric.
 4. Run `python -m vpg validate`, `python -m vpg docs` and `python -m pytest -q`.
@@ -180,6 +195,8 @@ Never hand-edit `knowledge/rules.json`. Propose it through N25, or with `python 
 ## Swap the graph for a different film type
 
 Set `workflow: path/to/other.yaml` in `vpg.project.yaml`; it must pass `python -m vpg validate --workflow path/to/other.yaml`.
+`workflow:` may also name a shipped graph: `default` or `quality` (`WORKFLOWS` in `vpg/graph.py`). A run stays on the
+workflow it started with; the engine refuses to open it when the project names another.
 
 - **Engine core:** hard-codes no node ids. Engine behaviour attaches through four `gate:` hooks, and the validator enforces them:
   - `freeze_inputs` — at most one node;
@@ -189,3 +206,17 @@ Set `workflow: path/to/other.yaml` in `vpg.project.yaml`; it must pass `python -
 - **Shipped domain tools:** they *do* trace findings to the default graph's node ids — the script (N07), storyboard (N08), asset plan and assets (N10–N11), voice (N12), scenes (N13) and assembly (N14).
   - Either keep those ids for the nodes that own that work, or give your graph its own tools.
   - A finding traced to an unknown node fails N21's `defects_valid` completion check. It is never silently dropped.
+
+## Add an optional workflow
+
+The [quality workflow](quality-workflow.md) shows the pattern: a graph generated from the default one, so it cannot
+drift from it.
+
+1. Declare the differences as data in a module like `vpg/quality.py`: per default node, the lists it extends and the
+   values it sets; the new nodes; the default edges it removes and the edges it adds.
+2. Register the generated file in `WORKFLOWS` (`vpg/graph.py`) and in `vpg/docs.py`, so `python -m vpg docs` writes it
+   with its catalogs and `vpg docs --check` fails when it is stale.
+3. Control documents come from an exact registry (`vpg/controls.py`): the six, plus the spec family's eight ids. A
+   workflow tracks the six and every spec document its nodes read, write or lock; any other name is refused. Give
+   each document one writer that validates and locks it.
+4. Test the drift guard and the run end to end (`tests/test_quality_workflow.py` is the template).

@@ -149,6 +149,7 @@ def trend_rows(state, blocking_severities: list[str], latest: dict[str, Any] | N
         gates.append((latest["version"], latest, None))
     now_sev = {d.id: d.severity for d in ev.defects}
     rows = []
+    clean_last = False   # the previous version's last gate passed with none open, so this version re-opened it (#164)
     for version in dict.fromkeys(v for v, _, _ in gates):
         mine = [(snap, g) for v, snap, g in gates if v == version]
         sev = dict(now_sev)
@@ -167,6 +168,16 @@ def trend_rows(state, blocking_severities: list[str], latest: dict[str, Any] | N
             head = {"cycle": None, "open": len(g.open_blocking), "open_by_severity": _reason_split(g, counted), "estimated": True}
         rows.append({"version": version, **head, "resolved": len(resolved), "new": len(new),
                      "persisting": len(seen - resolved)})
+        # A clean pass leaves none open; a provisional pass that left defects open isn't clean. A version re-gated after
+        # its own clean pass (end-review feedback, `vpg feedback`, an accepted configuration) files its new findings on
+        # its own row; a version built after its predecessor's last gate passed clean (`vpg invalidate`) starts a new row.
+        clean = [gate is not None and gate.outcome == "pass" and (snap or {}).get("open", len(gate.open_blocking)) == 0
+                 for snap, gate in mine]
+        if any(clean[:-1]) and not clean[-1]:
+            rows[-1]["reopened_after"] = version
+        elif clean_last:
+            rows[-1]["reopened_after"] = rows[-2]["version"]
+        clean_last = clean[-1]
     return rows
 
 
@@ -176,7 +187,18 @@ def _heavier(row: dict[str, Any]) -> tuple[int, ...] | None:
 
 
 def convergence(rows: list[dict[str, Any]]) -> tuple[bool, str]:
-    """Whether the latest review round made progress on the blocking defects, with the reason in plain words."""
+    """Whether the latest review round made progress on the blocking defects, with the reason in plain words. A round
+    that re-opened a version after it passed its gate with none open says so (#164): nothing was open before it, so its
+    defects are new scrutiny (a human's end-review feedback, an outside review), not a stall. The verdict is decided as
+    for any round; only the reason of a round that isn't converging changes."""
+    ok, why = _convergence(rows)
+    if ok or len(rows) < 2 or rows[-1].get("reopened_after") is None:
+        return ok, why
+    return ok, (f"{why.split(';', 1)[0]}; v{rows[-1]['reopened_after']} had passed its gate with none open and this round "
+                "re-opened it, so no earlier round of this work compares")
+
+
+def _convergence(rows: list[dict[str, Any]]) -> tuple[bool, str]:
     if len(rows) < 2:
         return False, "no earlier review round to compare with"
     prev, cur = rows[-2], rows[-1]
@@ -201,8 +223,9 @@ def trend_lines(rows: list[dict[str, Any]], last: int = 6) -> list[str]:
         split = r.get("open_by_severity")
         detail = f" ({', '.join(f'{s} {n}' for s, n in split.items())})" if split else ""
         cycle = f" · cycle {r['cycle']}" if r.get("cycle") is not None else ""
+        reopened = f" · re-opened after v{r['reopened_after']} passed" if r.get("reopened_after") is not None else ""
         out.append(f"v{r['version']}{cycle} · {r['open']} open{detail} · {r['resolved']} resolved · {r['new']} new · "
-                   f"{r['persisting']} persisting" + (" (estimated: recorded before v1.6)" if r.get("estimated") else ""))
+                   f"{r['persisting']} persisting{reopened}" + (" (estimated: recorded before v1.6)" if r.get("estimated") else ""))
     return out
 
 

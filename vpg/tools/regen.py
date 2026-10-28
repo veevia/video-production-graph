@@ -9,14 +9,14 @@ if their input fingerprints changed; otherwise they are memo-skipped.
 from __future__ import annotations
 
 from ..context import CheckResult, NodeResult
-from ..graph import GraphIndex, load_workflow
+from ..graph import WORKFLOWS, GraphIndex, load_workflow
 from ..models import EdgeKind, NodeStatus
-from ..util import write_json_atomic
+from ..util import artifact_identity, write_json_atomic
 
 
 def plan(ctx) -> NodeResult:
     wf_path = ctx.config.get("workflow")
-    wf = load_workflow(None if not wf_path or wf_path == "default" else wf_path)
+    wf = load_workflow(WORKFLOWS[wf_path] if wf_path in WORKFLOWS else (wf_path or None))
     index = GraphIndex(wf)
     policies = wf.policies
     loopable = {e.when.split(":", 1)[1] for e in index.outgoing(ctx.node.id, EdgeKind.LOOP) if e.when.startswith("target:")}
@@ -38,7 +38,7 @@ def plan(ctx) -> NodeResult:
         for o in wf.node(t).outputs:
             recs = ctx.current(o.key)
             if recs:
-                baseline[o.key] = [r.sha256 for r in recs]
+                baseline[o.key] = [artifact_identity(r) for r in recs]   # #171: with the files it names
     plan_doc = {
         "cycle": ctx.state.runtime.rework_cycles + 1, "targets": targets, "defects_by_target": by_target,
         "closure": [n for n in index.topo if n in closure], "preserved": preserved, "unroutable": unroutable,
@@ -57,7 +57,7 @@ def check_traces(ctx) -> CheckResult:
     """GAT-TRACE: every open blocking defect names a known node, a smallest fix and an acceptance check, so N22 can
     re-run exactly the node that caused it. The interpreter supplies a missing fix under `fixes` in interpretation.json."""
     wf_path = ctx.config.get("workflow")
-    wf = load_workflow(None if not wf_path or wf_path == "default" else wf_path)
+    wf = load_workflow(WORKFLOWS[wf_path] if wf_path in WORKFLOWS else (wf_path or None))
     ids = {n.id for n in wf.nodes}
     msgs = []
     for d in ctx.state.evaluation.defects:

@@ -42,6 +42,16 @@ candidate → observed_again → validated → approved → adopted → monitore
 4. Wei promotes a rule once its evidence is sufficient: `python -m vpg memory promote --rule R-… --to approved --by Wei --human --evidence "…"`.
 5. Every write bumps the rule-base version, archives the previous file and appends to the changelog.
 
-## Initial rule state
+## Spec proposals, baselines and judge calibration (v1.9)
+
+- In the quality workflow, N21 may propose a change to a spec rule when feedback shows the spec is wrong rather than the
+  build. A proposal is listed by `vpg status`; a person files it as a change request, and nothing changes the spec
+  without one. See [quality workflow](quality-workflow.md#spec-proposals).
+- The accepted baseline the ratchet compares against (`previous_best` in a benchmark registry) is set only by a named
+  human with a reason, and a registry pinned in GATES.yaml changes only through a change request.
+- A judge's verdicts gate nothing until its agreement with a named human's labels is measured
+  ([judging](judging.md#calibration)).
+
+## Seed state (v1.0)
 
 46 rules from the case study: 38 adopted, 3 approved (project-specific, deliberately never defaults), 4 validated (critic-derived, advisory until Wei approves), 1 candidate (found by this workflow's own dry run). Every adopted rule's approval cites the message in which Wei stated the requirement. The numeric thresholds are marked "calibration pending".

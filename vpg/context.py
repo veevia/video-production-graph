@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .controls import rel_path
 from .models import ArtifactRecord, Defect, Finding, NodeDef, ProjectState
 from .util import read_json
 
@@ -75,7 +76,7 @@ class NodeContext:
         return p if p.is_absolute() else (self.workdir / p)
 
     def control_path(self, doc: str) -> Path:
-        return self.project_dir / "controls" / f"{doc}.md"
+        return self.project_dir / rel_path(doc)
 
     def fm(self, doc: str) -> dict[str, Any]:
         return self.controls.front_matter(doc)

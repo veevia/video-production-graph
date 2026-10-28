@@ -22,6 +22,16 @@ SR, HEAD, PAUSE, TAIL = 48000, 0.6, 0.45, 1.3
 say = shutil.which("say")
 
 
+def fade_edges(x: np.ndarray) -> np.ndarray:
+    y = x.astype(np.float64, copy=True)
+    n = min(len(y) // 2, int(0.15 * SR))
+    if n > 0:
+        fade = np.linspace(0, 1, n)
+        y[:n] *= fade
+        y[-n:] *= fade[::-1]
+    return y
+
+
 def speak(text: str, aiff: Path) -> None:
     """macOS `say` now and then never returns (seen for hours in a test run); a fresh call normally does."""
     for attempt in range(3):
@@ -46,7 +56,7 @@ def render(i: int, text: str) -> np.ndarray:
         return x[max(0, voiced[0] - 480): voiced[-1] + 960] if len(voiced) else x
     n = int(SR * 0.33 * len(text.split()))
     t = np.arange(n) / SR
-    return 0.3 * np.sin(2 * np.pi * 180 * t) * (0.65 + 0.35 * np.sin(2 * np.pi * 3 * t))
+    return fade_edges(0.3 * np.sin(2 * np.pi * 180 * t) * (0.65 + 0.35 * np.sin(2 * np.pi * 3 * t)))
 
 
 parts, spans, silences, t = [np.zeros(int(HEAD * SR))], [], [{"start": 0.0, "end": HEAD, "why": "head"}], HEAD

@@ -13,6 +13,7 @@ Craft rules (from knowledge/rules.json):
 - Offer at least 3 directions with genuinely different anchors (rubric-authoring: diverse anchors defeat overfitting).
 - Make the customer's experts the protagonists: whose problem, which decision, what changes (R-NAR-001).
 - Map every concept's chapters to the objective and name its risks.
+- Score each concept 1–5 on the concept fork dimensions from `scoring/README.md` §2 and include `score_rationale`.
 
 ## Inputs
 {{inputs}}
@@ -40,3 +41,4 @@ Read: {{controls_read}} · Write: {{controls_write}}. An approved document is lo
 - Claim human listening, taste approval or release approval.
 - Offer three variants of the same idea.
 - Build a concept around a claim product.md can't support.
+- Add scores without a rationale grounded in the concept's actual structure and risks.

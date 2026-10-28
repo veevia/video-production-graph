@@ -13,8 +13,10 @@ from pathlib import Path
 
 import yaml
 
-from .controls import CONTROL_DOCS
+from .controls import CONTROL_DOCS, KNOWN_DOCS, doc_label, rel_path
 from .util import PKG_ROOT, ConcurrentChange, NotRegularFile, read_json
+
+INHERITED_SAFETY_KEYS = ("privacy", "reviews", "preflight", "loop_budget", "command_deps", "humans", "autonomy", "regression")
 
 
 def _engine(args, **kw):
@@ -37,7 +39,8 @@ def _known_node(eng, node_id: str) -> str:
 
 # Commands that change a production: each runs under the project's exclusive lock (vpg/lock.py).
 MUTATING = {"run", "submit", "approve", "feedback", "change-request", "unblock", "invalidate", "rollback", "accept-config",
-            "restore-control", "accept-ledger-break", "resolve", "preflight", "publish", "grant"}
+            "restore-control", "accept-ledger-break", "resolve", "preflight", "publish", "grant", "fork", "review", "calibrate",
+            "direct-run"}
 
 
 def _human_gate_lines(eng, nid: str) -> list[str]:
@@ -46,9 +49,9 @@ def _human_gate_lines(eng, nid: str) -> list[str]:
     here = proj.relative_to(Path.cwd()) if proj.is_relative_to(Path.cwd()) else proj
     outs = sorted(a.path for a in eng.state.artifacts.values() if a.node == nid and a.status == "current")
     ok, no = node.human_review.outcomes[0], node.human_review.outcomes[1] if len(node.human_review.outcomes) > 1 else None
-    locks = [f"controls/{d}.md" for d in node.controls.lock_on_approval]
+    locks = [rel_path(d) for d in node.controls.lock_on_approval]
     lines = [f"{nid} — decision: {node.human_review.decision} (approver: {node.human_review.approver})",
-             f"    review: {', '.join(outs + [f'controls/{d}.md' for d in node.controls.write if f'controls/{d}.md' not in outs]) or 'see the node catalog for what this gate decides'}",
+             f"    review: {', '.join(outs + [rel_path(d) for d in node.controls.write if rel_path(d) not in outs]) or 'see the node catalog for what this gate decides'}",
              *_since_last_approval(eng, nid),
              f"    approving locks: {', '.join(locks) or 'nothing'} (later edits then need `vpg change-request`)",
              f"    approve: python -m vpg approve {here} {nid} --actor <human> --reason \"<their words>\"   (records '{ok}')"]
@@ -74,7 +77,7 @@ def _since_last_approval(eng, nid: str) -> list[str]:
     if last is None:
         return []
     if not last.outputs:
-        return [f"    last decided {last.at[:16]} by {last.actor} ({last.decision}); that record predates output hashes"]
+        return [f"    last decided {last.at[:16]} by {last.actor} ({last.decision}); that record predates output hashes (v1.7)"]
     rt = eng.rt(nid)
     now_out = {k: sha[:16] for k, (_, sha) in eng._attempt_outputs(nid, rt.attempts).items()}
     changed = sorted(k for k in set(now_out) | set(last.outputs) if now_out.get(k) != last.outputs.get(k))
@@ -86,10 +89,23 @@ def _print(obj) -> None:
     print(json.dumps(obj, indent=1, ensure_ascii=False, default=str))
 
 
+def _relay(args) -> dict[str, str]:
+    """The relay flags. A flag given but blank (e.g. an unset shell variable) is an error, never a silent "no relay"."""
+    from .engine import EngineError
+    out = {}
+    for key, flag in (("on_behalf_of", "--on-behalf-of"), ("instruction", "--instruction"), ("instruction_at", "--instruction-at")):
+        value = getattr(args, key, None)
+        if value is not None and not value.strip():
+            raise EngineError(f"{flag} was given but is blank: leave it out, or pass the value")
+        out[key] = value or ""
+    return out
+
+
 def cmd_init(args) -> int:
     root = Path(args.project)
     if root.exists() and any(root.iterdir()) and not args.force:
         print(f"{root} is not empty; use --force to add missing files only")
+        return 1
     (root / "controls").mkdir(parents=True, exist_ok=True)
     (root / "sources").mkdir(exist_ok=True)
     for doc in CONTROL_DOCS:
@@ -97,23 +113,80 @@ def cmd_init(args) -> int:
         if not dest.exists():
             shutil.copy2(PKG_ROOT / "templates" / "control" / f"{doc}.md", dest)
     cfg = root / "vpg.project.yaml"
+    quality = getattr(args, "workflow", "default") == "quality"
     if not cfg.exists():
         cfg.write_text(yaml.safe_dump({
-            "id": args.id or root.name, "name": args.name or root.name, "workflow": "default", "executor": "task",
-            "brief": "sources/brief.md", "constraints": [], "commands": {}, "command_timeout_s": 900}, sort_keys=False))
+            "id": args.id or root.name, "name": args.name or root.name, "workflow": "quality" if quality else "default",
+            "executor": "task", "brief": "sources/brief.md", "constraints": [], "commands": {}, "command_timeout_s": 900,
+            **({"observability": {"evaluation_events": True}} if quality else {})}, sort_keys=False))
+    elif quality and (yaml.safe_load(cfg.read_text()) or {}).get("workflow") != "quality":
+        print(f"note: {cfg} exists and does not say `workflow: quality`; the spec family is added, the config is unchanged")
+    spec_files = []
+    if quality:
+        from .spec import FILES, SPEC_DIR, TEMPLATES
+        (root / SPEC_DIR).mkdir(exist_ok=True)
+        for name in FILES.values():
+            if not (root / SPEC_DIR / name).exists():
+                shutil.copy2(TEMPLATES / name, root / SPEC_DIR / name)
+                spec_files.append(name)
+    copied, not_copied = [], []
+    if args.from_project:
+        src_root = Path(args.from_project)
+        src_cfg = src_root / "vpg.project.yaml"
+        try:
+            source = yaml.safe_load(src_cfg.read_text()) or {}
+        except yaml.YAMLError as exc:
+            raise SystemExit(f"vpg init --from: cannot parse {src_cfg} ({exc.__class__.__name__})") from None
+        except OSError as exc:
+            raise SystemExit(f"vpg init --from: cannot read {src_cfg} ({exc.__class__.__name__})") from None
+        if not isinstance(source, dict):
+            raise SystemExit(f"vpg init --from: {src_cfg} must be a mapping")
+        target = yaml.safe_load(cfg.read_text()) or {}
+        if not isinstance(target, dict):
+            raise SystemExit(f"vpg init: {cfg} must be a mapping")
+        for key in INHERITED_SAFETY_KEYS:
+            if key not in source:
+                not_copied.append(f"{key} (not in source)")
+            elif key in target:
+                not_copied.append(f"{key} (already set)")
+            else:
+                value = source[key]
+                if key == "privacy" and isinstance(value, dict) and isinstance(value.get("names"), str) and value["names"] != "none":
+                    name_path = Path(value["names"])
+                    if not name_path.is_absolute():
+                        value = {**value, "names": str((src_root / name_path).resolve())}
+                if key == "regression" and isinstance(value, dict):
+                    value = json.loads(json.dumps(value))
+                    value.pop("departures", None)
+                    baseline = value.get("baseline")
+                    if isinstance(baseline, dict):
+                        for pkey in ("inventory", "master", "layout_audit"):
+                            raw = baseline.get(pkey)
+                            if isinstance(raw, str) and raw.strip() and not Path(raw).is_absolute():
+                                baseline[pkey] = str((src_root / raw).resolve())
+                target[key] = value
+                copied.append(key)
+        cfg.write_text(yaml.safe_dump(target, sort_keys=False))
     if not (root / "sources" / "brief.md").exists():
         (root / "sources" / "brief.md").write_text("# Brief\n\n<fill: the requester's brief, verbatim>\n")
-    print(f"initialised {root}: controls/ (6 templates), sources/brief.md, vpg.project.yaml")
+    print(f"initialised {root}: controls/ (6 templates), sources/brief.md, vpg.project.yaml"
+          + (f", spec/ ({len(spec_files)} templates)" if quality else ""))
+    if quality:
+        print("quality workflow: N03 completes spec/GATES.yaml and pins a benchmark registry (`vpg benchmark init|add|measure`, "
+              "with style frames per role); see docs/quality-workflow.md")
+    if args.from_project:
+        print("safety keys copied:", ", ".join(copied) or "none")
+        print("safety keys not copied:", ", ".join(not_copied) or "none")
     print("next: fill sources/brief.md; add product evidence (a spec, prototype capture or recording) and brand authority to "
           f"sources/; then `python -m vpg run {root}`")
     return 0
 
 
 def cmd_validate(args) -> int:
-    from .graph import load_workflow, validate
-    wf = load_workflow(args.workflow)
+    from .graph import load_workflow, resolve_workflow, validate
+    wf = load_workflow(resolve_workflow(args.workflow))
     errs = validate(wf)
-    print(f"{wf.id}: {len(wf.nodes)} nodes, {len(wf.edges)} edges, {len(wf.subgraphs)} subgraphs — "
+    print(f"{wf.id} v{wf.version}: {len(wf.nodes)} nodes, {len(wf.edges)} edges, {len(wf.subgraphs)} subgraphs — "
           + ("valid" if not errs else f"{len(errs)} errors"))
     for e in errs:
         print("  -", e)
@@ -127,6 +200,13 @@ def cmd_run(args) -> int:
     st = eng.run(max_steps=args.max_steps)
     _summary(st)
     return 0 if st["status"] in ("RUN_PASS", "WAITING_RUNTIME", "WAITING_HUMAN", "RUNNING") else 2
+
+
+def _escalation_text(e: dict, nodes: dict | None) -> str:
+    """A run-level escalation (integrity, configuration) keeps its report whole: its reason is that report cut at 240
+    characters, which can drop the advice (#147). A node's escalation prints its reason; its details are in its file."""
+    run_level = nodes is not None and e["node"] not in nodes
+    return e["report"] if run_level and e.get("report") else e["reason"]
 
 
 def _summary(st) -> None:
@@ -164,7 +244,7 @@ def _summary(st) -> None:
             + [f"{edge} {n + 1} → {n}" for edge, n in r["loops"].items()] + [f"{d} → {s}" for d, s in r["defects"].items()]
         print(f"unblocking {r['node']} reverts the plan an older engine applied although blocked: {'; '.join(undo) or 'nothing left'}")
     if st["escalations"]:
-        print("BLOCKED:", *(f"\n  {e['node']}: {e['reason']}" for e in st["escalations"]))
+        print("BLOCKED:", *(f"\n  {e['node']}: {_escalation_text(e, st.get('nodes'))}" for e in st["escalations"]))
     if st["open_defects"]:
         print("open defects:", *(f"\n  {d}" for d in st["open_defects"]))
     if st.get("holds"):
@@ -234,11 +314,57 @@ def cmd_submit(args) -> int:
     return 0
 
 
+def cmd_fork(args) -> int:
+    if args.action != "record":
+        raise SystemExit("vpg fork: action must be record")
+    st = _engine(args).record_fork(args.from_file, actor=args.actor)
+    _summary(st)
+    return 0
+
+
+def cmd_review(args) -> int:
+    if args.action != "record":
+        raise SystemExit("vpg review: action must be record")
+    st = _engine(args).record_review(args.from_file, actor=args.actor, **_relay(args))
+    _summary(st)
+    return 0
+
+
+def cmd_calibrate(args) -> int:
+    from . import scoring
+    if getattr(args, "reviewers", False):
+        data = _read_only(args)._preference_store(args.principal)
+        print(json.dumps({"reviewer_calibration": scoring.reviewer_calibration(data),
+                          "skipped_lines": scoring.skipped_lines(data)}, indent=1))
+        return 0
+    data = _engine(args)._preference_store(args.principal)
+    model = scoring.fit_store(data, principal=args.principal)
+    metrics = model.get("metrics", {})
+    print(json.dumps({
+        "principal": model.get("principal"),
+        "version": model.get("version"),
+        "n": metrics.get("n"),
+        "top1": metrics.get("top1"),
+        "pairwise": metrics.get("pairwise"),
+        "brier": metrics.get("brier"),
+        "ece_raw": metrics.get("ece"),
+        "ece_calibrated": metrics.get("ece_calibrated"),
+        "calibrated": scoring.is_calibrated(model),
+        "reviewer_calibration": scoring.reviewer_calibration(data),
+        "skipped_lines": scoring.skipped_lines(data),
+    }, indent=1))
+    return 0
+
+
 def cmd_approve(args) -> int:
     eng = _engine(args)
     node = eng.node(_known_node(eng, args.node))
     decision = args.decision or (node.human_review.outcomes[1] if args.reject else node.human_review.outcomes[0])
-    st = eng.decide(args.node, decision, actor=args.actor, reason=args.reason or "", feedback=args.feedback or [])
+    rejection_feedback = "\n".join(args.feedback or [])
+    st = eng.decide(args.node, decision, actor=args.actor, reason=args.reason or "", feedback=args.feedback or [],
+                    provisional=args.provisional, confirm_provisional=args.confirm_provisional or "",
+                    reject_provisional=args.reject_provisional or "", rejection_feedback=rejection_feedback,
+                    ack_warnings=args.ack_warning or [], signoffs=args.signoff or [], **_relay(args))
     _summary(st)
     return 0
 
@@ -249,7 +375,7 @@ def cmd_feedback(args) -> int:
         if args.accept == args.dismiss:
             raise EngineError("--triage needs exactly one of --accept or --dismiss")
         eng = _engine(args)
-        fb = eng.triage_feedback(args.triage, accept=args.accept, actor=args.actor, reason=args.reason or "")
+        fb = eng.triage_feedback(args.triage, accept=args.accept, actor=args.actor, reason=args.reason or "", **_relay(args))
         gate = eng._gate_node()
         escalated = any(e.node == gate and not e.resolved for e in eng.state.runtime.escalations)
         print(f"{fb.id} {fb.triage} by {args.actor}"
@@ -261,7 +387,7 @@ def cmd_feedback(args) -> int:
     if not args.text:
         raise EngineError("--text is required (or --triage F --accept|--dismiss for an agent's note)")
     eng = _engine(args)
-    fb = eng.add_feedback(args.text, actor=args.actor, at=args.at or "", severity=args.severity or "")
+    fb = eng.add_feedback(args.text, actor=args.actor, at=args.at or "", severity=args.severity or "", **_relay(args))
     if fb.triage == "pending":
         print(f"recorded {fb.id} on version {fb.version} as an agent's note: it re-opens nothing and holds the version until a "
               f"human (or an agent granted feedback-triage) runs `python -m vpg feedback {args.project} --triage {fb.id} "
@@ -272,8 +398,8 @@ def cmd_feedback(args) -> int:
 
 
 def _impact_lines(impact: dict) -> list[str]:
-    what = impact["cr"] or f"a change to {impact['doc']}.md"
-    return [f"impact of {what} ({impact['doc']}.md), if approved:",
+    what = impact["cr"] or f"a change to {doc_label(impact['doc'])}"
+    return [f"impact of {what} ({doc_label(impact['doc'])}), if approved:",
             f"  writer re-runs: {impact['writer'] or 'none (no node writes it)'}",
             f"  readers re-check when it changes: {', '.join(impact['readers']) or 'none'}",
             f"  human decisions that would re-open: {', '.join(impact['human_gates']) or 'none'}",
@@ -298,10 +424,10 @@ def cmd_grant(args) -> int:
         raise EngineError("--actor is required: the named human granting or revoking")
     eng = _engine(args)
     if args.revoke:
-        g = eng.revoke_grant(args.revoke, actor=args.actor, reason=args.reason or "")
+        g = eng.revoke_grant(args.revoke, actor=args.actor, reason=args.reason or "", **_relay(args))
         print(f"{g.id} revoked by {g.revoked_by}; {g.grantee} can no longer act for {g.grantor}")
         return 0
-    g = eng.grant(args.to or "", args.allow or [], args.expires or "", args.reason or "", actor=args.actor)
+    g = eng.grant(args.to or "", args.allow or [], args.expires or "", args.reason or "", actor=args.actor, **_relay(args))
     print(f"{g.id}: {g.grantee} may {', '.join(g.actions)} for {g.grantor} until {g.expires} (inclusive). Each act is ledgered "
           f"with the grant; revoke it with `python -m vpg grant {args.project} --revoke {g.id} --actor {g.grantor} --reason …`")
     return 0
@@ -318,28 +444,40 @@ def cmd_change_request(args) -> int:
         raise EngineError("--actor is required: who files or decides the change request")
     eng = _engine(args)
     if args.defer:
-        cr = eng.defer_change_request(args.defer, by=args.actor, until=args.until or "", reason=args.reason)
-        print(f"{cr.id} deferred by {args.actor} until: {cr.revisit}; {cr.doc}.md stays as approved and nothing re-runs")
+        cr = eng.defer_change_request(args.defer, by=args.actor, until=args.until or "", reason=args.reason, **_relay(args))
+        print(f"{cr.id} deferred by {args.actor} until: {cr.revisit}; {doc_label(cr.doc)} stays as approved and nothing re-runs")
         return 0
     if args.approve:
-        cr = eng.approve_change_request(args.approve, by=args.actor, reason=args.reason)
-        print(f"{cr.id} approved by {cr.approved_by}; the writer node is invalidated and will re-run")
+        cr = eng.approve_change_request(args.approve, by=args.actor, reason=args.reason, **_relay(args))
+        writer = eng.control_writer(cr.doc)
+        if writer:
+            print(f"{cr.id} approved by {cr.approved_by}; {writer} (the writer of {doc_label(cr.doc)}) is invalidated and will re-run. "
+                  f"{eng.edit_window_advice(cr.doc)}. An edit made before the task is dispatched is outside the workflow and "
+                  "blocks the run")
+        else:
+            print(f"{cr.id} approved by {cr.approved_by}; no node writes {doc_label(cr.doc)}, so nothing re-runs")
     elif args.reject:
-        cr = eng.reject_change_request(args.reject, by=args.actor, reason=args.reason)
-        print(f"{cr.id} rejected by {args.actor}; {cr.doc}.md stays as approved and nothing re-runs")
+        cr = eng.reject_change_request(args.reject, by=args.actor, reason=args.reason, **_relay(args))
+        print(f"{cr.id} rejected by {args.actor}; {doc_label(cr.doc)} stays as approved and nothing re-runs")
     else:
         cr = eng.change_request(args.doc, args.reason, by=args.actor)
-        print(f"opened {cr.id} on {args.doc}.md; approve it with --approve {cr.id} --actor <human>")
+        print(f"opened {cr.id} on {doc_label(args.doc)}; approve it with --approve {cr.id} --actor <human>")
         print(*_impact_lines(eng.change_request_impact(cr.id)), sep="\n")
     return 0
 
 
 def cmd_preflight(args) -> int:
+    from .engine import EngineError
     notes = ""
     if args.notes:
         path = Path(args.notes)
-        if not path.is_file():
-            raise FileNotFoundError(f"--notes {args.notes}: no such file")
+        if not path.is_file():   # #169: the notes are a file, not inline text
+            pathlike = "/" in args.notes or args.notes.endswith((".md", ".txt"))
+            shown = args.notes if len(args.notes) <= 60 else ("…" + args.notes[-57:] if pathlike else args.notes[:57] + "…")
+            where = "" if path.is_absolute() else " (relative to the current directory)"
+            raise EngineError(f"--notes expects the path of a file with the reviewer's notes, and there is no file at "
+                              f"{shown!r}{where}; if that is the notes themselves, write them to a file (for example "
+                              "notes.md) and pass its path")
         notes = path.read_text()
     st = _engine(args).preflight(args.node, args.token, args.verdict, actor=args.actor, notes=notes)
     _summary(st)
@@ -354,14 +492,14 @@ def cmd_unblock(args) -> int:
         raise EngineError(f"nothing to unblock called '{args.node}'; open escalations: "
                           f"{sorted({e.node for e in eng.state.runtime.escalations if not e.resolved}) or 'none'}")
     _summary(eng.unblock(args.node, actor=args.actor, note=args.note or "", reset_budget=args.reset_budget, waive=args.waive or [],
-                         all_loops=args.reset_loops))
+                         all_loops=args.reset_loops, **_relay(args)))
     return 0
 
 
 def cmd_resolve(args) -> int:
     import shlex
     eng = _engine(args)
-    d = eng.resolve_defect(args.defect, actor=args.actor, evidence=args.evidence)
+    d = eng.resolve_defect(args.defect, actor=args.actor, evidence=args.evidence, **_relay(args))
     print(f"{d.id} resolved by {args.actor}: {d.dimension} → {d.traced_node} ({d.description[:80]})")
     gate_node = eng._gate_node()
     if any(e.node == gate_node and not e.resolved for e in eng.state.runtime.escalations):
@@ -372,17 +510,17 @@ def cmd_resolve(args) -> int:
 
 def cmd_invalidate(args) -> int:
     eng = _engine(args)
-    changed = eng.invalidate_nodes([_known_node(eng, args.node)], reason=args.reason, actor=args.actor)
+    changed = eng.invalidate_nodes([_known_node(eng, args.node)], reason=args.reason, actor=args.actor, **_relay(args))
     print("invalidated:", ", ".join(changed))
     return 0
 
 
 def cmd_restore_control(args) -> int:
     eng = _engine(args)
-    eng.restore_control(args.doc, actor=args.actor)
+    eng.restore_control(args.doc, actor=args.actor, **_relay(args))
     import shlex
     kept = next(e["data"]["kept"] for e in reversed(list(eng.ledger.events("control_restored"))) if e["data"]["doc"] == args.doc)
-    print(f"controls/{args.doc}.md restored to the accepted version; what was there is kept at: {kept}")
+    print(f"{rel_path(args.doc)} restored to the accepted version; what was there is kept at: {kept}")
     if any(e.node == "integrity" and not e.resolved for e in eng.state.runtime.escalations):
         print(f"next: python -m vpg unblock {shlex.quote(str(args.project))} integrity --actor {shlex.quote(args.actor)}")
     return 0
@@ -390,7 +528,7 @@ def cmd_restore_control(args) -> int:
 
 def cmd_accept_ledger_break(args) -> int:
     from .engine import Engine
-    eng = Engine(args.project, accept_ledger_break=(args.actor, args.reason))
+    eng = Engine(args.project, accept_ledger_break={"actor": args.actor, "reason": args.reason, **_relay(args)})
     brk = eng.state.runtime.ledger_breaks[-1]
     print(f"ledger break accepted by {brk['actor']}: events after {brk['lost_after_seq']} were lost; the ledger continues "
           f"at event {brk['resumes_at_seq']}, and the release summary lists the break")
@@ -399,12 +537,12 @@ def cmd_accept_ledger_break(args) -> int:
 
 def cmd_accept_config(args) -> int:
     eng = _engine(args)
-    _summary(eng.accept_config(actor=args.actor, reason=args.reason, adopt_code=args.adopt_code))
+    _summary(eng.accept_config(actor=args.actor, reason=args.reason, adopt_code=args.adopt_code, **_relay(args)))
     return 0
 
 
 def cmd_rollback(args) -> int:
-    _summary(_engine(args).rollback(args.checkpoint, actor=args.actor))
+    _summary(_engine(args).rollback(args.checkpoint, actor=args.actor, **_relay(args)))
     return 0
 
 
@@ -487,9 +625,21 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--lock-timeout", type=float, default=900.0,
                         help="seconds to wait while another vpg process is changing the project (default 900)")
 
+    def relay(sp):
+        sp.add_argument("--on-behalf-of", dest="on_behalf_of", help="declared human principal for a relayed agent act")
+        sp.add_argument("--instruction", help="verbatim human instruction for a relayed agent act")
+        sp.add_argument("--instruction-at", dest="instruction_at",
+                        help="when the human gave the instruction: ISO 8601 with timezone, e.g. 2026-10-15T17:00:00-05:00")
+
     sp = sub.add_parser("init", help="create a project from the control-document templates"); proj(sp)
-    sp.add_argument("--name"); sp.add_argument("--id"); sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_init)
-    sp = sub.add_parser("validate", help="validate the workflow graph"); sp.add_argument("--workflow"); sp.set_defaults(fn=cmd_validate)
+    sp.add_argument("--name"); sp.add_argument("--id"); sp.add_argument("--force", action="store_true")
+    sp.add_argument("--from", dest="from_project", help="copy safety-critical top-level config keys from an existing project")
+    sp.add_argument("--workflow", choices=["default", "quality"], default="default",
+                    help="quality: the look and animatic gates, with the spec family templates in spec/ (docs/quality-workflow.md)")
+    sp.set_defaults(fn=cmd_init)
+    sp = sub.add_parser("validate", help="validate the workflow graph")
+    sp.add_argument("--workflow", help="default (the shipped graph), quality (with look and animatic gates), or a path")
+    sp.set_defaults(fn=cmd_validate)
     sp = sub.add_parser("run", help="run until the graph waits for an agent or a human, blocks, or finishes"); proj(sp)
     sp.add_argument("--max-steps", type=int, default=1000); sp.add_argument("--fixtures", help="replay agent outputs from fixtures (dry runs)")
     sp.add_argument("--auto-approve-dry-run", action="store_true",
@@ -504,18 +654,36 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--outputs", help="a JSON file mapping output keys to paths (a path, a list, or {item: path} for per-item outputs)")
     sp.add_argument("--review", help="review.json for review nodes")
     sp.add_argument("--outcome", default="pass", help="the node's outcome when it has several (default: pass)"); sp.set_defaults(fn=cmd_submit)
+    sp = sub.add_parser("fork", help="record a scored fork artifact"); proj(sp); sp.add_argument("action", choices=["record"])
+    sp.add_argument("--from", dest="from_file", required=True, help="fork.json to validate and record")
+    sp.add_argument("--actor", default="agent:production-orchestrator", help="agent recording the fork")
+    sp.set_defaults(fn=cmd_fork)
+    sp = sub.add_parser("review", help="record the principal's single end-review answer"); proj(sp)
+    sp.add_argument("action", choices=["record"]); sp.add_argument("--from", dest="from_file", required=True, help="decision.json")
+    sp.add_argument("--actor", required=True, help="declared human, or agent:<id> with relay fields while release waits")
+    relay(sp); sp.set_defaults(fn=cmd_review)
+    sp = sub.add_parser("calibrate", help="refit the principal's scored-fork preference model"); proj(sp)
+    sp.add_argument("--principal", default=None, help="principal preference store to refit (default: project/autonomy principal)")
+    sp.add_argument("--reviewers", action="store_true", help="report reviewer calibration from verdicts.jsonl without fitting")
+    sp.set_defaults(fn=cmd_calibrate)
     sp = sub.add_parser("approve", help="record a human decision at a human gate"); proj(sp); sp.add_argument("node")
     sp.add_argument("--actor", required=True, help="the named human deciding (agents and dry-run actors are refused)")
     sp.add_argument("--reject", action="store_true", help="record the gate's second outcome (e.g. rejected)")
     sp.add_argument("--decision", help="an explicit outcome from the gate's list, instead of approve or --reject")
     sp.add_argument("--reason", required=True, help="the human's own words for the decision (required)")
-    sp.add_argument("--feedback", action="append", help="feedback to act on after a rejection (repeatable)"); sp.set_defaults(fn=cmd_approve)
+    sp.add_argument("--feedback", action="append", help="feedback to act on after a rejection, or after --reject-provisional (repeatable)")
+    sp.add_argument("--provisional", action="store_true", help="record an autonomy-mode provisional approval at a pre-production gate")
+    sp.add_argument("--confirm-provisional", metavar="all|NODE,...", help="at release, confirm standing provisional approvals")
+    sp.add_argument("--reject-provisional", metavar="NODE", help="at release, reject one standing provisional approval and reopen it")
+    sp.add_argument("--ack-warning", action="append", metavar="N|all", help="acknowledge release-summary warning number(s)")
+    sp.add_argument("--signoff", action="append", metavar="DIM,...", help="sign off pending human-judged dimension(s)")
+    relay(sp); sp.set_defaults(fn=cmd_approve)
     sp = sub.add_parser("feedback", help="record feedback on the current version, or triage an agent's note"); proj(sp)
     sp.add_argument("--text", help="the feedback (a named human's re-opens the gate; an agent's note waits for triage)")
     sp.add_argument("--actor", required=True); sp.add_argument("--at"); sp.add_argument("--severity")
     sp.add_argument("--triage", metavar="F", help="rule on an agent's note: --accept or --dismiss, with --reason")
     sp.add_argument("--accept", action="store_true"); sp.add_argument("--dismiss", action="store_true")
-    sp.add_argument("--reason", help="why the note is accepted or dismissed (required with --triage)"); sp.set_defaults(fn=cmd_feedback)
+    sp.add_argument("--reason", help="why the note is accepted or dismissed (required with --triage)"); relay(sp); sp.set_defaults(fn=cmd_feedback)
     sp = sub.add_parser("grant", help="a named human delegates human-only actions to one agent until a date, or revokes it"); proj(sp)
     sp.add_argument("--actor", help="the named human granting or revoking"); sp.add_argument("--to", metavar="agent:ID")
     sp.add_argument("--allow", action="append", metavar="ACTION", help="repeatable: accept-config, unblock, invalidate, "
@@ -523,7 +691,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--expires", metavar="YYYY-MM-DD", help="the last day the grant holds (at most 90 days out)")
     sp.add_argument("--reason", help="the human's reason, e.g. their instruction quoted")
     sp.add_argument("--revoke", metavar="G-NNN"); sp.add_argument("--list", action="store_true", help="read-only: every grant and its state")
-    sp.set_defaults(fn=cmd_grant)
+    relay(sp); sp.set_defaults(fn=cmd_grant)
     sp = sub.add_parser("change-request", help="open, approve, reject, defer or preview a change request on a locked control document"); proj(sp)
     sp.add_argument("--doc"); sp.add_argument("--reason", default="", help="why it is filed, approved, rejected or deferred (required to reject or defer)")
     sp.add_argument("--actor", help="who files or decides it (required except with --impact)"); sp.add_argument("--approve", metavar="CR")
@@ -531,7 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--defer", metavar="CR", help="park an open change request until a trigger (needs --until and --reason)")
     sp.add_argument("--until", help="what brings a deferred change request back, e.g. \"after the v1 release\"")
     sp.add_argument("--impact", metavar="CR", help="read-only: what approving it would re-run and re-open")
-    sp.set_defaults(fn=cmd_change_request)
+    relay(sp); sp.set_defaults(fn=cmd_change_request)
     sp = sub.add_parser("preflight", help="an independent reviewer passes a held attempt, or returns it with notes"); proj(sp)
     sp.add_argument("node"); sp.add_argument("--token", required=True, help="the pre-flight token from the packet")
     sp.add_argument("--verdict", required=True, choices=["pass", "revise"])
@@ -546,27 +714,27 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--waive", action="append", metavar="GAP",
                     help="source validation only: proceed without resolving this resolvable intake gap (repeatable; --note gives "
                          "the reason). Works whether or not N02 is blocked, until the inputs freeze")
-    sp.set_defaults(fn=cmd_unblock)
+    relay(sp); sp.set_defaults(fn=cmd_unblock)
     sp = sub.add_parser("resolve", help="a human closes a defect no review can clear, with the evidence it is fixed or does not apply")
     proj(sp); sp.add_argument("defect", help="defect id, e.g. D018"); sp.add_argument("--actor", required=True, help="the named human")
     sp.add_argument("--evidence", required=True, help="what shows the defect is fixed or does not apply (recorded in the ledger)")
-    sp.set_defaults(fn=cmd_resolve)
+    relay(sp); sp.set_defaults(fn=cmd_resolve)
     sp = sub.add_parser("invalidate", help="force a node and its dependents to re-check"); proj(sp); sp.add_argument("node")
     sp.add_argument("--reason", required=True)
     sp.add_argument("--actor", required=True, help="who asks: an agent id, or a named human (or a granted agent) when a human's "
-                    "decision or the frozen inputs would re-open (recorded in the ledger)"); sp.set_defaults(fn=cmd_invalidate)
+                    "decision or the frozen inputs would re-open (recorded in the ledger)"); relay(sp); sp.set_defaults(fn=cmd_invalidate)
     sp = sub.add_parser("accept-ledger-break", help="a human accepts that ledger events were lost (no backup exists)")
     proj(sp); sp.add_argument("--actor", required=True, help="the named human"); sp.add_argument("--reason", required=True)
-    sp.set_defaults(fn=cmd_accept_ledger_break)
+    relay(sp); sp.set_defaults(fn=cmd_accept_ledger_break)
     sp = sub.add_parser("restore-control", help="a human puts a control document back to the version the workflow accepted")
-    proj(sp); sp.add_argument("--doc", required=True, choices=list(CONTROL_DOCS)); sp.add_argument("--actor", required=True, help="the named human")
-    sp.set_defaults(fn=cmd_restore_control)
+    proj(sp); sp.add_argument("--doc", required=True, choices=list(KNOWN_DOCS)); sp.add_argument("--actor", required=True, help="the named human")
+    relay(sp); sp.set_defaults(fn=cmd_restore_control)
     sp = sub.add_parser("accept-config", help="a human accepts a mid-run change to the workflow, rules, rubrics, thresholds or project config")
     proj(sp); sp.add_argument("--actor", required=True, help="the named human"); sp.add_argument("--reason", required=True)
     sp.add_argument("--adopt-code", action="append", default=[], metavar="NODE",
                     help="keep NODE's last pass, which predates code fingerprints: you vouch its current code made it (repeatable)")
-    sp.set_defaults(fn=cmd_accept_config)
-    sp = sub.add_parser("rollback", help="restore state from a checkpoint"); proj(sp); sp.add_argument("--checkpoint", type=int, required=True); sp.add_argument("--actor", required=True); sp.set_defaults(fn=cmd_rollback)
+    relay(sp); sp.set_defaults(fn=cmd_accept_config)
+    sp = sub.add_parser("rollback", help="restore state from a checkpoint"); proj(sp); sp.add_argument("--checkpoint", type=int, required=True); sp.add_argument("--actor", required=True); relay(sp); sp.set_defaults(fn=cmd_rollback)
     sp = sub.add_parser("lineage", help="walk an artifact's inputs"); proj(sp); sp.add_argument("artifact"); sp.set_defaults(fn=cmd_lineage)
     sp = sub.add_parser("ledger-verify", help="verify the hash-chained ledger"); proj(sp); sp.set_defaults(fn=cmd_ledger_verify)
     sp = sub.add_parser("docs", help="regenerate the catalogs, schemas and graph visualisation"); sp.add_argument("--check", action="store_true"); sp.set_defaults(fn=cmd_docs)
@@ -580,6 +748,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--version", type=int, help="publish or check one version instead of all unpublished versions")
     sp.add_argument("--check", action="store_true", help="report unpublished or out-of-sync versions without writing")
     sp.set_defaults(fn=cmd_publish)
+    from .quality_cli import register as register_quality
+    register_quality(sub)
     args = p.parse_args(argv)
     from .controls import IntegrityViolation
     from .engine import EngineError
@@ -587,9 +757,11 @@ def main(argv: list[str] | None = None) -> int:
     from .memory import DEFAULT_RULES, GovernanceError
     from .provenance import LedgerBehind, LedgerCorrupt
     try:
-        if args.cmd in MUTATING and not ((args.cmd == "publish" and args.check)   # a check or a preview only reads
-                                         or (args.cmd == "change-request" and args.impact)
-                                         or (args.cmd == "grant" and args.list)):
+        if (args.cmd in MUTATING and not ((args.cmd == "publish" and args.check)   # a check or a preview only reads
+                                          or (args.cmd == "change-request" and args.impact)
+                                          or (args.cmd == "grant" and args.list)
+                                          or (args.cmd == "calibrate" and getattr(args, "reviewers", False)))
+                or (args.cmd == "telemetry" and args.write)):   # refreshing .vpg/telemetry/ writes into the run's folder
             with project_lock(args.project, args.cmd, args.lock_timeout):
                 return args.fn(args)
         if args.cmd == "memory" and args.action != "status":

@@ -120,7 +120,7 @@
 | 6. State written | production.concepts_ref |
 | 7. Responsible agent | `creative-director` (agents/creative-director.yaml) |
 | 8. Skills and tools | Skills: video-prototype, concept-creator, video-shotcraft, design-principles<br>Tools: — |
-| 9. Execution instructions | Write concepts.json with ≥3 concepts whose anchors differ (for example a problem-first story, a user's-day journey and a system reveal). Give each a logline, a chapter structure mapped to the objective, strengths and risks.<br>Prompt: `prompts/n05_narrative_ideation.md` |
+| 9. Execution instructions | Write concepts.json with ≥3 concepts whose anchors differ (for example a problem-first story, a user's-day journey and a system reveal). Give each a logline, a chapter structure mapped to the objective, strengths and risks. For new concepts, add 1–5 scores on the concept fork dimensions (CON-FIT, DIR-BOUNDARIES, CRE-HOOK, CRE-ONE-MESSAGE, CRE-ARC, NAR-CLARITY, NAR-RELEVANCE, NAR-CONNECTION, NAR-PERSPECTIVE) plus score_rationale; old concepts without scores remain valid.<br>Prompt: `prompts/n05_narrative_ideation.md` |
 | 10. Expected outputs and artifacts | concepts (json, concepts) → production.concepts_ref |
 | 11. Completion criteria | [artifact] Concepts validate<br>[tool: briefs:check_concepts] ≥3 concepts with distinct anchors, structures and risks |
 | 12. Evaluation rubric | concepts<br>CON-DIVERSE (tool) |
@@ -143,11 +143,11 @@
 | 3. Required inputs | artifact:concepts<br>artifact:brief<br>control:creative |
 | 4. Relevant context | Recovered: start from the strongest earlier direction instead of restarting; keep one brand-derived motion vocabulary |
 | 5. State read | production.concepts_ref<br>production.objective |
-| 6. State written | production.creative_decision_ref<br>production.narrative_ref |
+| 6. State written | production.creative_decision_ref<br>production.narrative_ref<br>production.forks_ref |
 | 7. Responsible agent | `creative-director` (agents/creative-director.yaml) |
 | 8. Skills and tools | Skills: traffic-light-decisions, design-criteria, video-shotcraft<br>Tools: — |
 | 9. Execution instructions | Write creative-decision.json (selected id, rationale, a rejection reason for every other concept, narrative arc) and narrative.md. Complete creative.md (concept, structure, emotional progression, devices, tone, pacing, audience experience, boundaries).<br>Prompt: `prompts/n06_creative_direction.md` |
-| 10. Expected outputs and artifacts | creative_decision (json, creative-decision) → production.creative_decision_ref<br>narrative (markdown) → production.narrative_ref |
+| 10. Expected outputs and artifacts | creative_decision (json, creative-decision) → production.creative_decision_ref<br>narrative (markdown) → production.narrative_ref<br>fork (json, fork, per item, optional) → production.forks_ref |
 | 11. Completion criteria | [artifact] Decision validates<br>[tool: briefs:check_decision] Selection is a known concept and every alternative has a rejection reason<br>[tool: briefs:doc_complete] creative.md is complete |
 | 12. Evaluation rubric | creative-direction<br>DIR-DECISION (tool)<br>DIR-BOUNDARIES (human)<br>CON-FIT (human) |
 | 13. Failure conditions | Selected concept unknown<br>Alternatives rejected without a reason |
@@ -305,9 +305,9 @@
 | 7. Responsible agent | `voice-audio` (agents/voice-audio.yaml) |
 | 8. Skills and tools | Skills: video-prototype<br>Tools: local TTS (identity-locked), Whisper ASR QC (offline), ffmpeg · project command hook |
 | 9. Execution instructions | Write voice-direction.json (age adult, delivery, pronunciation list, engine, human_listening pending). The bound command then renders voice.wav and timings.json (units with start and end; planned silences).<br>Prompt: `prompts/n12_voice_audio.md` |
-| 10. Expected outputs and artifacts | voice_direction (json, voice-direction) → production.audio_spec<br>voice (audio) → production.voice_ref<br>timings (json, timings) → production.timings_ref |
+| 10. Expected outputs and artifacts | voice_direction (json, voice-direction) → production.audio_spec<br>voice (audio) → production.voice_ref<br>timings (json, timings) → production.timings_ref<br>voice_seams (json, optional) → artifact only |
 | 11. Completion criteria | [artifact] Timings validate<br>[tool: audio:check_voice] Every unit spoken in order; no clipping; no dropped speech; adult direction; listening status recorded |
-| 12. Evaluation rubric | voice-audio<br>VOI-COMPLETE (tool) |
+| 12. Evaluation rubric | voice-audio<br>VOI-COMPLETE (tool)<br>VOI-SEAMS (tool) |
 | 13. Failure conditions | A unit missing from the stem<br>Clipping<br>Near-silent frames inside speech<br>Voice direction not adult/professional |
 | 14. Retry behavior | max 3 consecutive attempts — Re-render only the units named in the defect, with new seeds; rephrase a term misheard in most takes |
 | 15. Maximum retry or escalation policy | 3 consecutive failures, or voice identity cannot be held → Wei: Units that fail, the takes tried, and a listening request |
@@ -332,7 +332,7 @@
 | 7. Responsible agent | `motion-design` (agents/motion-design.yaml) |
 | 8. Skills and tools | Skills: video-shotcraft, remotion, frontend-design, design-system-as-infrastructure<br>Tools: deterministic HTML/SVG renderer (Playwright/Chromium) or Remotion after licence clearance, ffmpeg · project command hook |
 | 9. Execution instructions | Write scene-params.json. The bound command renders scene frames and writes scenes.json (beat, image, start, end, motion) plus text-layers.json (every text, logo and ring with font, px, colours, bbox, times, opacity).<br>Prompt: `prompts/n13_motion_scenes.md` |
-| 10. Expected outputs and artifacts | scene_params (json, optional) → artifact only<br>scenes (json, scenes) → production.scenes_ref<br>text_layers (json, text-layers) → production.text_layers_ref<br>scene_frames (image, optional) → artifact only |
+| 10. Expected outputs and artifacts | scene_params (json, optional) → artifact only<br>scenes (json, scenes) → production.scenes_ref<br>text_layers (json, text-layers) → production.text_layers_ref<br>scene_frames (image, optional) → artifact only<br>layout_audit (json, layout-audit, optional) → artifact only<br>inventory (json, inventory, optional) → artifact only |
 | 11. Completion criteria | [artifact] Text-layer manifest validates<br>[tool: scenes:check] Every beat rendered, contiguous timing, a manifest for the audits |
 | 12. Evaluation rubric | motion<br>MO-MANIFEST (tool)<br>MO-EXPLAIN (review) |
 | 13. Failure conditions | A beat without a scene<br>No text-layer manifest<br>Timing gaps |
@@ -405,16 +405,16 @@
 |---|---|
 | 1. Node ID and name | `n16_creative_critique` — N16 Creative critique · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | An independent critic judges the rendered film through Wei's five lenses and the craft rubric — hook, clarity, one message per frame, motion purpose, transitions, emotional arc, polish. |
-| 3. Required inputs | artifact:master<br>artifact:scenes<br>control:creative<br>control:evaluation |
+| 3. Required inputs | artifact:master<br>artifact:scenes<br>artifact:inventory<br>control:creative<br>control:evaluation |
 | 4. Relevant context | Score what the viewer sees: keyframes and the review cut, never source code<br>Five lenses: executive, operations leader, sustainability leader, engineer, first-time viewer |
 | 5. State read | production.master_ref<br>production.scenes_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `creative-critic` (agents/creative-critic.yaml) |
 | 8. Skills and tools | Skills: design-review, persona-critic, speed-critique, video-shotcraft<br>Tools: keyframe extraction, frame viewer<br>Run: `review_prep:creative` |
 | 9. Execution instructions | Score every dimension of the creative rubric with evidence (timestamp or frame). Report each defect with severity, the traced node and the smallest fix. Never claim human listening or release approval.<br>Prompt: `prompts/n16_creative_critique.md` |
-| 10. Expected outputs and artifacts | keyframes (image, optional) → artifact only |
+| 10. Expected outputs and artifacts | keyframes (image, optional) → artifact only<br>baseline_strips (json, optional) → artifact only |
 | 11. Completion criteria | [review_complete] Every MUST dimension scored; failed dimensions carry traced defects |
-| 12. Evaluation rubric | creative<br>CRE-HOOK (review)<br>CRE-ONE-MESSAGE (review)<br>CRE-MOTION (review)<br>CRE-TRANSITIONS (review)<br>CRE-FOCUS (review)<br>CRE-LENSES (review)<br>CRE-POLISH (review)<br>CRE-ARC (review)<br>VOI-ADULT (human)<br>CRE-MUSIC (human) |
+| 12. Evaluation rubric | creative<br>CRE-HOOK (review)<br>CRE-ONE-MESSAGE (review)<br>CRE-MOTION (review)<br>CRE-TRANSITIONS (review)<br>CRE-FOCUS (review)<br>CRE-LENSES (review)<br>CRE-POLISH (review)<br>CRE-ARC (review)<br>REG-VERDICT (review)<br>VOI-PRONUNCIATION (review)<br>VOI-ADULT (human)<br>CRE-MUSIC (human) |
 | 13. Failure conditions | Dimensions left unscored<br>A failed dimension without a defect |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
 | 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Dimensions the critic could not judge |
@@ -431,16 +431,16 @@
 |---|---|
 | 1. Node ID and name | `n17_design_compliance` — N17 Design-system compliance · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Trace everything drawn to design.md — palette tokens, approved text pairs, type families, logo integrity, prohibited patterns — and judge cross-scene consistency. |
-| 3. Required inputs | artifact:text_layers<br>artifact:assets<br>control:design |
+| 3. Required inputs | artifact:text_layers<br>artifact:assets<br>artifact:inventory<br>control:design |
 | 4. Relevant context | Wei R06: typography inconsistent with the bookends is a defect<br>Logos are supplied files, scaled uniformly, never regenerated |
 | 5. State read | production.text_layers_ref<br>production.design_system_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `design-system-reviewer` (agents/design-system-reviewer.yaml) |
 | 8. Skills and tools | Skills: design-review, drift-check, design-system-as-infrastructure, impeccable<br>Tools: vpg.tools.design:compliance<br>Run: `design:compliance` |
 | 9. Execution instructions | The deterministic token trace runs first. Score the visual-consistency dimensions on the keyframes.<br>Prompt: `prompts/n17_design_compliance.md` |
-| 10. Expected outputs and artifacts | design_report (json) → artifact only |
+| 10. Expected outputs and artifacts | design_report (json) → artifact only<br>regression_report (json, optional) → artifact only |
 | 11. Completion criteria | [review_complete] Review record complete |
-| 12. Evaluation rubric | design-compliance<br>DES-TOKENS (tool)<br>DES-TYPE (tool)<br>DES-LOGO (tool)<br>DES-PROHIBITED (tool)<br>DES-COHERENCE (review)<br>DES-CONSISTENCY (review)<br>DES-COMPOSITION (review)<br>DES-SPECIFICITY (review)<br>DES-BOOKENDS (review) |
+| 12. Evaluation rubric | design-compliance<br>DES-TOKENS (tool)<br>DES-TYPE (tool)<br>DES-LOGO (tool)<br>DES-PROHIBITED (tool)<br>REG-BASELINE (tool)<br>DES-COHERENCE (review)<br>DES-CONSISTENCY (review)<br>DES-COMPOSITION (review)<br>DES-SPECIFICITY (review)<br>DES-BOOKENDS (review) |
 | 13. Failure conditions | Dimensions left unscored |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
 | 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Tokens that cannot be traced |
@@ -457,16 +457,16 @@
 |---|---|
 | 1. Node ID and name | `n18_accessibility_legibility` — N18 Accessibility and legibility validation · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Verify that every text is large enough, has enough contrast, is on screen long enough, sits inside the safe areas and never ghosts; that captions are speech-locked; and that nothing flashes. |
-| 3. Required inputs | artifact:text_layers<br>artifact:captions<br>artifact:timings<br>artifact:master<br>control:evaluation<br>control:design |
+| 3. Required inputs | artifact:text_layers<br>artifact:captions<br>artifact:timings<br>artifact:script<br>artifact:master<br>artifact:layout_audit<br>control:evaluation<br>control:design |
 | 4. Relevant context | Wei R07 §6: strong contrast, large readable text, sufficient reading time, safe margins, no fast flashing, colour never the only cue<br>Validate at presentation and laptop sizes |
 | 5. State read | production.text_layers_ref<br>production.captions_ref<br>production.timings_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `accessibility-reviewer` (agents/accessibility-reviewer.yaml) |
 | 8. Skills and tools | Skills: accessibility-verification, browser-testing-with-devtools<br>Tools: vpg.tools.legibility:check, caption sync, luminance flash scan<br>Run: `legibility:check` |
 | 9. Execution instructions | The deterministic audit runs first. Score the colour-independence and laptop-size readability dimensions on the keyframes.<br>Prompt: `prompts/n18_accessibility_legibility.md` |
-| 10. Expected outputs and artifacts | accessibility_report (json) → artifact only |
+| 10. Expected outputs and artifacts | accessibility_report (json) → artifact only<br>layout_report (json, optional) → artifact only |
 | 11. Completion criteria | [review_complete] Review record complete |
-| 12. Evaluation rubric | accessibility<br>LEG-SIZE (tool)<br>LEG-CONTRAST (tool)<br>LEG-DWELL (tool)<br>LEG-SAFE (tool)<br>LEG-GHOST (tool)<br>LEG-DENSITY (tool)<br>LEG-RING (tool)<br>LEG-FLASH (tool)<br>ACC-CAPTIONS (tool)<br>LEG-COLOR-CUE (review)<br>LEG-LAPTOP (review) |
+| 12. Evaluation rubric | accessibility<br>LEG-SIZE (tool)<br>LEG-CONTRAST (tool)<br>LEG-DWELL (tool)<br>LEG-SAFE (tool)<br>LEG-GHOST (tool)<br>LEG-DENSITY (tool)<br>LEG-OVERLAP (tool)<br>LEG-CLIP (tool)<br>LEG-OFFSTAGE (tool)<br>LEG-EMPTY (tool)<br>LEG-RING (tool)<br>LEG-FLASH (tool)<br>ACC-CAPTIONS (tool)<br>CAP-SCRIPT (tool)<br>LEG-COLOR-CUE (review)<br>LEG-LAPTOP (review) |
 | 13. Failure conditions | Dimensions left unscored |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
 | 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Checks that could not run |
@@ -595,7 +595,7 @@
 | 7. Responsible agent | `final-approval` (agents/final-approval.yaml) |
 | 8. Skills and tools | Skills: shipping-and-launch, traffic-light-decisions<br>Tools: vpg.tools.verify:final<br>Run: `verify:final` |
 | 9. Execution instructions | Deterministic verification. Then the engine waits for Wei's decision (approved \| changes_requested). Changes loop back to feedback interpretation. |
-| 10. Expected outputs and artifacts | verification (json) → artifact only<br>release_summary (markdown) → artifact only |
+| 10. Expected outputs and artifacts | verification (json) → artifact only<br>release_summary (markdown) → artifact only<br>decision_digest (markdown) → artifact only<br>review_packet (markdown) → artifact only<br>decision_template (json) → artifact only<br>review_html (html, optional) → artifact only |
 | 11. Completion criteria | [tool: verify:check_final] Every release condition recomputes true |
 | 12. Evaluation rubric | release<br>REL-RECOMPUTED (tool) |
 | 13. Failure conditions | No passing gate for the current version<br>The master changed after review<br>A deliverable missing |

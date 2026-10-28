@@ -281,6 +281,7 @@ class ProductionState(_Strict):
     text_layers_ref: str | None = None
     master_ref: str | None = None
     captions_ref: str | None = None
+    forks_ref: dict[str, str] = Field(default_factory=dict)
     config: dict[str, Any] = Field(default_factory=dict)
     refs: dict[str, str] = Field(default_factory=dict)
 
@@ -300,6 +301,10 @@ class ArtifactRecord(_Strict):
     params: dict[str, Any] = Field(default_factory=dict)
     version: int = 0
     status: Literal["current", "superseded"] = "current"
+    # #171: the files a JSON output names by path (scenes.json's "video": "film.mp4"), keyed as the manifest wrote them (an
+    # absolute path by its project-relative form) → sha256, or "size:…:mtime:…" for a file over 1 GiB; files past the
+    # first 256 fold into one "<+N more>" digest of their sizes and mtimes. Its consumers' fingerprints cover them.
+    named_files: dict[str, str] = Field(default_factory=dict)
 
 
 class Finding(_Strict):
@@ -359,12 +364,14 @@ class Defect(_Strict):
     smallest_fix: str = ""
     acceptance_check: str = ""
     status: Literal["open", "in_rework", "resolved", "persisting", "waived"] = "open"
+    resolved_by: str = ""
     needs_human: bool = False
     first_seen_version: int = 0
     last_seen_version: int = 0
     rework_count: int = 0
     elements: list[str] = Field(default_factory=list)   # the items (layer, beat, cue, unit, asset ids) its latest sighting names
     human_hold: str = ""   # why a named human must see it before rework routes it (a re-trace off a human-gated node)
+    rework_gate: str = ""   # #160: the gate decision (GateResult.id) that last put it in rework, by the plan or by adoption
 
 
 class Feedback(_Strict):
@@ -375,7 +382,7 @@ class Feedback(_Strict):
     severity: str = ""
     version: int = 0
     created_at: str
-    status: Literal["open", "interpreted", "triage", "dismissed"] = "open"   # triage: an agent's note awaiting a human (#14)
+    status: Literal["open", "interpreted", "resolved_pending_confirmation", "confirmed", "reopened", "triage", "dismissed"] = "open"
     defect_ids: list[str] = Field(default_factory=list)
     no_action_reason: str = ""
     hold: str = ""   # set when the interpreter closed a human's feedback with no action: no version passes until a human accepts it
@@ -441,12 +448,15 @@ class NodeRuntime(_Strict):
     started_at: str | None = None
     finished_at: str | None = None
     failures: list[str] = Field(default_factory=list)
+    task_notes: list[str] = Field(default_factory=list)
+    task_notes_by_attempt: dict[int, list[str]] = Field(default_factory=dict)
     pre_findings: list[Finding] = Field(default_factory=list)
     rework_defects: list[str] = Field(default_factory=list)
     items: dict[str, ItemRuntime] = Field(default_factory=dict)
     traversals: dict[str, int] = Field(default_factory=dict)
     interruptions: int = 0           # consecutive attempts cut short by a dead process; escalates at retry.max_attempts
-    force_rerun: bool = False        # set by an explicit invalidate or a loop unblock: the next dispatch skips the memo once
+    force_rerun: bool = False        # set by an explicit invalidate, a loop unblock or a change request's approval
+                                     # (its writer): the next dispatch skips the memo once
     executed: bool = False           # this attempt's execution returned; a crash before it is judged is not the node's fault
     rechecks: int = 0                # depth of the control-document re-check chain that sent this node back (0 = none)
     preflight: dict[str, Any] | None = None   # a finished attempt waiting for its independent pre-flight verdict (v1.6)
@@ -485,9 +495,13 @@ class RuntimeState(_Strict):
     ledger_tail: list[Any] = Field(default_factory=list)       # [seq, hash] of the last ledger event when the state was saved
     ledger_breaks: list[dict[str, Any]] = Field(default_factory=list)   # losses of ledger events a named human accepted
     config_parts: dict[str, Any] = Field(default_factory=dict) # per-file hashes behind config_sha256, to say what changed
+    accepted_policy: dict[str, Any] = Field(default_factory=dict) # v1.8 human/autonomy safety policy accepted for this run
+    accepted_config: dict[str, Any] = Field(default_factory=dict) # full accepted vpg.project.yaml config for relay-scope checks
     loop_extra: dict[str, int] = Field(default_factory=dict)   # traversals granted to converging rework loops (v1.6)
     rework_extra: int = 0                                       # rework cycles granted to a converging run (v1.6)
     grant_versions: dict[str, int] = Field(default_factory=dict)  # budget ("rework" or a loop id) → version it was last granted at
+    end_review_items: list[dict[str, Any]] = Field(default_factory=list)  # autonomous issues held for N23 review (v1.8)
+    preference_model_pins: dict[str, int] = Field(default_factory=dict)   # principal key → model version pinned for this run/version
 
 
 class VersionRecord(_Strict):
@@ -514,6 +528,53 @@ class Approval(_Strict):
     reason: str = ""
     outputs: dict[str, str] = Field(default_factory=dict)   # the node's outputs it decided on, key → sha256[:16] (v1.7, #43)
     grant: str = ""   # the grant an agent decided under (v1.7, #18); empty for a named human
+    principal: str = ""   # declared human the agent acted for, when relayed
+    instruction: str = ""   # verbatim instruction for a relayed act
+    instruction_at: str = ""
+    relayed: bool = False
+    provisional: bool = False
+    confirmed_at: str = ""
+    superseded_at: str = ""
+    rejected_at: str = ""
+    rejection_feedback: str = ""
+    warning_acks: list[str] = Field(default_factory=list)
+    signoffs: list[str] = Field(default_factory=list)
+    pre_lock_controls: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    confirmed_by: str = ""
+    confirmed_principal: str = ""
+    confirmed_instruction: str = ""
+    confirmed_instruction_at: str = ""
+    confirmation_relayed: bool = False
+    rejected_by: str = ""
+    rejected_principal: str = ""
+    rejected_instruction: str = ""
+    rejected_instruction_at: str = ""
+    rejection_relayed: bool = False
+    # v1.9: the evidence tag of the decision (observed: a named human's own act; reported: relayed by an agent;
+    # assumed: a provisional approval) and, for a provisional one under autonomy.provisional_expiry_h, when it expires
+    evidence: str = ""
+    expires_at: str = ""
+    expiry_noted_at: str = ""
+
+
+class DirectRun(_Strict):
+    """v1.9: a build made outside the governed path (a node's work run directly while the graph waited), recorded so it is
+    observable. Its outputs are hashed but never registered as artifacts: no gate or review ever judged them."""
+    id: str
+    node: str
+    actor: str
+    reason: str
+    at: str
+    started_at: str = ""
+    label: str = ""
+    command: str = ""
+    exit_code: int | None = None
+    duration_s: float | None = None
+    log: str = ""
+    outputs: dict[str, dict[str, str]] = Field(default_factory=dict)   # key → {path, sha256}
+    code: dict[str, str] = Field(default_factory=dict)                 # the node's command code, file → sha256[:16]
+    inputs: dict[str, str] = Field(default_factory=dict)               # the node's current input artifacts, key → sha256[:16]
+    version: int = 0                                                   # the governed version current when it ran
 
 
 class Grant(_Strict):
@@ -565,6 +626,7 @@ class HistoryState(_Strict):
     checkpoints: list[CheckpointRef] = Field(default_factory=list)
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     grants: list[Grant] = Field(default_factory=list)
+    direct_runs: list[DirectRun] = Field(default_factory=list)
 
 
 class ControlDocState(_Strict):
@@ -576,6 +638,7 @@ class ControlDocState(_Strict):
     approved_sha256: str | None = None
     approved_by: str | None = None
     approved_at: str | None = None
+    provisional: bool = False
     snapshot: str | None = None
 
 

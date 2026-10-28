@@ -1,0 +1,36 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/judge-verdict",
+ "title": "vpg pairwise judge verdict (vpg-judge-verdict/v1)",
+ "description": "What a judging agent returns for a packet: one pick per presentation, by position (first, second or tie), with the rule ids it relied on and timecoded evidence. `vpg judge score` unblinds it with the key, merges the two orders of each pair (a disagreement is a tie), checks the hidden anchors and ranks with Bradley-Terry.",
+ "type": "object",
+ "required": ["schema", "batch", "judge", "verdicts"],
+ "properties": {
+  "schema": {"const": "vpg-judge-verdict/v1"},
+  "batch": {"type": "string"},
+  "judge": {"type": "string", "minLength": 1, "description": "the judging agent's id, e.g. agent:pairwise-critic"},
+  "verdicts": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": ["presentation", "pick"],
+    "properties": {
+     "presentation": {"type": "string"},
+     "pick": {"enum": ["first", "second", "tie"]},
+     "rules": {"type": "array", "items": {"type": "string"}},
+     "rationale": {"type": "string"},
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {"t": {"type": "number", "minimum": 0}, "item": {"enum": ["first", "second"]}, "note": {"type": "string"}},
+       "additionalProperties": false
+      }
+     }
+    },
+    "additionalProperties": false
+   }
+  }
+ },
+ "additionalProperties": false
+}

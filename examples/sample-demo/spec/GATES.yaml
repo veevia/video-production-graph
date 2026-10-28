@@ -1,0 +1,20 @@
+# Example gates for the fictional sample. The registry path is relative to this file (spec/ in a project); a project
+# pins the registry's sha256 here (benchmarks: {path, sha256}) before N03 approves the bar.
+spec: {family: vpg-spec/v1, doc: gates, version: 1}
+benchmarks: ../benchmarks/registry.json
+player_width_px: 960
+waivers: []
+gates:
+  - {id: GT-GROUND-001, metric: still.ground_colourfulness.median, version: 1, envelope: benchmark, severity: P2, stage: look, rules: [DS-GROUND-001]}
+  - {id: GT-COLOUR-001, metric: still.colourfulness.median, version: 1, envelope: benchmark, severity: P2, stage: look, rules: [DS-GROUND-001]}
+  - {id: GT-UI-001, metric: still.ocr_word_px.median, version: 1, envelope: benchmark, severity: nit, stage: look, rules: [DS-UI-001], roles: [product_ui]}
+  - {id: GT-GROUND-002, metric: video.ground_colourfulness.median, version: 1, envelope: benchmark, severity: P2, stage: build, rules: [DS-GROUND-001], ratchet: true}
+  - {id: GT-MOTION-001, metric: video.motion_share, version: 1, envelope: benchmark, severity: P3, stage: build, rules: [MO-SHARE-001], ratchet: true}
+  - {id: GT-OVERLAP-001, metric: text.overlap_all.count, version: 2, envelope: {hi: 0}, severity: P1, stage: build, rules: [DS-TEXT-001]}
+  - {id: GT-PACE-001, metric: audio.pace_wpm, version: 1, envelope: benchmark, severity: P2, stage: animatic, rules: [VO-PACE-001]}
+  - {id: GT-PAUSE-001, metric: audio.pause_share, version: 1, envelope: benchmark, severity: P2, stage: animatic, rules: [VO-PAUSE-001]}
+  - {id: GT-VOM-001, metric: audio.vo_over_music.p10, version: 2, envelope: benchmark, severity: P1, stage: animatic, rules: [MX-VOM-001]}
+  - {id: GT-VOM-002, metric: audio.vo_over_music.p10, version: 2, envelope: benchmark, severity: P1, stage: build, rules: [MX-VOM-001], ratchet: true}
+  - {id: GT-VOM-003, metric: audio.vo_over_music.median, version: 2, envelope: benchmark, severity: P2, stage: animatic, rules: [MX-VOM-002]}
+  - {id: GT-VOM-004, metric: audio.vo_over_music.median, version: 2, envelope: benchmark, severity: P2, stage: build, rules: [MX-VOM-002], ratchet: true}
+  - {id: GT-UI-002, metric: text.ocr_word_px.dense_min, version: 1, envelope: benchmark, severity: nit, stage: build, rules: [DS-UI-001], ratchet: true}
