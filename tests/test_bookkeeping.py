@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import subprocess
+import unicodedata
 from types import SimpleNamespace
 
 import pytest
@@ -22,11 +24,13 @@ from vpg.engine import Engine, EngineError, Project
 from vpg.evaluation import compare_after_rework, gate, record_findings, signature
 from vpg.executors import ScriptedExecutor, TaskPacketExecutor
 from vpg.memory import GovernanceError, apply_proposal
-from vpg.models import Defect, EvaluationState, Finding, Policies, Review, RuntimeState
+from vpg.models import Approval, ArtifactRecord, Defect, EvaluationState, Finding, Policies, Review, RuntimeState
+from vpg.models import NodeStatus as S
 from vpg.provenance import Ledger
 from vpg.tools import pacing
+from vpg.tools import privacy
 from vpg.tools.legibility import max_simultaneous
-from vpg.util import is_human_name, sha256_json
+from vpg.util import is_human_name, now, sha256_file, sha256_json
 
 ROUTES = "tests.fakes:review_routes"
 COMMAND_SCRIPT = ("import json, os, pathlib\n"
@@ -36,6 +40,47 @@ COMMAND_SCRIPT = ("import json, os, pathlib\n"
 
 def events(proj, kind):
     return [e["data"] for e in Ledger(proj / ".vpg/ledger.jsonl").events(kind)]
+
+
+def release_workflow(tmp_path, release_id="n23_final_verification", **kw):
+    path = mini_workflow(tmp_path, **kw)
+    data = yaml.safe_load(path.read_text())
+    for node in data["nodes"]:
+        if node["id"] == "z_done":
+            node["id"] = release_id
+            node["human_review"] = {"required": True, "decision": "release", "approver": "Wei",
+                                    "outcomes": ["approved", "changes_requested"]}
+            node["outcomes"] = ["approved", "changes_requested"]
+            for output in node.get("outputs", []):
+                if output.get("key") == "z_done":
+                    output["key"] = release_id
+            for completion in node.get("completion", []):
+                if completion.get("key") == "z_done":
+                    completion["key"] = release_id
+    for edge in data["edges"]:
+        if edge["from"] == "z_done":
+            edge["from"] = release_id
+        if edge["to"] == "z_done":
+            edge["to"] = release_id
+        if edge["id"] == "E15":
+            edge["when"], edge["transition"] = "approved", "conditional"
+    data["edges"].append({"id": "E16R", "from": release_id, "to": "g_gate", "kind": "loop", "transition": "conditional",
+                          "when": "changes_requested", "transfers": ["feedback"], "threshold": "release changes requested",
+                          "branching": "changes requested", "on_fail": "bounded", "max_traversals": 2})
+    data["subgraphs"][0]["nodes"] = [n["id"] for n in data["nodes"]]
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    return path
+
+
+def add_verification_artifact(eng, warnings=None, pending=None):
+    path = eng.project.root / "work/verification.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"warnings": list(warnings or []), "pending_human": list(pending or [])}))
+    eng.state.artifacts[f"verification-{len(eng.state.artifacts)}"] = ArtifactRecord(
+        id=f"verification-{len(eng.state.artifacts)}", key="verification", path="work/verification.json",
+        sha256=sha256_file(path), bytes=path.stat().st_size, node=eng._release_node() or "n23_final_verification",
+        attempt=1, produced_at=now())
+    return path
 
 
 def _state(*defects, failures=None):
@@ -202,6 +247,89 @@ def test_a_named_human_resolves_a_defect_no_review_can_clear(tmp_path, capsys):
     eng.unblock("g_gate", actor="Wei", note="the feedback does not apply")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS", eng.state.evaluation.gate_results[-1].reasons
+
+
+def test_tool_defect_cannot_be_resolved_by_command(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    finding = Finding(check="tool:contrast", dimension="ACC-CONTRAST", severity="P2", message="contrast below bar",
+                      evidence="ratio 2.1", traced_node="d_build")
+    review = Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="tool", rubric_ids=[],
+                    tool_findings=[finding], verdict="fail", created_at=now())
+    eng.state.evaluation.reviews.append(review)
+    did = eng._record_findings([finding], review.id, version=1)[0]
+    with pytest.raises(EngineError, match="deterministic tool check.*next tool check.*end review"):
+        eng.resolve_defect(did, actor="Wei", evidence="looks fixed")
+    assert eng.state.evaluation.defects[0].status == "open"
+
+
+def test_reproduced_closed_defect_reopens_for_routing():
+    finding = Finding(check="tool:contrast", dimension="ACC-CONTRAST", severity="P2", message="contrast below bar",
+                      evidence="ratio 2.1", traced_node="d_build")
+    closed = Defect(id="D001", signature=signature("ACC-CONTRAST", "d_build", "tool:contrast"), severity="P2",
+                    dimension="ACC-CONTRAST", description="contrast below bar", source="rev-r1_review-v1",
+                    traced_node="d_build", status="waived", first_seen_version=1, last_seen_version=1)
+    st = _state(closed)
+    ids = record_findings(st, [finding], "rev-r1_review-v2", 2, default_trace="g_gate")
+    assert ids == ["D001"]
+    assert closed.status == "open" and closed.last_seen_version == 2
+
+
+def test_independent_review_defect_needs_fresh_pass_or_principal(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    finding = Finding(check="review:r1_review", dimension="CRE-ARC", severity="P2", message="story is unclear",
+                      evidence="review notes", traced_node="d_build")
+    review = Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
+                    verdict="fail", independent=True, created_at=now())
+    eng.state.evaluation.reviews.append(review)
+    did = eng._record_findings([finding], review.id, version=1)[0]
+    with pytest.raises(EngineError, match="independent review.*producer cannot close"):
+        eng.resolve_defect(did, actor="Pat Example", evidence="I fixed it")
+    eng.resolve_defect(did, actor="Wei", evidence="end-review decision accepts it")
+    assert eng.state.evaluation.defects[0].status == "resolved"
+
+
+def test_relayed_resolve_of_review_defect_refused_mid_run(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    eng.state.runtime.accepted_policy = {"humans": ["Wei"], "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    finding = Finding(check="review:r1_review", dimension="CRE-ARC", severity="P2", message="story is unclear",
+                      evidence="review notes", traced_node="d_build")
+    review = Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
+                    verdict="fail", independent=True, created_at=now())
+    eng.state.evaluation.reviews.append(review)
+    did = eng._record_findings([finding], review.id, version=1)[0]
+    with pytest.raises(EngineError, match="release end review"):
+        eng.resolve_defect(did, actor="agent:producer", on_behalf_of="Wei", instruction="looks fine", evidence="fixed")
+
+
+def test_non_independent_fresh_review_does_not_close_defect():
+    d = Defect(id="D001", signature=signature("CRE-ARC", "d_build", "review:r1_review"), severity="P2",
+               dimension="CRE-ARC", description="story unclear", source="rev-r1_review-v1", traced_node="d_build",
+               first_seen_version=1, last_seen_version=1)
+    st = _state(d)
+    st.evaluation.reviews = [Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
+                                    verdict="fail", independent=True, defect_ids=["D001"], created_at=now()),
+                             Review(id="rev-r1_review-v2", node="r1_review", version=2, reviewer="producer", rubric_ids=[],
+                                    verdict="pass", independent=False, defect_ids=[], created_at=now())]
+    compare_after_rework(st, 2, {})
+    assert d.status == "open"
+
+
+def test_failed_review_satisfied_when_all_defects_resolved():
+    d = Defect(id="D001", signature=signature("CRE-ARC", "d_build", "review:r1_review"), severity="P2",
+               dimension="CRE-ARC", description="story unclear", source="rev-r1_review-v1", traced_node="d_build",
+               first_seen_version=1, last_seen_version=1, status="resolved", resolved_by="Wei")
+    st = _state(d)
+    st.evaluation.reviews = [Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
+                                    verdict="fail", independent=True, defect_ids=["D001"], created_at=now())]
+    result = gate(st, Policies(max_rework_cycles=3, max_same_defect_failures=3, parallel_limit=1,
+                               single_flight_resources=[], blocking_severities=["P1", "P2", "P3"],
+                               dry_run_actor="dry-run-auto"),
+                  1, ["r1_review"], "g_gate")
+    assert result.outcome == "pass"
+    assert not any("reviews failed with no blocking defect" in r for r in result.reasons)
 
 
 # ---------------------------------------------------------------------------------------------- #25 #26 #27 defect identity
@@ -484,8 +612,10 @@ def test_a_file_a_command_generates_is_reported_and_can_be_excluded(tmp_path):
         (proj / "pipeline/build.py").write_text(COMMAND_SCRIPT + "pathlib.Path('pipeline/film/data.js').write_text("
                                                 "'window.FILM = ' + json.dumps(ctx['attempt']))\n")
         cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-        (proj / "vpg.project.yaml").write_text(yaml.safe_dump({**cfg, "commands": {"b_plan": "{python} pipeline/plan.py",
-                                                                                    "d_build": "{python} pipeline/build.py"}, **extra}))
+        (proj / "vpg.project.yaml").write_text(yaml.safe_dump({**cfg, "privacy": {"names": "none", "reason": "synthetic"},
+                                                                "humans": ["Wei"],
+                                                                "commands": {"b_plan": "{python} pipeline/plan.py",
+                                                                             "d_build": "{python} pipeline/build.py"}, **extra}))
         eng = Engine(proj, executor=FnExecutor())
         eng.run(max_steps=200)
         assert eng.state.runtime.status.value == "RUN_PASS"
@@ -570,7 +700,7 @@ def test_a_failed_attempt_records_when_it_finished(project):
 def test_a_real_production_refuses_auto_approval_and_fixtures(tmp_path, capsys):
     """Judge finding: on a real project, `vpg run --auto-approve-dry-run` auto-approved every gate up to the release and
     the run passed with no human; replaying fixtures had the same hole. Both are for dry-run projects only."""
-    proj = make_project(tmp_path, human_b=True)
+    proj = make_project(tmp_path, human_b=True, lock_b=("design",))
     with pytest.raises(EngineError, match="dry-run projects only"):
         Engine(proj, executor=FnExecutor(), auto_approve=True)
     with pytest.raises(EngineError, match="dry-run projects only"):
@@ -598,11 +728,16 @@ def test_agents_in_any_case_cannot_act_as_humans(tmp_path):
     flag(proj, "defect_audio")
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    d = eng.state.evaluation.defects[0]
+    d = eng.state.evaluation.defects[0]   # from the review's deterministic tool check: nobody resolves it by hand (#185)
+    manual = Defect(id="D950", signature="s", severity="P2", dimension="TECH-X", description="d", source="manual",
+                    traced_node="d_build")
+    eng.state.evaluation.defects.append(manual)
     for actor in ("Agent:critic", " AGENT:x", "Dry-Run-Auto"):
         with pytest.raises(EngineError, match="named human"):
             eng.unblock("g_gate", actor=actor, note="route it")
         with pytest.raises(EngineError, match="named human"):
+            eng.resolve_defect(manual.id, actor=actor, evidence="it is fine")
+        with pytest.raises(EngineError, match="came from a deterministic tool check"):
             eng.resolve_defect(d.id, actor=actor, evidence="it is fine")
     cr = eng.change_request("design", "tighten the plate", by="Wei")
     with pytest.raises(EngineError, match="named human"):
@@ -639,6 +774,496 @@ def test_approve_needs_the_humans_reason(project):
     proj, _ = project
     with pytest.raises(SystemExit):
         cli.main(["approve", str(proj), "b_plan", "--actor", "Wei"])
+
+
+def test_declared_humans_refuse_free_text_and_record_relays(tmp_path, monkeypatch):
+    import vpg.engine as ve
+    monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
+    proj = make_project(tmp_path, human_b=True, lock_b=("design",))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+                "reviews": {"binding": "require", "independence": "require"},
+                "loop_budget": {"on_exhaust": "extend_if_converging"},
+                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    with pytest.raises(EngineError, match="--actor must be exactly one of the declared humans"):
+        eng.decide("b_plan", "approved", actor="Wei (standing instruction)", reason="go")
+    st = eng.decide("b_plan", "approved", actor="agent:runner", reason="proceed", on_behalf_of="Wei",
+                    instruction="approve the plan and keep going", instruction_at="2026-09-30T12:00:00Z",
+                    provisional=True)
+    assert st["nodes"]["b_plan"]["status"] == "STEP_PASS"
+    approval = eng.state.history.approvals[-1]
+    assert approval.actor == "agent:runner" and approval.relayed and approval.principal == "Wei"
+    decision = list(Ledger(proj / ".vpg/ledger.jsonl").events("decision"))[-1]["data"]
+    assert decision["actor"] == "agent:runner" and decision["principal"] == "Wei" and decision["relayed"] is True
+
+
+def test_invalid_humans_config_is_refused(tmp_path):
+    for idx, (humans, msg) in enumerate((([], "non-empty"), (["agent:runner"], "not agent"), (["dry-run-auto"], "not agent"))):
+        proj = make_project(tmp_path / str(idx))
+        cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+        cfg["humans"] = humans
+        (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+        with pytest.raises(EngineError, match=msg):
+            Engine(proj, executor=FnExecutor())
+
+
+def test_unaccepted_policy_config_cannot_authorize_human_actions(tmp_path, monkeypatch):
+    import vpg.engine as ve
+    monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
+    proj = make_project(tmp_path, human_b=True)
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+                "reviews": {"binding": "require", "independence": "require"},
+                "loop_budget": {"on_exhaust": "extend_if_converging"},
+                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="unaccepted configuration change"):
+        eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go",
+                   reason="p", provisional=True)
+
+
+def test_provisional_approval_requires_policy_and_records_standing_pass(tmp_path, monkeypatch):
+    import vpg.engine as ve
+    proj = make_project(tmp_path, human_b=True, lock_b=("design",))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({
+        "humans": ["Wei"],
+        "privacy": {"names": "none", "reason": "synthetic"},
+        "reviews": {"binding": "require", "independence": "require"},
+        "loop_budget": {"on_exhaust": "extend_if_converging"},
+        "autonomy": {"mode": "provisional", "principal": "Wei"},
+    })
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    with pytest.raises(EngineError, match="cannot approve its own output"):
+        eng.decide("b_plan", "approved", actor="agent:production-orchestrator", on_behalf_of="Wei", instruction="go",
+                   reason="provisional", provisional=True)
+    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go", reason="provisional",
+               provisional=True)
+    approval = eng.state.history.approvals[-1]
+    assert approval.provisional and approval.relayed and approval.principal == "Wei"
+    assert eng.state.controls["design"].provisional is True
+    data = list(Ledger(proj / ".vpg/ledger.jsonl").events("decision"))[-1]["data"]
+    assert data["provisional"] is True and data["principal"] == "Wei"
+
+
+@pytest.mark.parametrize("remove_key, expected", [
+    ("principal", "autonomy.principal"),
+    ("privacy", "privacy names"),
+    ("reviews", "reviews must require"),
+    ("loop_budget", "loop_budget must extend"),
+])
+def test_each_autonomy_precondition_fails_on_its_own(tmp_path, remove_key, expected):
+    import vpg.engine as ve
+    cfg = {"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+           "reviews": {"binding": "require", "independence": "require"},
+           "loop_budget": {"on_exhaust": "extend_if_converging"},
+           "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    if remove_key == "principal":
+        del cfg["autonomy"]["principal"]
+    else:
+        cfg.pop(remove_key)
+    assert any(expected in p for p in ve.autonomy_precondition_problems(cfg))
+
+
+def test_provisional_refused_at_release_and_review_descendant(tmp_path, monkeypatch):
+    import vpg.engine as ve
+    wf = release_workflow(tmp_path)
+    proj = make_project(tmp_path, workflow=wf)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+                "reviews": {"binding": "require", "independence": "require"},
+                "loop_budget": {"on_exhaust": "extend_if_converging"},
+                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"n23_final_verification", "d_build"})
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="release-review side"):
+        eng._check_provisional_decision(eng.node("n23_final_verification"), "approved", "agent:ops", "Wei", "go")
+
+
+def test_release_structure_requires_warning_acks_and_human_signoffs(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    path = proj / "work/verification.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"warnings": ["check this", "and this"], "pending_human": ["VOI-ADULT", "CRE-MUSIC"]}))
+    eng.state.artifacts["verification-test"] = ArtifactRecord(
+        id="verification-test", key="verification", path="work/verification.json", sha256=sha256_file(path),
+        bytes=path.stat().st_size, node="n23_final_verification", attempt=1, produced_at=now())
+    with pytest.raises(EngineError, match="acknowledge warning"):
+        eng._check_release_structure(["1"], ["VOI-ADULT", "CRE-MUSIC"])
+    with pytest.raises(EngineError, match="pending human dimension"):
+        eng._check_release_structure(["all"], ["VOI-ADULT"])
+    assert eng._check_release_structure(["all"], ["VOI-ADULT,CRE-MUSIC"]) == (["1", "2"], ["CRE-MUSIC", "VOI-ADULT"])
+
+
+def test_partial_confirm_leaves_standing_and_reject_reopens_node(tmp_path):
+    proj = make_project(tmp_path, human_b=True)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei", "Pat Example"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.state.history.approvals += [
+        Approval(node="b_plan", decision="approved", actor="agent:a", human=True, at=now(), provisional=True, relayed=True,
+                 principal="Wei", instruction="go"),
+        Approval(node="c_audio", decision="approved", actor="agent:b", human=True, at=now(), provisional=True, relayed=True,
+                 principal="Wei", instruction="go"),
+    ]
+    eng.rt("c_audio").status = S.STEP_PASS
+    eng._handle_release_provisional_controls("b_plan", "", "", "Wei", "", "", "", now())
+    assert [a.node for a in eng._standing_provisional()] == ["c_audio"]
+    eng._handle_release_provisional_controls("", "c_audio", "redo the mix", "Wei", "", "", "", now())
+    assert not eng._standing_provisional()
+    assert eng.rt("c_audio").status == S.STALE
+    assert eng.rt("c_audio").task_notes_by_attempt[eng.rt("c_audio").attempts + 1][-1].endswith("redo the mix")
+    assert eng.state.evaluation.feedback == []
+
+
+def test_reject_provisional_restores_prelock_and_later_reaches_release(tmp_path, monkeypatch):
+    import vpg.engine as ve
+    monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
+    monkeypatch.setattr(ve, "autonomy_precondition_problems", lambda config: [])
+    proj = make_project(tmp_path, workflow=release_workflow(tmp_path, human_b=True, lock_b=("design",)))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+                "loop_budget": {"on_exhaust": "extend_if_converging"},
+                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+
+    def write_design(ctx):
+        p = ctx.project_dir / "controls/design.md"
+        p.write_text(p.read_text().rstrip() + f"\n\n<!-- attempt {ctx.attempt} -->\n")
+        (ctx.workdir / "b_plan.json").write_text("{}")
+        return {"b_plan": "b_plan.json"}
+
+    eng = Engine(proj, executor=FnExecutor({"b_plan": write_design}))
+    eng.run(max_steps=200)
+    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go", reason="p", provisional=True)
+    eng.run(max_steps=300)
+    assert eng.rt("n23_final_verification").status == S.WAITING_HUMAN
+    eng.decide("n23_final_verification", "approved", actor="Wei", reason="reject", reject_provisional="b_plan",
+               rejection_feedback="change palette")
+    assert eng.state.controls["design"].status == "draft"
+    ctx = eng._context(eng.node("b_plan"), eng.rt("b_plan").attempts + 1, eng.rt("b_plan").fingerprint or "fp", "tok")
+    packet = TaskPacketExecutor().execute(ctx)
+    packet_path = proj / packet.task_packet
+    assert packet_path.exists() and "Wei's rejection of the provisional approval (verbatim): change palette" in packet_path.read_text()
+    eng = Engine(proj, executor=FnExecutor({"b_plan": write_design}))
+    eng.run(max_steps=300)
+    assert "attempt 2" in (proj / "controls/design.md").read_text()
+    assert not [e for e in Ledger(proj / ".vpg/ledger.jsonl").events() if "without an approved change request" in json.dumps(e["data"])]
+    assert not [f for f in eng.state.evaluation.feedback if f.hold or f.status == "open"]
+    ctx3 = eng._context(eng.node("b_plan"), eng.rt("b_plan").attempts + 1, eng.rt("b_plan").fingerprint or "fp", "tok3")
+    packet3 = TaskPacketExecutor().execute(ctx3)
+    assert "rejection of the provisional approval" not in (proj / packet3.task_packet).read_text()
+    eng.decide("b_plan", "approved", actor="Wei", reason="ok")
+    eng.run(max_steps=300)
+    if eng.rt("n23_final_verification").status == S.STALE:
+        eng.run(max_steps=300)
+    assert eng.rt("n23_final_verification").status == S.WAITING_HUMAN
+
+
+def test_relayed_signoff_requires_principal_and_instruction(tmp_path):
+    proj = make_project(tmp_path, workflow=release_workflow(tmp_path))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="--on-behalf-of must be one of"):
+        eng._require_human("agent:release", "release signoff", instruction="sign VOI-ADULT")
+    with pytest.raises(EngineError, match="needs --instruction"):
+        eng._require_human("agent:release", "release signoff", on_behalf_of="Wei")
+    eng.rt(eng._release_node()).status = S.WAITING_HUMAN
+    meta = eng._require_human("agent:release", "release signoff", on_behalf_of="Wei", instruction="sign VOI-ADULT")
+    assert meta["relayed"] is True and meta["principal"] == "Wei"
+
+
+def test_relayed_confirm_requires_fresh_instruction_at(tmp_path):
+    proj = make_project(tmp_path, workflow=release_workflow(tmp_path))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.state.history.approvals.append(Approval(node="b_plan", decision="approved", actor="agent:a", human=False, at=now(),
+                                                provisional=True, relayed=True, principal="Wei", instruction="go"))
+    eng.rt("n23_final_verification").status = S.WAITING_HUMAN
+    eng.rt("n23_final_verification").started_at = "2026-09-30T12:00:00+00:00"
+    with pytest.raises(EngineError, match="instruction-at"):
+        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Wei", instruction="ship",
+                   reason="ship", confirm_provisional="all")
+    with pytest.raises(EngineError, match="ISO timestamp"):
+        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Wei", instruction="ship",
+                   instruction_at="whenever", reason="ship", confirm_provisional="all")
+    with pytest.raises(EngineError, match="later"):
+        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Wei", instruction="ship",
+                   instruction_at="2026-09-30T11:59:59+00:00", reason="ship", confirm_provisional="all")
+
+
+def test_superseded_provisional_approval_confirm_all_clears_latest(tmp_path, monkeypatch):
+    import vpg.engine as ve
+    monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
+    proj = make_project(tmp_path, human_b=True)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+                "reviews": {"binding": "require", "independence": "require"},
+                "loop_budget": {"on_exhaust": "extend_if_converging"},
+                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    eng.decide("b_plan", "approved", actor="agent:a", on_behalf_of="Wei", instruction="go", reason="p", provisional=True)
+    eng.invalidate_nodes(["b_plan"], reason="again", actor="Wei")
+    eng.run(max_steps=200)
+    eng.decide("b_plan", "approved", actor="agent:a", on_behalf_of="Wei", instruction="go", reason="p2", provisional=True)
+    assert len(eng._standing_provisional()) == 1
+    eng._handle_release_provisional_controls("all", "", "", "Wei", "", "", "", now())
+    assert not eng._standing_provisional()
+
+
+# The grantable acts as _authorize sees them: (action, the sentence the engine passes). #185: the relay scope is decided by
+# the action, so these go through _authorize, the path every engine caller takes, never _require_human with a bare word.
+GRANTABLE_ACTS = [("unblock", "unblocking"),
+                  ("invalidate", "invalidating b_plan re-opens a human's decision (b_plan), which"),
+                  ("change-request", "approving a change request"), ("resolve", "resolving a defect"),
+                  ("restore-control", "restoring a control document"), ("feedback-triage", "triaging an agent's note")]
+
+
+@pytest.mark.parametrize("action,what", GRANTABLE_ACTS + [("", "waiving an intake gap")])
+def test_declared_human_actions_refuse_free_text_and_accept_structured_relay(tmp_path, action, what):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="--actor must be exactly one of the declared humans"):
+        eng._require_human("Wei (standing instruction)", what)
+    if not action:
+        with pytest.raises(EngineError, match="refused mid-run"):
+            eng._require_human("agent:ops", what, on_behalf_of="Wei", instruction="do this")
+    else:
+        assert eng._authorize("agent:ops", action, what, on_behalf_of="Wei", instruction="do this") is None
+        assert eng.ledger.stamp["principal"] == "Wei" and eng.ledger.stamp["relayed"] is True
+
+
+@pytest.mark.parametrize("action", ["granting a delegation", "accepting a configuration change", "a rollback", "accepting a ledger break",
+                                    "a human decision", "waiving an intake gap"])
+def test_mid_run_relays_are_refused_for_non_grantable_human_actions(tmp_path, action):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="release|accept-config|refused mid-run"):
+        eng._require_human("agent:ops", action, on_behalf_of="Wei", instruction="do this")
+
+
+def test_waiver_path_refuses_free_text_declared_human(tmp_path):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="declared humans"):
+        eng._require_human("Wei (standing instruction)", "waiving an intake gap")
+
+
+def test_v17_project_gets_clear_new_release_refusals(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    path = proj / "work/verification.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"warnings": ["check"], "pending_human": ["VOI-ADULT"]}))
+    eng.state.artifacts["verification-test"] = ArtifactRecord(
+        id="verification-test", key="verification", path="work/verification.json", sha256=sha256_file(path),
+        bytes=path.stat().st_size, node="n23_final_verification", attempt=1, produced_at=now())
+    with pytest.raises(EngineError, match="--ack-warning"):
+        eng._check_release_structure([], ["VOI-ADULT"])
+    with pytest.raises(EngineError, match="--signoff"):
+        eng._check_release_structure(["all"], [])
+    from vpg.tools.privacy import release_problem
+    ctx = SimpleNamespace(project_dir=proj, config={}, workdir=proj / "work")
+    assert "privacy.names" in release_problem(ctx, path, sha256_file(path))
+
+
+def test_custom_release_node_enforces_provisional_and_structured_release(tmp_path):
+    proj = make_project(tmp_path, workflow=release_workflow(tmp_path, release_id="ship_release"))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.state.history.approvals.append(Approval(node="b_plan", decision="approved", actor="agent:a", human=False, at=now(),
+                                                provisional=True, relayed=True, principal="Wei", instruction="go"))
+    eng.rt("ship_release").status = S.WAITING_HUMAN
+    add_verification_artifact(eng, warnings=["check"], pending=["VOI-ADULT"])
+    with pytest.raises(EngineError, match="standing provisional"):
+        eng.decide("ship_release", "approved", actor="Wei", reason="ship", ack_warnings=["all"], signoffs=["VOI-ADULT"])
+    eng._handle_release_provisional_controls("all", "", "", "Wei", "", "", "", now())
+    with pytest.raises(EngineError, match="--ack-warning"):
+        eng.decide("ship_release", "approved", actor="Wei", reason="ship", signoffs=["VOI-ADULT"])
+    with pytest.raises(EngineError, match="--signoff"):
+        eng.decide("ship_release", "approved", actor="Wei", reason="ship", ack_warnings=["all"])
+
+
+def test_cli_release_approve_with_ack_warning_and_signoff_on_default_workflow(tmp_path):
+    proj = tmp_path / "film"
+    assert cli.main(["init", str(proj), "--name", "film"]) == 0
+    eng = Engine(proj, executor=FnExecutor())
+    eng.rt("n23_final_verification").status = S.WAITING_HUMAN
+    add_verification_artifact(eng, warnings=["review warning"], pending=["VOI-ADULT", "CRE-MUSIC"])
+    eng._save("test")
+    assert cli.main(["approve", str(proj), "n23_final_verification", "--actor", "Wei", "--reason", "ship",
+                     "--ack-warning", "all", "--signoff", "VOI-ADULT,CRE-MUSIC"]) == 0
+    eng = Engine(proj, read_only=True)
+    approval = eng.state.history.approvals[-1]
+    assert approval.node == "n23_final_verification" and approval.warning_acks == ["1"]
+    assert approval.signoffs == ["CRE-MUSIC", "VOI-ADULT"]
+
+
+def test_pre_v18_state_loads_accepts_config_and_steps(tmp_path):
+    proj = make_project(tmp_path, human_b=True)
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    eng.decide("b_plan", "approved", actor="Wei (standing instruction)", reason="go")
+    raw = json.loads((proj / ".vpg/state.json").read_text())
+    raw["runtime"].pop("accepted_policy", None)
+    raw["runtime"].pop("accepted_config", None)
+    for approval in raw["history"]["approvals"]:
+        for key in ("provisional", "confirmed_at", "superseded_at", "pre_lock_controls", "warning_acks", "signoffs"):
+            approval.pop(key, None)
+    (proj / ".vpg/state.json").write_text(json.dumps(raw))
+    eng = Engine(proj, executor=FnExecutor())
+    assert eng.state.history.approvals[0].actor == "Wei (standing instruction)"
+    eng.accept_config(actor="Wei", reason="adopt")
+    eng.run(max_steps=200)
+    assert eng.state.runtime.status.value in ("RUN_PASS", "RUNNING", "WAITING_RUNTIME", "WAITING_HUMAN")
+
+
+def test_release_structure_fails_closed_on_missing_or_drifted_verification(tmp_path):
+    proj = make_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    path = proj / "work/verification.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"warnings": ["check"], "pending_human": []}))
+    eng.state.artifacts["verification-test"] = ArtifactRecord(
+        id="verification-test", key="verification", path="work/verification.json", sha256=sha256_file(path),
+        bytes=path.stat().st_size, node="n23_final_verification", attempt=1, produced_at=now())
+    path.write_text(json.dumps({"warnings": [], "pending_human": []}))
+    with pytest.raises(EngineError, match="changed on disk"):
+        eng._check_release_structure([], [])
+    path.unlink()
+    with pytest.raises(EngineError, match="missing"):
+        eng._check_release_structure([], [])
+
+
+def test_feedback_declared_humans_and_relays(tmp_path):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    with pytest.raises(EngineError, match="declared humans"):
+        eng.add_feedback("make it bluer", actor="Wei (standing instruction)")
+    fb = eng.add_feedback("make it shorter", actor="agent:runner", on_behalf_of="Wei", instruction="shorter")
+    ev = list(Ledger(proj / ".vpg/ledger.jsonl").events("feedback"))[-1]["data"]
+    assert fb.actor == "Wei" and fb.triage == "" and ev["relayed"] is True and ev["relay_actor"] == "agent:runner"
+
+
+@pytest.mark.parametrize("action", [
+    "granting a delegation", "accepting a configuration change", "unblocking", "invalidating",
+    "approving a change request", "resolving a defect", "restoring a control document", "triaging an agent's note",
+    "waiving an intake gap", "a rollback", "accepting a ledger break",
+])
+def test_relays_allowed_for_human_actions_at_waiting_release(tmp_path, action):
+    proj = make_project(tmp_path, workflow=release_workflow(tmp_path))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.rt("n23_final_verification").status = S.WAITING_HUMAN
+    meta = eng._require_human("agent:ops", action, on_behalf_of="Wei", instruction="do it")
+    assert meta["relayed"] is True and eng.ledger.stamp["principal"] == "Wei"
+
+
+@pytest.mark.parametrize("action,what", GRANTABLE_ACTS)
+def test_grantable_relays_allowed_mid_run(tmp_path, action, what):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    assert not eng._at_release_wait()
+    assert eng._authorize("agent:ops", action, what, on_behalf_of="Wei", instruction="do it") is None
+    assert eng.ledger.stamp["principal"] == "Wei"
+
+
+def test_relayed_safety_accept_config_allowed_but_broad_config_refused(tmp_path):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.accept_config(actor="Wei", reason="declare")
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["loop_budget"] = {"on_exhaust": "extend_if_converging"}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    assert eng._require_human("agent:ops", "accepting a configuration change", on_behalf_of="Wei", instruction="safety")["principal"] == "Wei"
+    eng = Engine(proj, executor=FnExecutor())
+    eng.accept_config(actor="Wei", reason="accept safety")
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["commands"] = {"b_plan": "echo x"}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    with pytest.raises(EngineError, match="safety-key-only"):
+        eng._require_human("agent:ops", "accepting a configuration change", on_behalf_of="Wei", instruction="broad")
+
+
+def test_relayed_threshold_change_request_refused_mid_run(tmp_path):
+    proj = make_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    cr = eng.change_request("evaluation", "lower threshold", by="agent:critic")
+    with pytest.raises(EngineError, match="bar changes"):
+        eng.approve_change_request(cr.id, by="agent:ops", on_behalf_of="Wei", instruction="approve")
+    with pytest.raises(EngineError, match="bar changes"):
+        eng.reject_change_request(cr.id, by="agent:ops", reason="reject", on_behalf_of="Wei", instruction="reject")
+    with pytest.raises(EngineError, match="bar changes"):
+        eng.defer_change_request(cr.id, by="agent:ops", until="later", reason="defer", on_behalf_of="Wei", instruction="defer")
+
+
+def test_adoption_relay_instruction_at_validation(tmp_path):
+    proj = make_project(tmp_path, workflow=release_workflow(tmp_path, human_b=True))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    eng.decide("b_plan", "approved", actor="Wei", reason="ok")
+    eng.run(max_steps=300)
+    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+                "reviews": {"binding": "require", "independence": "require"},
+                "loop_budget": {"on_exhaust": "extend_if_converging"},
+                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+    with pytest.raises(EngineError, match="ISO timestamp"):
+        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+                                                          instruction="adopt", instruction_at="whenever")
+    with pytest.raises(EngineError, match="timezone"):
+        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+                                                          instruction="adopt", instruction_at="2099-01-01T10:00:00")
+    with pytest.raises(EngineError, match="later"):
+        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+                                                          instruction="adopt", instruction_at="2000-01-01T10:00:00+00:00")
+    later_at = "2099-01-01T10:00:00+00:00"
+    Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+                                                      instruction="adopt", instruction_at=later_at)
+    assert Engine(proj, read_only=True).state.runtime.accepted_policy["humans"] == ["Wei"]
 
 
 # ---------------------------------------------------------------------------------------------- printed commands run as written (judge, J05)
@@ -720,8 +1345,9 @@ def test_human_feedback_closed_with_no_action_waits_for_its_author(tmp_path):
     assert "leads to no open blocking defect" in g.reasons[0] and any("on hold" in r and "F001" in r for r in g.reasons)
     assert any(h.startswith("F001: ") for h in eng.status()["holds"])
     assert events(proj, "feedback_held")[0] == {"id": "F001", "actor": "Maria", "reason": "test"}
-    eng.unblock("g_gate", actor="Sam Placeholder", note="looks fine to me")   # neither the author nor the gate's owner
-    assert events(proj, "unblocked")[-1]["released_holds"] == [] and eng.state.evaluation.feedback[0].hold
+    with pytest.raises(EngineError, match="F001.*Wei|Wei.*F001"):
+        eng.unblock("g_gate", actor="Sam Placeholder", note="looks fine to me")   # neither the author nor the gate's owner
+    assert eng.state.evaluation.feedback[0].hold
     eng.run(max_steps=200)
     assert eng.state.evaluation.gate_results[-1].outcome == "blocked"
     eng.unblock("g_gate", actor="Wei", note="as the owner I accept: no change")   # the gate's owner (escalation.to)
@@ -743,6 +1369,37 @@ def test_a_held_feedback_blocks_only_the_pass_not_the_rework(tmp_path):
     eng.unblock("g_gate", actor="Maria", note="the mix is fine as it is")   # the author accepts it
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
+
+
+def test_feedback_hold_unblock_accepts_relay_principal_or_exact_author(tmp_path):
+    proj = make_project(tmp_path, review_tool=ROUTES)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["humans"] = ["Wei", "Pat Example"]
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+
+    def no_action(ctx):
+        fb = [f.id for f in ctx.state.evaluation.feedback if f.status == "open"]
+        (ctx.workdir / "interpretation.json").write_text(json.dumps(
+            {"defects": [], "feedback": [{"id": f, "no_action_reason": "already fixed"} for f in fb]}))
+        return {"interpretation": "interpretation.json"}
+
+    eng = Engine(proj, executor=FnExecutor({"g_gate": no_action}))
+    eng.run(max_steps=200)
+    eng.add_feedback("the proof point is now clear", actor="Wei")
+    eng.run(max_steps=200)
+    gate = eng._gate_node()
+    with pytest.raises(EngineError, match="--actor must be one of Wei"):
+        eng.unblock(gate, actor="agent:relay", on_behalf_of="Pat Example", instruction="continue")
+    eng.unblock(gate, actor="agent:relay", on_behalf_of="Wei", instruction="continue", note="relayed")
+    assert events(proj, "unblocked")[-1]["released_holds"] == ["F001"]
+
+    proj2 = make_project(tmp_path / "exact", review_tool=ROUTES)
+    eng2 = Engine(proj2, executor=FnExecutor({"g_gate": no_action}))
+    eng2.run(max_steps=200)
+    eng2.add_feedback("the proof point is now clear", actor="Wei")
+    eng2.run(max_steps=200)
+    eng2.unblock(eng2._gate_node(), actor="Wei", note="exact author")
+    assert events(proj2, "unblocked")[-1]["released_holds"] == ["F001"]
 
 
 def test_feedback_mapped_to_a_defect_is_not_held(tmp_path):
@@ -785,6 +1442,380 @@ def test_human_feedback_cannot_be_closed_on_a_closed_defect_or_a_nit(tmp_path):
         else:
             assert fb.hold and eng.state.evaluation.gate_results[-1].outcome == "blocked", plan
             eng.unblock("g_gate", actor="Wei", note=f"accept the {plan} mapping")
+
+
+def test_principal_feedback_resolved_under_provisional_does_not_hold_gate(tmp_path):
+    def no_action(ctx):
+        fb = [f.id for f in ctx.state.evaluation.feedback if f.status == "open"]
+        (ctx.workdir / "interpretation.json").write_text(json.dumps(
+            {"defects": [], "feedback": [{"id": f, "no_action_reason": "fixed with evidence"} for f in fb]}))
+        return {"interpretation": "interpretation.json"}
+
+    proj = make_project(tmp_path, review_tool=ROUTES)
+    eng = Engine(proj, executor=FnExecutor({"g_gate": no_action}))
+    eng.state.runtime.accepted_policy = {"autonomy": {"mode": "provisional", "principal": "Wei"}, "humans": ["Wei"]}
+    eng.run(max_steps=200)
+    eng.add_feedback("the evidence label is wrong", actor="Wei")
+    eng.run(max_steps=200)
+    fb = eng.state.evaluation.feedback[0]
+    assert (fb.status, fb.hold, fb.no_action_reason) == ("resolved_pending_confirmation", "", "fixed with evidence")
+    assert eng.state.runtime.status.value == "RUN_PASS"
+    assert events(proj, "feedback_pending_confirmation")[-1]["id"] == "F001"
+
+    proj2 = make_project(tmp_path / "gated", review_tool=ROUTES)
+    eng2 = Engine(proj2, executor=FnExecutor({"g_gate": no_action}))
+    eng2.run(max_steps=200)
+    eng2.add_feedback("the evidence label is wrong", actor="Wei")
+    eng2.run(max_steps=200)
+    assert eng2.state.evaluation.feedback[0].hold
+    assert eng2.state.runtime.status.value == "BLOCKED"
+
+
+def test_non_principal_feedback_still_holds_under_provisional(tmp_path):
+    def no_action(ctx):
+        fb = [f.id for f in ctx.state.evaluation.feedback if f.status == "open"]
+        (ctx.workdir / "interpretation.json").write_text(json.dumps(
+            {"defects": [], "feedback": [{"id": f, "no_action_reason": "already fine"} for f in fb]}))
+        return {"interpretation": "interpretation.json"}
+
+    proj = make_project(tmp_path, review_tool=ROUTES)
+    eng = Engine(proj, executor=FnExecutor({"g_gate": no_action}))
+    eng.state.runtime.accepted_policy = {"autonomy": {"mode": "provisional", "principal": "Wei"}, "humans": ["Wei", "Pat Example"]}
+    eng.run(max_steps=200)
+    eng.add_feedback("labels are wrong", actor="Pat Example")
+    eng.run(max_steps=200)
+    fb = eng.state.evaluation.feedback[0]
+    assert fb.status == "interpreted" and fb.hold
+    assert eng.state.runtime.status.value == "BLOCKED"
+
+
+def _declare_privacy_name(proj, name="Jordan Sample"):
+    (proj / "names.json").write_text(json.dumps({"names": [name]}))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    hold = proj.parent / "hold"
+    hold.mkdir(exist_ok=True)
+    cfg["privacy"] = {"names": "names.json", "text_scan": "on", "n14_hold": "on", "hold_dir": str(hold.resolve())}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+    return name
+
+
+def test_submit_refuses_text_output_with_listed_name_before_attempt_used(tmp_path):
+    proj = make_project(tmp_path)
+    listed = _declare_privacy_name(proj)
+    eng = Engine(proj)
+    eng.run(max_steps=1)
+    rt = eng.rt("a_intake")
+    out = proj / "work/a_intake/a1/a_intake.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"speaker": listed}))
+    with pytest.raises(EngineError, match=r"no attempt used: privacy text scan.*\[list entry #1\]"):
+        eng.submit("a_intake", {"a_intake": str(out)}, token=rt.dispatch_token, actor="agent:test")
+    assert eng.rt("a_intake").status == S.WAITING_RUNTIME and eng.rt("a_intake").attempts == 1
+
+
+def test_text_scan_folds_json_escapes_nfd_and_ascii_spelling(tmp_path):
+    listed = "Zoë Núñez"
+    for idx, text in enumerate((json.dumps({"speaker": listed}), json.dumps({"speaker": unicodedata.normalize('NFD', listed)}),
+                                json.dumps({"speaker": "Zoe Nunez"}))):
+        proj = make_project(tmp_path / str(idx))
+        _declare_privacy_name(proj, listed)
+        eng = Engine(proj)
+        eng.run(max_steps=1)
+        rt = eng.rt("a_intake")
+        out = proj / "work/a_intake/a1/a_intake.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+        with pytest.raises(EngineError, match=r"\[list entry #1\]"):
+            eng.submit("a_intake", {"a_intake": str(out)}, token=rt.dispatch_token, actor="agent:test")
+
+
+def test_text_scan_uses_frame_matcher_variants():
+    cases = [("Jordan Sample", "Sample, Jordan"), ("Jordan Sample", "JordanSample"),
+             ("Jordan Sample", "jordan_sample"), ("Ana Smith-Jones", "Ana Smith-Jones"),
+             ("Ana O'Brien", "Ana O'Brien")]
+    for name, text in cases:
+        full, part = privacy.text_privacy_hits(text, [name])
+        assert full == [1] and part == []
+
+
+def test_text_scan_part_only_hit_becomes_end_review_warning(tmp_path):
+    proj = make_project(tmp_path)
+    _declare_privacy_name(proj, "Jordan Sample")
+    eng = Engine(proj)
+    eng.run(max_steps=1)
+    rt = eng.rt("a_intake")
+    out = proj / "work/a_intake/a1/a_intake.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"note": "attach a sample report"}))
+    eng.submit("a_intake", {"a_intake": str(out)}, token=rt.dispatch_token, actor="agent:test")
+    assert eng.rt("a_intake").status == S.STEP_PASS
+    assert events(proj, "privacy_text_warning")[-1]["warning"].endswith("[list entry #1]")
+
+
+def test_text_scan_refuses_undecodable_text_and_names_file_output(tmp_path):
+    proj = make_project(tmp_path)
+    _declare_privacy_name(proj)
+    eng = Engine(proj)
+    eng.run(max_steps=1)
+    rt = eng.rt("a_intake")
+    out = proj / "work/a_intake/a1/a_intake.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(b"\xff\xfe")
+    with pytest.raises(EngineError, match="not valid JSON|not UTF-8"):
+        eng.submit("a_intake", {"a_intake": str(out)}, token=rt.dispatch_token, actor="agent:test")
+    with pytest.raises(EngineError, match="cannot register the privacy name list"):
+        eng.submit("a_intake", {"a_intake": str(proj / "names.json")}, token=rt.dispatch_token, actor="agent:test")
+
+
+def test_submit_allows_preexisting_control_doc_with_listed_name(tmp_path):
+    proj = make_project(tmp_path, lock_b=("design",))
+    listed = _declare_privacy_name(proj)
+    (proj / "controls/design.md").write_text(f"# Design\n\nOwner: {listed}\n")
+    eng = Engine(proj)
+    eng.run(max_steps=10)
+    submit_packet(eng, proj, "a_intake")
+    eng.run(max_steps=10)
+    assert eng.rt("b_plan").status == S.WAITING_RUNTIME
+    submit_packet(eng, proj, "b_plan")
+    assert eng.rt("b_plan").status == S.STEP_PASS
+
+
+def test_submit_allows_clean_text_when_names_declared(tmp_path):
+    proj = make_project(tmp_path)
+    _declare_privacy_name(proj)
+    eng = Engine(proj)
+    eng.run(max_steps=1)
+    submit_packet(eng, proj, "a_intake")
+    assert eng.rt("a_intake").status == S.STEP_PASS
+
+
+def test_command_written_text_output_is_scanned(tmp_path):
+    wf_dir = tmp_path / "wf"
+    wf_dir.mkdir()
+    wf = mini_workflow(wf_dir)
+    data = yaml.safe_load(wf.read_text())
+    for node in data["nodes"]:
+        if node["id"] == "a_intake":
+            node["outputs"].append({"key": "notes", "kind": "markdown", "description": "notes", "required": False})
+    wf.write_text(yaml.safe_dump(data, sort_keys=False))
+    proj = make_project(tmp_path, workflow=wf)
+    listed = _declare_privacy_name(proj)
+    (proj / "tools").mkdir()
+    (proj / "tools/cmd.py").write_text(
+        "import json, os, pathlib\n"
+        "w = pathlib.Path(json.load(open(os.environ['VPG_CONTEXT']))['workdir'])\n"
+        f"(w / 'notes.md').write_text('Speaker: {listed}\\n')\n"
+        "(w / 'outputs.json').write_text(json.dumps({'outputs': {'notes': 'notes.md'}}))\n")
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["commands"] = {"a_intake": "{python} tools/cmd.py"}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+    eng = Engine(proj)
+    eng.run(max_steps=1)
+    submit_packet(eng, proj, "a_intake")
+    assert eng.rt("a_intake").status == S.ITERATE
+    assert any("[list entry #1]" in f for f in eng.rt("a_intake").failures)
+
+
+def test_review_payload_is_scanned_before_state(tmp_path):
+    proj = make_project(tmp_path)
+    listed = _declare_privacy_name(proj)
+    eng = Engine(proj)
+    eng.run(max_steps=10)
+    for nid in ("a_intake", "b_plan", "d_build"):
+        submit_packet(eng, proj, nid)
+        eng.run(max_steps=10)
+    rt = eng.rt("r1_review")
+    dims = [x for r in eng.node("r1_review").rubric for x in eng.rubrics[r]["dimensions"] if x["check"]["type"] == "review"]
+    review = {"reviewer": "critic", "scores": [{"dimension": x["id"], "score": 5, "evidence": "ok"} for x in dims],
+              "defects": [{"dimension": dims[0]["id"], "severity": "P2", "traced_node": "d_build",
+                           "description": f"frame shows {listed}"}]}
+    with pytest.raises(EngineError, match=r"review payload.*\[list entry #1\]"):
+        eng.submit("r1_review", {}, token=rt.dispatch_token, actor="agent:critic", review=review)
+    assert listed not in (proj / ".vpg/state.json").read_text()
+
+
+def _master_project(tmp_path):
+    (tmp_path / "wf").mkdir(parents=True)
+    wf = mini_workflow(tmp_path / "wf")
+    data = yaml.safe_load(wf.read_text())
+    for node in data["nodes"]:
+        if node["id"] == "d_build":
+            node["outputs"] = [{"key": "master", "kind": "video", "description": "Master",
+                                "state_path": "production.master_ref"}]
+            node["completion"] = [{"type": "artifact", "key": "master", "description": "exists"}]
+    wf.write_text(yaml.safe_dump(data, sort_keys=False))
+    proj = make_project(tmp_path, workflow=wf)
+    (proj / "names.json").write_text(json.dumps({"names": ["Jordan Sample"]}))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    hold = tmp_path / "hold"
+    hold.mkdir(exist_ok=True)
+    cfg["privacy"] = {"names": "names.json", "n14_hold": "on", "hold_dir": str(hold.resolve())}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+    return proj
+
+
+def _master_project_with_silent(tmp_path):
+    (tmp_path / "wf").mkdir(parents=True)
+    wf = mini_workflow(tmp_path / "wf")
+    data = yaml.safe_load(wf.read_text())
+    for node in data["nodes"]:
+        if node["id"] == "d_build":
+            node["outputs"] = [{"key": "master", "kind": "video", "description": "Master",
+                                "state_path": "production.master_ref"},
+                               {"key": "silent", "kind": "video", "description": "Silent",
+                                "state_path": "production.refs.silent"}]
+            node["completion"] = [{"type": "artifact", "key": "master", "description": "exists"}]
+    wf.write_text(yaml.safe_dump(data, sort_keys=False))
+    proj = make_project(tmp_path, workflow=wf)
+    (proj / "names.json").write_text(json.dumps({"names": ["Jordan Sample"]}))
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    hold = tmp_path / "hold"
+    hold.mkdir(exist_ok=True)
+    cfg["privacy"] = {"names": "names.json", "n14_hold": "on", "hold_dir": str(hold.resolve())}
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+    return proj
+
+
+def _drive_to_master_submit(eng, proj):
+    eng.run(max_steps=10)
+    submit_packet(eng, proj, "a_intake")
+    eng.run(max_steps=10)
+    submit_packet(eng, proj, "b_plan")
+    eng.run(max_steps=10)
+    assert eng.rt("d_build").status == S.WAITING_RUNTIME
+    rt = eng.rt("d_build")
+    master = proj / "work/d_build/a1/master.mp4"
+    master.parent.mkdir(parents=True, exist_ok=True)
+    master.write_bytes(b"synthetic")
+    return rt, master
+
+
+def test_privacy_failing_master_is_held_outside_repo_before_registration(tmp_path, monkeypatch):
+    proj = _master_project(tmp_path)
+    monkeypatch.setattr(privacy, "scan_video", lambda *a, **k: {"frames": 1, "fps": 30, "ocr_calls": 1,
+                                                                "windows": [{"entry": 1, "start_s": 0, "end_s": 1,
+                                                                             "reads": 1, "box": [1, 2, 3, 4]}],
+                                                                "live_windows": []})
+    eng = Engine(proj)
+    rt, master = _drive_to_master_submit(eng, proj)
+    eng.submit("d_build", {"master": str(master)}, token=rt.dispatch_token, actor="agent:test")
+    hold = tmp_path / "hold"
+    held = list(hold.glob("*.mp4"))
+    assert held and held[0].is_file() and not held[0].is_relative_to(proj)
+    assert not master.exists()
+    assert not eng.current("master")
+    assert oct(hold.stat().st_mode & 0o777) == "0o700"
+    assert any("privacy scan failed before video registration" in f for f in eng.rt("d_build").failures)
+
+
+def test_privacy_passing_master_registers_current(tmp_path, monkeypatch):
+    proj = _master_project(tmp_path)
+    monkeypatch.setattr(privacy, "scan_video", lambda *a, **k: {"frames": 1, "fps": 30, "ocr_calls": 1,
+                                                                "windows": [], "live_windows": []})
+    eng = Engine(proj)
+    rt, master = _drive_to_master_submit(eng, proj)
+    eng.submit("d_build", {"master": str(master)}, token=rt.dispatch_token, actor="agent:test")
+    assert eng.current("master")
+    assert master.exists()
+
+
+def test_privacy_scan_cache_is_ledgered_but_n23_still_scans(tmp_path, monkeypatch):
+    proj = _master_project(tmp_path)
+    calls = {"n": 0}
+    def clean(*a, **k):
+        calls["n"] += 1
+        return {"frames": 1, "fps": 30, "ocr_calls": 1, "windows": [], "live_windows": []}
+    monkeypatch.setattr(privacy, "scan_video", clean)
+    eng = Engine(proj)
+    rt, master = _drive_to_master_submit(eng, proj)
+    eng.submit("d_build", {"master": str(master)}, token=rt.dispatch_token, actor="agent:test")
+    rec = eng.current("master")[0]
+    ctx = SimpleNamespace(config=eng.project.config, project_dir=proj, workdir=proj / "work/n23", load=lambda k: None)
+    assert privacy.release_problem(ctx, proj / rec.path, rec.sha256) is None
+    assert calls["n"] == 3
+    monkeypatch.setattr(privacy, "scan_video", lambda *a, **k: {"frames": 1, "fps": 30, "ocr_calls": 1,
+                                                                "windows": [{"entry": 1, "start_s": 0, "end_s": 1,
+                                                                             "reads": 1, "box": [1, 2, 3, 4]}],
+                                                                "live_windows": []})
+    ctx.config = {**eng.project.config, "privacy": {**eng.project.config["privacy"], "scan_fps": 60}}
+    assert privacy.release_problem(ctx, proj / rec.path, rec.sha256)
+    ctx.config = eng.project.config
+    ctx.load = lambda k: {"live_windows": [{"start": 0, "end": 1, "what": "ui"}]} if k == "text_layers" else None
+    assert privacy.release_problem(ctx, proj / rec.path, rec.sha256)
+    (proj / "names.json").write_text(json.dumps({"names": ["Jordan Sample", "Riley Example"]}))
+    ctx.load = lambda k: None
+    assert privacy.release_problem(ctx, proj / rec.path, rec.sha256)
+
+
+def test_privacy_hold_dir_must_be_absolute_and_outside_git(tmp_path):
+    proj = _master_project(tmp_path)
+    cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
+    cfg["privacy"]["hold_dir"] = "relative"
+    (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+    with pytest.raises(EngineError, match="privacy.hold_dir"):
+        Engine(proj)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    proj2 = _master_project(tmp_path / "other")
+    cfg = yaml.safe_load((proj2 / "vpg.project.yaml").read_text())
+    cfg["privacy"]["hold_dir"] = str((repo / "held").resolve())
+    (proj2 / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
+    with pytest.raises(EngineError, match="git working tree"):
+        Engine(proj2)
+
+
+def test_privacy_holds_silent_video_and_never_moves_sources(tmp_path, monkeypatch):
+    proj = _master_project_with_silent(tmp_path)
+    monkeypatch.setattr(privacy, "scan_video", lambda *a, **k: {"frames": 1, "fps": 30, "ocr_calls": 1,
+                                                                "windows": [{"entry": 1, "start_s": 0, "end_s": 1,
+                                                                             "reads": 1, "box": [1, 2, 3, 4]}],
+                                                                "live_windows": []})
+    eng = Engine(proj)
+    rt, master = _drive_to_master_submit(eng, proj)
+    silent = master.with_name("silent.mp4")
+    silent.write_bytes(b"synthetic")
+    source = proj / "assets/source-recording.mp4"
+    source.parent.mkdir()
+    source.write_bytes(b"source")
+    eng.submit("d_build", {"master": str(source), "silent": str(silent)}, token=rt.dispatch_token, actor="agent:test")
+    assert source.exists()
+    assert not silent.exists()
+    assert len(list((tmp_path / "hold").glob("*.mp4"))) == 1
+
+
+def test_privacy_ocr_unavailable_does_not_move_or_register(tmp_path, monkeypatch):
+    proj = _master_project(tmp_path)
+    def no_ocr(*a, **k):
+        raise privacy.OcrUnavailable("missing")
+    monkeypatch.setattr(privacy, "scan_video", no_ocr)
+    eng = Engine(proj)
+    rt, master = _drive_to_master_submit(eng, proj)
+    before = eng.rt("d_build").attempts
+    eng.submit("d_build", {"master": str(master)}, token=rt.dispatch_token, actor="agent:test")
+    assert eng.rt("d_build").attempts == before and eng.rt("d_build").status == S.WAITING_RUNTIME
+    assert master.exists()
+    assert not list((tmp_path / "hold").glob("*.mp4"))
+    assert not eng.current("master")
+    assert any("no attempt used" in f for f in eng.rt("d_build").failures)
+
+
+def test_symlinked_workdir_does_not_move_video_target(tmp_path, monkeypatch):
+    proj = _master_project(tmp_path)
+    monkeypatch.setattr(privacy, "scan_video", lambda *a, **k: {"frames": 1, "fps": 30, "ocr_calls": 1,
+                                                                "windows": [{"entry": 1, "start_s": 0, "end_s": 1,
+                                                                             "reads": 1, "box": [1, 2, 3, 4]}],
+                                                                "live_windows": []})
+    eng = Engine(proj)
+    rt, master = _drive_to_master_submit(eng, proj)
+    source = proj / "assets/source.mp4"
+    source.parent.mkdir()
+    source.write_bytes(b"source")
+    master.unlink()
+    master.parent.rmdir()
+    master.parent.symlink_to(source.parent, target_is_directory=True)
+    eng.submit("d_build", {"master": str(master.parent / "source.mp4")}, token=rt.dispatch_token, actor="agent:test")
+    assert source.exists()
 
 
 def test_a_feedback_mapping_that_closes_in_the_same_gate_is_held(tmp_path):
@@ -832,17 +1863,9 @@ def test_an_unblock_releases_only_the_holds_its_human_was_shown(tmp_path):
     eng.add_feedback("the ending is flat", actor="Wei")
     eng.run(max_steps=200)
     assert eng.state.evaluation.feedback[0].hold and eng.state.runtime.status.value == "BLOCKED"
-    eng.unblock("g_gate", actor="Sam Placeholder", note="not the author")     # releases nothing: not the author or the owner
-    plan["now"] = "broken"                                              # the gate now fails its own checks twice …
-    eng.run(max_steps=200)
-    esc = [e for e in eng.state.runtime.escalations if not e.resolved][-1]
-    assert "unknown defect" in esc.report and "F001" in esc.report and esc.holds == []   # it mentions F001, but not as a hold
-    eng.unblock("g_gate", actor="Wei", note="fixed the interpreter")
-    assert events(proj, "unblocked")[-1]["released_holds"] == [] and eng.state.evaluation.feedback[0].hold
-    plan["now"] = "good"
-    eng.run(max_steps=200)
-    g = eng.state.evaluation.gate_results[-1]
-    assert g.outcome == "blocked" and any("on hold" in r and "F001" in r for r in g.reasons)
+    with pytest.raises(EngineError, match="F001.*Wei|Wei.*F001"):
+        eng.unblock("g_gate", actor="Sam Placeholder", note="not the author")     # not the author or the owner
+    assert eng.state.evaluation.feedback[0].hold and not events(proj, "unblocked")
     eng.unblock("g_gate", actor="Wei", note="the ending stays as it is")
     assert events(proj, "unblocked")[-1]["released_holds"] == ["F001"]
     eng.run(max_steps=200)

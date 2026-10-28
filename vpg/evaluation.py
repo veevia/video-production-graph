@@ -158,12 +158,16 @@ def merge_review(node: NodeDef, version: int, pre_findings: list[Finding], agent
     failed_must = {s.dimension for s in scores if not s.passed and s.level == "MUST"}
     # A failed MUST dimension is never a nit, whatever severity the reviewer filed: it must block and route.
     findings = [f.model_copy(update={"severity": "P3"}) if f.dimension in failed_must and f.severity == "nit" else f for f in findings]
-    blocking = [f for f in findings if f.severity != "nit"]
-    verdict = "fail" if blocking or any(not s.passed and s.level == "MUST" for s in scores) else "pass"
     review = Review(id=f"rev-{node.id}-v{version}", node=node.id, version=version, reviewer=node.agent,
-                    rubric_ids=node.rubric, scores=scores, tool_findings=list(pre_findings), verdict=verdict,
+                    rubric_ids=node.rubric, scores=scores, tool_findings=list(pre_findings), verdict=review_verdict(scores, findings),
                     overridden_agent_passes=overridden, pending_human=pending_human, created_at=now())
     return review, findings, unscored
+
+
+def review_verdict(scores: list[Score], findings: list[Finding]) -> str:
+    """A review fails on a blocking finding or a failed MUST score. The engine re-judges it once the rubric's levels have
+    governed the findings (#162), so the verdict agrees with what the gate can route."""
+    return "fail" if any(f.severity != "nit" for f in findings) or any(not s.passed and s.level == "MUST" for s in scores) else "pass"
 
 
 def record_findings(state: ProjectState, findings: list[Finding], source: str, version: int, *, default_trace: str,
@@ -176,7 +180,7 @@ def record_findings(state: ProjectState, findings: list[Finding], source: str, v
       1. an unresolved defect of the problem on the finding's trace;
       2. an unresolved defect of the problem on another trace, which follows the new trace and keeps its failure
          count: re-tracing a persisting problem never counts as fixing it (`defect_retraced`);
-      3. a resolved defect of the problem on the finding's trace: a regression reopens it;
+      3. a resolved or waived defect of the problem on the finding's trace: a regression reopens it;
       4. otherwise a new defect. A waiver covers what was seen, so a waived defect never absorbs a later finding.
     Unresolved defects are always taken before a resolved twin is reopened, so a problem that moves between traces
     carries one failure count instead of reopening twins at zero.
@@ -214,6 +218,12 @@ def record_findings(state: ProjectState, findings: list[Finding], source: str, v
             if d.traced_node != trace:
                 log.append({"event": "defect_retraced", "id": d.id, "from": d.traced_node, "to": trace, "by": source})
                 d.traced_node = trace
+            target[i] = placed[(key, trace)] = d
+    for i, (f, trace, key) in enumerate(rows):
+        if target[i] is not None or not str(f.check).startswith("tool:"):
+            continue
+        d = placed.get((key, trace)) or match(i, ("waived",), True)
+        if d is not None:
             target[i] = placed[(key, trace)] = d
     created: set[str] = set()
     for i, (f, trace, key) in enumerate(rows):
@@ -258,7 +268,7 @@ def record_findings(state: ProjectState, findings: list[Finding], source: str, v
             d.status = "persisting"
             d.rework_count += 1
             failures[d.signature] = failures.get(d.signature, 0) + 1
-        elif d.status == "resolved":
+        elif d.status in ("resolved", "waived"):
             d.status = "open"   # regression: the fix did not hold
         d.last_seen_version = version
     return [d.id for d in target]
@@ -268,7 +278,7 @@ def compare_after_rework(state: ProjectState, version: int, artifacts_changed: d
                          resolved_by_interpreter: set[str] | None = None) -> list[Comparison]:
     """Decide, for every unresolved defect, whether fresh evidence shows it fixed. Resolution needs fresh evidence.
 
-    A review-sourced defect is resolved when the reviewer that found it re-ran on a newer version than the one that
+    A review-sourced defect is resolved when an independent reviewer that found it re-ran on a newer version than the one that
     last reported it (not carried forward) and no longer reports it. Defects are matched by problem, so a re-traced
     problem is still reported. A defect from human feedback alone is resolved only when the interpreter lists it as
     resolved, on a version after the one it was last seen on. This holds whether the fix came from a rework cycle or
@@ -287,7 +297,10 @@ def compare_after_rework(state: ProjectState, version: int, artifacts_changed: d
         resolved, why = False, ""
         if d.source.startswith("rev-"):
             node = d.source[4:].rsplit("-v", 1)[0]
-            fresh = [r for r in state.evaluation.reviews if r.node == node and r.version > d.last_seen_version and not r.carried_forward]
+            source_review = next((r for r in state.evaluation.reviews if r.id == d.source), None)
+            fresh = [r for r in state.evaluation.reviews if r.node == node and r.version > d.last_seen_version
+                     and not r.carried_forward and (source_review is not None and source_review.independent is True and r.independent is not False
+                                                    or not (source_review is not None and source_review.independent is True))]
             if fresh and d.id not in fresh[-1].defect_ids:
                 resolved, why = True, f"{node} re-ran on version {fresh[-1].version} and no longer reports it"
             else:
@@ -349,7 +362,13 @@ def gate(state: ProjectState, policies: Policies, version: int, reviewer_nodes: 
             reasons.append(granted)
         reasons.append("blocking defects open: " + ", ".join(f"{d.id} {d.severity} {d.dimension}→{d.traced_node}" for d in blocking))
     else:
-        failing = [r.node for r in current.values() if r.verdict == "fail"]
+        principal = (((state.runtime.accepted_policy or {}).get("autonomy") or {}).get("principal") or "Wei")
+        resolved = {d.id for d in state.evaluation.defects if d.status == "resolved"
+                    and (d.severity == "nit" or d.resolved_by == principal)}
+        defects = {d.id: d for d in state.evaluation.defects}
+        failing = [r.node for r in current.values() if r.verdict == "fail"
+                   and (not r.defect_ids or any(did in defects and defects[did].severity in policies.blocking_severities
+                                                and did not in resolved for did in r.defect_ids))]
         held = [f for f in state.evaluation.feedback if f.hold]
         if failing:
             # Never pass a version a current review failed. With no blocking defect there is nothing to route to

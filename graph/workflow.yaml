@@ -163,7 +163,7 @@ nodes:
     agent: creative-director
     skills: [video-prototype, concept-creator, video-shotcraft, design-principles]
     tools: []
-    instructions: Write concepts.json with ≥3 concepts whose anchors differ (for example a problem-first story, a user's-day journey and a system reveal). Give each a logline, a chapter structure mapped to the objective, strengths and risks.
+    instructions: Write concepts.json with ≥3 concepts whose anchors differ (for example a problem-first story, a user's-day journey and a system reveal). Give each a logline, a chapter structure mapped to the objective, strengths and risks. For new concepts, add 1–5 scores on the concept fork dimensions (CON-FIT, DIR-BOUNDARIES, CRE-HOOK, CRE-ONE-MESSAGE, CRE-ARC, NAR-CLARITY, NAR-RELEVANCE, NAR-CONNECTION, NAR-PERSPECTIVE) plus score_rationale; old concepts without scores remain valid.
     prompt: prompts/n05_narrative_ideation.md
     outputs:
       - {key: concepts, kind: json, schema: concepts, description: "Concept directions", state_path: production.concepts_ref}
@@ -188,7 +188,7 @@ nodes:
     inputs: ["artifact:concepts", "artifact:brief", "control:creative"]
     context: ["Recovered: start from the strongest earlier direction instead of restarting; keep one brand-derived motion vocabulary"]
     state_read: [production.concepts_ref, production.objective]
-    state_write: [production.creative_decision_ref, production.narrative_ref]
+    state_write: [production.creative_decision_ref, production.narrative_ref, production.forks_ref]
     agent: creative-director
     skills: [traffic-light-decisions, design-criteria, video-shotcraft]
     tools: []
@@ -197,6 +197,7 @@ nodes:
     outputs:
       - {key: creative_decision, kind: json, schema: creative-decision, description: "Selected concept and rejections", state_path: production.creative_decision_ref}
       - {key: narrative, kind: markdown, description: "Narrative arc", state_path: production.narrative_ref}
+      - {key: fork, kind: json, schema: fork, description: "Scored concept fork", state_path: production.forks_ref, per_item: true, required: false}
     completion:
       - {type: artifact, key: creative_decision, schema: creative-decision, description: "Decision validates"}
       - {type: tool, fn: "briefs:check_decision", description: "Selection is a known concept and every alternative has a rejection reason"}
@@ -383,6 +384,7 @@ nodes:
       - {key: voice_direction, kind: json, schema: voice-direction, description: "Voice direction and engine", state_fields: {audio_spec: production.audio_spec}}
       - {key: voice, kind: audio, description: "Narration stem (WAV)", state_path: production.voice_ref}
       - {key: timings, kind: json, schema: timings, description: "Measured unit timings and planned silences", state_path: production.timings_ref}
+      - {key: voice_seams, kind: json, description: "Voice seam audit report", required: false}
     completion:
       - {type: artifact, key: timings, schema: timings, description: "Timings validate"}
       - {type: tool, fn: "audio:check_voice", description: "Every unit spoken in order; no clipping; no dropped speech; adult direction; listening status recorded"}
@@ -417,6 +419,8 @@ nodes:
       - {key: scenes, kind: json, schema: scenes, description: "Rendered scenes with timing", state_path: production.scenes_ref}
       - {key: text_layers, kind: json, schema: text-layers, description: "Everything drawn as text, logo or ring", state_path: production.text_layers_ref}
       - {key: scene_frames, kind: image, description: "Rendered scene frames", required: false}
+      - {key: layout_audit, kind: json, schema: layout-audit, description: "Optional DOM layout-integrity audit from the project N13 command", required: false}
+      - {key: inventory, kind: json, schema: inventory, description: "Optional sampled film inventory for baseline regression", required: false}
     completion:
       - {type: artifact, key: text_layers, schema: text-layers, description: "Text-layer manifest validates"}
       - {type: tool, fn: "scenes:check", description: "Every beat rendered, contiguous timing, a manifest for the audits"}
@@ -502,7 +506,7 @@ nodes:
     subgraph: review
     kind: review
     purpose: An independent critic judges the rendered film through Wei's five lenses and the craft rubric — hook, clarity, one message per frame, motion purpose, transitions, emotional arc, polish.
-    inputs: ["artifact:master", "artifact:scenes", "control:creative", "control:evaluation"]
+    inputs: ["artifact:master", "artifact:scenes", "artifact:inventory", "control:creative", "control:evaluation"]
     context: ["Score what the viewer sees: keyframes and the review cut, never source code", "Five lenses: executive, operations leader, sustainability leader, engineer, first-time viewer"]
     state_read: [production.master_ref, production.scenes_ref]
     state_write: [evaluation.reviews, evaluation.defects]
@@ -513,6 +517,7 @@ nodes:
     prompt: prompts/n16_creative_critique.md
     outputs:
       - {key: keyframes, kind: image, description: "Keyframes the critic judged", required: false}
+      - {key: baseline_strips, kind: json, description: "Manifest of baseline-vs-candidate contact strips", required: false}
     completion:
       - {type: review_complete, description: "Every MUST dimension scored; failed dimensions carry traced defects"}
     rubric: [creative]
@@ -531,7 +536,7 @@ nodes:
     subgraph: review
     kind: review
     purpose: Trace everything drawn to design.md — palette tokens, approved text pairs, type families, logo integrity, prohibited patterns — and judge cross-scene consistency.
-    inputs: ["artifact:text_layers", "artifact:assets", "control:design"]
+    inputs: ["artifact:text_layers", "artifact:assets", "artifact:inventory", "control:design"]
     context: ["Wei R06: typography inconsistent with the bookends is a defect", "Logos are supplied files, scaled uniformly, never regenerated"]
     state_read: [production.text_layers_ref, production.design_system_ref]
     state_write: [evaluation.reviews, evaluation.defects]
@@ -542,6 +547,7 @@ nodes:
     prompt: prompts/n17_design_compliance.md
     outputs:
       - {key: design_report, kind: json, description: "Token and logo trace"}
+      - {key: regression_report, kind: json, description: "Released-baseline regression check", required: false}
     completion:
       - {type: review_complete, description: "Review record complete"}
     rubric: [design-compliance]
@@ -560,7 +566,7 @@ nodes:
     subgraph: review
     kind: review
     purpose: Verify that every text is large enough, has enough contrast, is on screen long enough, sits inside the safe areas and never ghosts; that captions are speech-locked; and that nothing flashes.
-    inputs: ["artifact:text_layers", "artifact:captions", "artifact:timings", "artifact:master", "control:evaluation", "control:design"]
+    inputs: ["artifact:text_layers", "artifact:captions", "artifact:timings", "artifact:script", "artifact:master", "artifact:layout_audit", "control:evaluation", "control:design"]
     context: ["Wei R07 §6: strong contrast, large readable text, sufficient reading time, safe margins, no fast flashing, colour never the only cue", "Validate at presentation and laptop sizes"]
     state_read: [production.text_layers_ref, production.captions_ref, production.timings_ref]
     state_write: [evaluation.reviews, evaluation.defects]
@@ -571,6 +577,7 @@ nodes:
     prompt: prompts/n18_accessibility_legibility.md
     outputs:
       - {key: accessibility_report, kind: json, description: "Legibility, caption and flash audit"}
+      - {key: layout_report, kind: json, description: "Layout integrity audit report", required: false}
     completion:
       - {type: review_complete, description: "Review record complete"}
     rubric: [accessibility]
@@ -721,6 +728,10 @@ nodes:
     outputs:
       - {key: verification, kind: json, description: "Recomputed release checks"}
       - {key: release_summary, kind: markdown, description: "What Wei is asked to release"}
+      - {key: decision_digest, kind: markdown, description: "Numbered human-facing end-review digest"}
+      - {key: review_packet, kind: markdown, description: "Blind-then-reveal end-review packet"}
+      - {key: decision_template, kind: json, description: "Decision template for the single end-review answer"}
+      - {key: review_html, kind: html, description: "Self-contained review form", required: false}
     completion:
       - {type: tool, fn: "verify:check_final", description: "Every release condition recomputes true"}
     rubric: [release]

@@ -82,6 +82,58 @@ dimensions:
   cases:
     never: []
     always: []
+- id: LEG-OVERLAP
+  name: No overlapping or struck-through text
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: layout:check
+  threshold: 1.0
+  target: no text overlap, chip/card overlap or line through text in the N13 layout audit
+  rule: R-LAY-001
+  cases:
+    never: []
+    always: []
+- id: LEG-CLIP
+  name: No clipped text
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: layout:check
+  threshold: 1.0
+  target: no held text is clipped by a mask or window
+  rule: R-LAY-002
+  cases:
+    never: []
+    always: []
+- id: LEG-OFFSTAGE
+  name: No offstage text or panels
+  brief_dimension: legibility
+  level: MUST
+  check:
+    type: tool
+    fn: layout:check
+  threshold: 1.0
+  target: text and text-bearing panels stay inside the 1920×1080 stage
+  rule: R-LAY-003
+  cases:
+    never: []
+    always: []
+- id: LEG-EMPTY
+  name: No empty panels
+  brief_dimension: visual_coherence
+  level: MUST
+  check:
+    type: tool
+    fn: layout:check
+  threshold: 1.0
+  target: panels do not sit empty after their title appears
+  rule: R-LAY-004
+  cases:
+    never: []
+    always: []
 - id: LEG-RING
   name: Highlight duration
   brief_dimension: legibility
@@ -118,6 +170,19 @@ dimensions:
   threshold: 1.0
   target: 0 lags; mid-sentence lead ≤ 0.20 s; early clear ≤ 0.10 s; ≤ 20 cps
   rule: R-CAP-001
+  cases:
+    never: []
+    always: []
+- id: CAP-SCRIPT
+  name: Captions match approved script words
+  brief_dimension: accessibility
+  level: MUST
+  check:
+    type: tool
+    fn: layout:check_caption_script
+  threshold: 1.0
+  target: caption words equal script words after normalization
+  rule: R-CAP-003
   cases:
     never: []
     always: []

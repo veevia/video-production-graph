@@ -1,0 +1,34 @@
+# Animatic (quality workflow, N27; docs/quality-workflow.md). Timing, pace, pauses and music hit points are checked on
+# a scratch read and a music sketch before the full build; the decision to build on it stays a named human's.
+id: animatic
+name: Animatic
+reviewer: storyboard
+scale: tool dimensions pass/fail; human dimensions are decided by a named human
+dimensions:
+- id: ANI-TIMING
+  name: Timing inside the approved spec
+  brief_dimension: pacing
+  level: MUST
+  check:
+    type: tool
+    fn: animatic:check
+  threshold: 1.0
+  target: runtime within STORY.md; every beat within its share; pace, pauses and voice over music inside their animatic gates; every must-say term spoken; every hit point landed
+  rule: R-PRO-006
+  cases:
+    never: []
+    always: []
+- id: ANI-APPROVED
+  name: The animatic is a named human's decision
+  brief_dimension: narrative_clarity
+  level: MUST
+  check:
+    type: human
+  threshold: null
+  target: Wei approves the animatic at N27 before voice, assets and scenes are built
+  rule: R-PRO-002
+  cases:
+    never:
+    - Treat a passing animatic check as listening or taste approval
+    always:
+    - Record the named human's animatic decision

@@ -30,6 +30,11 @@ The library files, YAML, JSON schemas, prompts, rules and sample assets are load
 - **Workflow OS:** an optional workspace operations adapter discovers the existing workflow folder.
   vpg does not import it. Keeping that folder intact preserves the adapter.
 - **GitHub CLI:** maintainer publication only; never required to produce a film.
+- **Glassbox:** the optional local viewer uses Python's standard library on macOS/Linux, with
+  optional PyYAML. Its POSIX file locking does not support Windows. It uses no Copilot API,
+  frontend build, CDN or model service. Project and library roots are configured explicitly.
+- **Glassbox tests:** Playwright/Chromium and ffmpeg exercise the browser with fictional media;
+  Node.js 22+ runs the router test. These are not viewer runtime dependencies.
 
 ## Included project files
 
@@ -37,6 +42,9 @@ The standalone repository contains the complete runtime/tool source, graph, role
 six control templates, rubrics, default configuration, schemas, reusable rules, generated documentation,
 fictional sample (fixtures, pipeline, synthetic images, licensed font), portable tests, and optional
 preference scorer with synthetic tests. Generated docs are rebuilt against the public files.
+It also includes the quality-workflow overlay, spec templates, measurement/judging/telemetry tools,
+and the complete current Glassbox backend, frontend, producer CLI and synthetic tests.
+Historical UI snapshots and private design/review records remain in the authoring workspace.
 
 ## Deliberately not redistributed
 

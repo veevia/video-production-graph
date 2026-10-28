@@ -319,6 +319,23 @@
    "type": "string",
    "description": "Absolute workspace path on the machine where the history was recorded; citations are absolute paths under it."
   },
+  "archives": {
+   "type": "array",
+   "description": "Folders whose cited files a later commit removed (a project archive). A cited path missing on disk resolves from the commit before `removed_in`, only if it lies under `path`, exists there as a regular file or folder, is gone at `removed_in`, is untracked at HEAD, and `removed_in` is in the checked-out history, its remote-tracking upstream, or the configured remote's default branch that `kept_in` names (#183).",
+   "items": {
+    "type": "object",
+    "required": ["path", "removed_in"],
+    "additionalProperties": false,
+    "properties": {
+     "path": {"type": "string", "pattern": "^(?!.*\\n)(?!/)(?!.*(^|/)\\.{1,2}(/|$))(?!.*//).+/$", "description": "Folder relative to the git top level of workspace_root, with a trailing slash."},
+     "removed_in": {"type": "string", "minLength": 40, "maxLength": 40, "pattern": "^[0-9a-f]{40}$", "description": "Full sha of the commit that removed the cited files."},
+     "kept_in": {"type": "string", "pattern": "^(?!.*\\n)(?!.*\\.\\.)(?!refs/(?!remotes/))(?:refs/remotes/)?[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)+$", "description": "The default branch of a configured remote (<remote>/<branch>, exactly the ref its refs/remotes/<remote>/HEAD points to): a published copy of the repository that keeps `removed_in` when the checked-out history does not, e.g. after a copy was published with a fresh history. Any other branch, a local branch or an unconfigured remote vouches for nothing."},
+     "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+     "copy": {"type": "string", "description": "Where a local copy of the removed files is kept; informational, never read."},
+     "note": {"type": "string"}
+    }
+   }
+  },
   "wei_messages": {
    "type": "array",
    "description": "Index of the requester's messages cited as wei:Mn.",

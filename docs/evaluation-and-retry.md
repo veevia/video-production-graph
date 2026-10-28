@@ -56,6 +56,13 @@ A finding on a failed MUST dimension is never a nit. Whatever severity a reviewe
   on hold (`defect_held`). The gate blocks and says why; rework routes it only after a named human unblocks the gate.
 - Severity follows the latest review (`defect_severity_changed`); the latest smallest fix replaces the earlier one. The
   rubric sets a finding's level: a reviewer cannot make a MUST dimension's finding a SHOULD-level nit.
+- The reverse holds too: a SHOULD dimension's finding is a nit, including on a MUST dimension whose rule isn't adopted yet
+  (advisory). A dimension whose rule is inactive judges nothing, so its findings are dropped. A reviewer's P1–P3 is never
+  demoted or dropped silently (v1.8, #162):
+  - its description keeps the filed severity and the reason;
+  - the ledger records `finding_governed`;
+  - the review's verdict counts only what still blocks;
+  - N23 lists it as a warning with the steps that would make the dimension block.
 
 ## The seven-step failure procedure
 
@@ -82,16 +89,16 @@ A finding on a failed MUST dimension is never a nit. Whatever severity a reviewe
   - Unblocking resets the node's retry streak. The node re-runs, so any dependent that already passed is re-checked first: nothing stays built on output it replaces.
   - An escalation can sit on a node that is no longer BLOCKED: a rollback restored a checkpoint at which it was not, or an invalidation (an accepted configuration change, an upstream edit) sent it to re-check. Unblocking it never resets the node; the node and its dependents re-check (re-run, or memo-skip when unchanged), and the ledger names which of the two happened (the escalation records it when it happens).
   - For the loops whose traversal budget ran out, it also resets their counters. `--reset-loops` (only with an open loop escalation) gives every loop of the node a fresh budget in the same decision; the ledger and the release's human record list each loop it reset.
-  - Unblocking a legacy loop block whose escalation recorded no `edges` reverts what that plan spent, when the ledger shows the exact sequence it wrote: the rework cycle, the defects' status before the plan (from the checkpoint before it) and the traversal it charged each loop that was not spent. The ledger records `legacy_plan_reverted`, and `vpg status` shows what it will change before the unblock. Otherwise re-judging the same version would count each of those defects as a failed correction. A rollback made after such a block turns the repair off: the rollback restores its own state, and the cycle it carries forward stays spent.
+  - An engine before v1.5.1 applied a regeneration plan before checking its loop bounds. Unblocking a loop block such an engine wrote (its escalation records no `edges`) reverts what that plan spent, when the ledger shows the exact sequence it wrote: the rework cycle, the defects' status before the plan (from the checkpoint before it) and the traversal it charged each loop that was not spent. The ledger records `legacy_plan_reverted`, and `vpg status` shows what it will change before the unblock. Otherwise re-judging the same version would count each of those defects as a failed correction. A rollback made after such a block turns the repair off: the rollback restores its own state, and the cycle it carries forward stays spent.
   - It restarts every control-document re-check chain.
   - When the intake loop (E04) runs out, `--waive <gap id> --note "<reason>"` lets the film proceed past a resolvable gap. Only a named human can record the waiver, and only for a gap in the latest gap report, before the inputs freeze. The waiver is frozen with the inputs and ledgered (`gap_waived`). While the gap is open, every later human gate and task packet names it.
   - `--reset-budget` restarts the rework-cycle and repeated-defect counters, and the ledger records it.
   - A rollback (also human-only) never restores a spent budget.
 - **Loop budgets are checked before anything moves.** A node whose result needs a loop with no traversal left blocks without traversing any of its loops: a regeneration plan then spends no rework cycle and puts no defect in rework. One escalation names every spent loop and lists the node's loop budgets, and it says when another loop of the node has no traversal left either. `vpg status` prints each traversed loop's count against its bound, and the rework cycles against `max_rework_cycles`.
 
-## Budgets that follow quality
+## Budgets that follow quality (v1.6)
 
-A loop bound measures effort, not quality. When a rework loop reaches its traversal bound right after a review round resolved multiple defects, budgets can follow quality via project settings (`vpg/budget.py`):
+A loop bound measures effort, not quality. On the SRA run, rework loop E43 reached its bound of 3 just after cycle 4 had resolved 15 defects, and the run sat blocked for a day while the film kept improving outside the graph. So budgets are project settings (`vpg/budget.py`):
 
 ```yaml
 loop_budget:
@@ -117,13 +124,21 @@ loop_budget:
   - Resolved, new and persisting are the version's own: the defects its comparisons resolved, those first seen at it, and those it saw persist.
   - Each gate also records its own round (`trend.round`) for the audit, and each involved defect's severity at the time (`trend.severities`). A defect's severity follows its latest review, so a later downgrade can't rewrite an earlier round.
   - `vpg status` prints the last rounds and whether the latest one converged.
+  - A round that re-opened finished work is marked "re-opened after vN passed" (v1.8, #164), when a gate passed with
+    none open first:
+    - the version itself, re-gated after it passed, when a human's end-review feedback, `vpg feedback` or an accepted
+      configuration put new findings on its own row;
+    - the next version, when it was built after the previous one passed (`vpg invalidate`).
+
+    A provisional pass that left defects open doesn't count. When such a round isn't converging, its reason says
+    nothing was open before it, instead of "the same defects persist". Whether it converges is decided as for any round.
   - Every escalation file has a "Quality trend" section, and its ledger event carries the last two rounds.
-  - Earlier rounds without a stored snapshot are marked "estimated". Their open count is the gate's own; resolved and new are counted from current defects, and their severity split is taken from the gate's reason when it lists every open defect.
+  - Rounds recorded before v1.6 are marked "estimated". Their open count is the gate's own; resolved and new are counted from today's defects. Their severity split is taken from the gate's reason, which lists each open defect with its severity at the time ("blocking defects open: D043 P2 …"), when it lists them all.
 - **Granted budget is kept.** A rollback never takes back an extension, as it never restores a spent budget.
 
-## Independent pre-flight (optional)
+## Independent pre-flight (v1.6, optional)
 
-`preflight: {nodes: [n14_video_assembly], when: rework}` in `vpg.project.yaml` holds a listed node's finished attempt before the graph spends a review round on it. `when: always` holds the first build too.
+`preflight: {nodes: [n14_video_assembly], when: rework}` in `vpg.project.yaml` holds a listed node's finished attempt before the graph spends a review round on it. `when: always` holds the first build too. This is how the SRA side chat took v16 to v19 through an independent reviewer; the graph now does it as a step.
 
 - **Which nodes:** only producers. A review, a gate, the freeze, the package node, a human-gated node or a per-item node is refused, because it has already acted when it finishes, or a human decides it.
 - **What is held:** the attempt is judged (outputs registered, completion checks passed), but no version is cut and nothing downstream starts. The node waits (`WAITING_RUNTIME`) on a packet, `.vpg/tasks/<node>-a<N>-preflight.md`. The packet lists:
@@ -138,13 +153,13 @@ loop_budget:
 - **Pass:** the attempt passes as it would have (a version is cut, the reviews run), and its result records who checked it.
 - **Revise:** a failed attempt with the reviewer's notes as its failure reasons, so the producer's next packet carries them. No version or review round is spent.
   - Revisions escalate after `preflight.max_revisions` (default: the node's `retry.max_attempts`). A revision is a quality iteration, so a project may allow more of them than technical failures; the bound stays as the runaway guard.
-  - Pre-flight revisions and technical failures count apart (`preflight_revisions` and `fail_streak`, both reset by a pass). A technical failure after revisions is charged to the node's retry budget only, and a revised attempt (which completed its checks) ends a run of technical failures.
+  - Since v1.7 the two count apart (`preflight_revisions` and `fail_streak`, both reset by a pass). A technical failure after revisions is charged to the node's retry budget only, and a revised attempt (which completed its checks) ends a run of technical failures.
   - The revised attempt's files stay registered under their attempt number until the next attempt replaces them. Nothing downstream runs on them, because the node has not passed.
   - After a revision, or when an invalidation drops a pending hold, the next dispatch re-runs the node. It never memo-passes on those unjudged files.
 - **Records:** the ledger has `preflight_requested`, `preflight_passed`, `preflight_revise`, and `preflight_dropped` (an invalidation sent the attempt back). The release summary lists every verdict.
 - **The pre-flight adds a check; it never replaces the six reviews,** which still judge every version.
 
-## Review binding and independence
+## Review binding and independence (v1.7)
 
 - A review node's packet lists the files it must judge, the version's registered bytes, and a `"reviewed": {key: sha256}`
   block to copy into review.json. Per-item inputs (e.g. assets) bind as one digest of their sorted hashes.
@@ -153,10 +168,32 @@ loop_budget:
 - `vpg.project.yaml` `reviews: {binding: warn | require, independence: warn | require}` (default warn). Under require,
   a review without the block is refused, and so is one submitted by an identity that produced what it judges: the
   submitter of those artifacts' attempts, or their node's bound agent.
-- Each review records `actor`, `inputs`, `reviewed` and `independent`. N23 warns about unbound and non-independent
-  reviews of the released version.
+- Each review records `actor`, `inputs`, `reviewed` and `independent`. N23 warns about unbound, non-independent and
+  pre-v1.7 reviews of the released version.
 
-## Agents' notes and triage
+## Provisional autonomy and end-review items (v1.8 batch 1)
+
+- `humans: [...]` makes human-only commands accept only exact declared names, or structured relays:
+  `--actor agent:<id> --on-behalf-of <human> --instruction "…"`. Relays are recorded as the agent's act with
+  `principal`, `instruction`, optional `instruction_at` (ISO 8601 with timezone, e.g. 2026-10-15T17:00:00-05:00) and
+  `relayed=true`. A relay flag given but blank is refused.
+- `autonomy: {mode: provisional, principal: <human>}` lets N03/N04/N06/N09 pass provisionally when privacy is declared,
+  reviews require binding and independence, and the loop budget extends while converging. N23 refuses release until every
+  provisional approval is confirmed or rejected.
+- N23 release approval must acknowledge every numbered warning and sign every pending human-judged dimension. A relayed
+  signoff uses the same relay fields and is listed separately from the human's own act.
+- In provisional mode, review-gate escalations that do not require a human-only act become `end_review_item`s. The run
+  continues to N23, where the release summary lists those items for the human end review. Gated mode still blocks. Batch
+  1 does not search for an alternative producer; it records that the traced producer already retried. A real
+  alternative-producer search is deferred to a later v1.8 batch.
+- To adopt this batch in a live v1.7 run, do it at the next end review: accept the engine/config change with
+  `vpg accept-config`, then add `humans:`, `autonomy:`, declared privacy names (or `names: none` with a reason), required
+  review policy and an extending `loop_budget` to `vpg.project.yaml`.
+- v1.8 batch 2.1 ships the decision digest and review-record changes, while submit-time `privacy.text_scan` and N14
+  `privacy.n14_hold` remain experimental and default off pending a dedicated privacy batch. N23 remains the release gate
+  and always performs its own privacy scan.
+
+## Agents' notes and triage (v1.7)
 
 - A named human's feedback re-opens a passed gate, and N21 interprets it on the next run.
 - An agent's note (`vpg feedback --actor agent:<id>`) re-opens nothing. It is recorded with status `triage` and a hold:
@@ -164,6 +201,16 @@ loop_budget:
   release. `vpg feedback --triage F --accept|--dismiss --reason … --actor <human>` rules on it (an agent granted
   `feedback-triage` may, never the note's author). Accepted, it becomes open feedback that counts as the human's (N21 can't
   close it with no action); dismissed, it is closed with the reason.
+
+## Look and animatic gates (v1.9, quality workflow)
+
+In the [quality workflow](quality-workflow.md), N26 and N27 are completion-checked before their human gates: the look's
+style frames are measured per role against the approved look gates and the pinned benchmark registry, and the
+animatic's timing against STORY.md, VOICE.md, MUSIC.md and the animatic gates. A failure fails the attempt with the gate,
+rule ids, role, value and envelope in the next packet; three failures escalate. A gate that cannot be judged blocks like
+a failure. N15 adds the spec's build gates and the ratchet (GAT-SPEC, GAT-RATCHET), advisory until R-REG-001 is
+adopted. A project may let a relaying agent pass N26 and N27 provisionally only with
+`autonomy.provisional_gates_extra`.
 
 ## Human-review checkpoints
 
@@ -175,7 +222,7 @@ loop_budget:
 | N09 | Visual system and production spec | design.md, production.md |
 | N23 | Release, or changes requested with feedback | — |
 
-None of these decisions can be delegated: each covers human-judged dimensions, or, for N23, the reviewed film.
+None of these decisions can be delegated (v1.7): each covers human-judged dimensions, or, for N23, the reviewed film.
 Some other human-only acts can be, to one named agent until a date, with `vpg grant`, but never accept-config, and never
 over a hold or a defect that needs a human; see the SOP.
 

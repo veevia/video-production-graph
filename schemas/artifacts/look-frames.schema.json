@@ -1,0 +1,44 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/look-frames",
+ "title": "look-frames",
+ "description": "The look gate's manifest (quality workflow, N26): 3 to 5 style frames, one per DESIGN.md role, and a motion test, all rendered from one version of the spec family. Paths are relative to this file and stay in the attempt's work folder.",
+ "type": "object",
+ "properties": {
+  "spec_hash": {
+   "type": "string",
+   "minLength": 64,
+   "maxLength": 64,
+   "description": "`vpg spec hash spec/` when the frames were rendered"
+  },
+  "frames": {
+   "type": "array",
+   "minItems": 3,
+   "maxItems": 5,
+   "items": {
+    "type": "object",
+    "properties": {
+     "role": {"type": "string", "minLength": 1},
+     "file": {"type": "string", "minLength": 1},
+     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+     "beat": {"type": "string"},
+     "notes": {"type": "string"}
+    },
+    "required": ["role", "file"],
+    "additionalProperties": true
+   }
+  },
+  "motion_test": {
+   "type": "object",
+   "properties": {
+    "file": {"type": "string", "minLength": 1},
+    "shows": {"type": "array", "items": {"type": "string"}}
+   },
+   "required": ["file"],
+   "additionalProperties": true
+  },
+  "renderer": {"type": "string"}
+ },
+ "required": ["spec_hash", "frames", "motion_test"],
+ "additionalProperties": true
+}

@@ -64,6 +64,18 @@ def test_human_record_pairs_each_answer_with_its_own_prompt_and_flags_it():
     assert resolved["reason"].startswith("CR-001") and "no_reason" not in resolved["codes"]
     assert rows[("invalidate", "n01")]["codes"] == ["no_actor"]
     assert rows[("decision", "n06 → approved")]["codes"] == ["no_reason"]
+
+
+def test_human_record_includes_structured_relays_as_agent_acts():
+    rows = human_record([
+        _ev("00:00", "awaiting_human", node="n04", approver="Wei"),
+        _ev("00:05", "decision", node="n04", decision="approved", actor="agent:runner", human=True, reason="proceed",
+            relayed=True, principal="Wei", instruction="approve this and keep going", instruction_at="2026-09-30T12:00:00Z"),
+    ])
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["actor"] == "agent:runner" and row["principal"] == "Wei" and row["instruction"].startswith("approve")
+    assert "relayed" in row["codes"] and "delegation" not in row["codes"]
     assert FAST_S == 60
 
 
@@ -146,6 +158,46 @@ def test_release_summary_lays_out_the_human_record_and_warnings(tmp_path):
     assert any("privacy list entries #2 are too short" in w for w in report["warnings"])
     known = ("no current master", "deliverables not produced")                                 # the mini fixture renders no film
     assert all(p.startswith(known) for p in res.data["problems"])                              # warnings never block
+
+
+def test_release_writes_blind_review_packet_template_and_html(tmp_path):
+    proj = _human_gated_project(tmp_path)
+    eng = Engine(proj, executor=FnExecutor())
+    eng.run(max_steps=200)
+    eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+    eng.run(max_steps=200)
+    fork_dir = proj / "work/forks"
+    fork_dir.mkdir(parents=True)
+    fork = {
+        "fork_id": "F-001",
+        "fork_type": "concept",
+        "node": "n06_creative_direction",
+        "version": eng.state.runtime.current_version,
+        "dims": [{"id": "CON-FIT", "measured": False}],
+        "candidates": [
+            {"id": "A", "label": "Alpha", "scores": {"CON-FIT": 5}, "passes_rubric": True, "rationale": "strong"},
+            {"id": "B", "label": "Beta", "scores": {"CON-FIT": 3}, "passes_rubric": True, "rationale": "useful"},
+        ],
+        "scored": {"model_version": 0, "predicted": {"A": 0.7, "B": 0.3}, "confidence": 0.8, "band": "flag", "build": ["A", "B"]},
+    }
+    (fork_dir / "F-001.json").write_text(json.dumps(fork))
+    eng.state.production.forks_ref["F-001"] = "work/forks/F-001.json"
+    ctx = eng._context(eng.node("z_done"), 1, "fp", "tok")
+
+    verify.final(ctx)
+
+    packet = (ctx.workdir / "review-packet.md").read_text()
+    template = json.loads((ctx.workdir / "decision.template.json").read_text())
+    html = (ctx.workdir / "review.html").read_text()
+    blind = packet.split("## 9. Reveal", 1)[0]
+    assert "## 2. Blind fork candidates" in packet and "## 9. Reveal" in packet
+    assert "scores" not in blind and "0.7" not in blind
+    assert "Current model: v" in packet and "Predicted probabilities" in packet and "0.7" in packet
+    assert template["forks"]["F-001"]["ranking"] == []
+    assert template["forks"]["F-001"]["ratings"] == {}
+    assert template["forks"]["F-001"]["why"] == ""
+    assert template["forks"]["F-001"]["sha256"]
+    assert "Export decision.json" in html and "Reveal scores" in html
 
 
 def test_release_warnings_report_drift_redaction_counts_and_a_batch_of_three_reviews(tmp_path):

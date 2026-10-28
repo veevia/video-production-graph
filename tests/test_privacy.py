@@ -276,7 +276,12 @@ def test_release_problem_fails_closed_never_writes_names_and_never_reuses_a_repo
         assert "cannot be ruled out" in privacy.release_problem(ctx, master, sha)
     (tmp_path / "names.json").write_text(json.dumps({"Names": [NAME]}))
     assert "name list is unusable" in privacy.release_problem(ctx, master, sha)
-    assert privacy.release_problem(NS(project_dir=tmp_path, config={}, workdir=tmp_path / "w"), master, sha) is None
+    assert "no privacy name list is declared" in privacy.release_problem(NS(project_dir=tmp_path, config={}, workdir=tmp_path / "w"), master, sha)
+    assert "privacy.reason is missing" in privacy.release_problem(
+        NS(project_dir=tmp_path, config={"privacy": {"names": "none"}}, workdir=tmp_path / "w"), master, sha)
+    assert privacy.release_problem(
+        NS(project_dir=tmp_path, config={"privacy": {"names": "none", "reason": "synthetic sample"}}, workdir=tmp_path / "w"),
+        master, sha) is None
 
 
 def test_streaming_fails_closed_on_a_failing_decoder_or_a_second_video_stream(tmp_path, monkeypatch):

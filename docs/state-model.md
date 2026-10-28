@@ -14,7 +14,7 @@
 | `history` + `.vpg/ledger.jsonl` | **Historical memory**: versions, decisions, approvals (human, dry-run or under a grant, with the outputs decided on), retries, checkpoints, change requests (open, approved, rejected, deferred with their revisit trigger), delegation grants; the hash-chained event log, where every event of an act under a grant carries the grant and its grantor | Append-only. |
 | `knowledge` | **Reusable cross-project knowledge**, by reference: rule-base path, version, sha256, enforced and advisory rule ids, proposals | Read-only during a run. Changed only through `vpg memory apply` by a human. |
 | `runtime` | Execution control: node status, attempts, failure streak, fingerprints, dispatch tokens, traversals, batches, rework cycles, escalations | The engine. |
-| `controls` | Registry of the control documents: status, version, accepted and approved hashes, snapshot | The engine; see [control access](control-access.md). |
+| `controls` | Registry of the control documents: status, version, accepted and approved hashes, snapshot. A quality-workflow run also registers the spec family (`spec-design` … `spec-gates`, kept in `spec/`) | The engine; see [control access](control-access.md) and [quality control access](quality-control-access.md). |
 
 ## Resumability
 
@@ -28,14 +28,14 @@
   project directory, or `command_deps`), so a pipeline edit re-runs it. Other nodes' fingerprints do not include it.
 - A node's fingerprint also covers `files:<pattern>` inputs: N01 fingerprints `files:sources/**`, so adding a source re-opens intake.
 - A review's fingerprint includes `runtime.config_sha256` (`judged_under`), so accepting a configuration change re-runs
-  every review instead of carrying its verdict forward, and so does a rollback to a checkpoint judged under another one.
+  every review instead of carrying its verdict forward, and so does a rollback to a checkpoint judged under another one (v1.5).
 - `NodeRuntime.fingerprint_scheme` and `last_pass_scheme` record the fingerprint scheme (`engine.FINGERPRINT_SCHEME`) a
-  dispatch and a pass were fingerprinted under. `NodeRuntime.settled_fingerprint` is the
+  dispatch and a pass were fingerprinted under; none means before v1.5. `NodeRuntime.settled_fingerprint` is the
   dispatch fingerprint without the rework defects it was sent to fix, which is what a pass records, so an unchanged
   node memo-skips after a fix. `vpg accept-config`, and a rollback to a
   checkpoint judged under another configuration, re-derive only older passes.
 - A `defects:rework` input covers the defects routed to the node, which are all its context holds; `defects:open` and
-  `defects:all` cover every defect. `vpg accept-config` carries passes recorded under an earlier scheme over when
+  `defects:all` cover every defect (v1.5). `vpg accept-config` carries passes recorded under an earlier scheme over when
   their checkpoint reproduces them (`passes_carried_over`); `--adopt-code` keeps a pass that predates code fingerprints.
 - At the freeze, each local source that still matches its registered hash is copied, read-only, to `.vpg/sources/<sha256>`
   (`sources_kept`). `vpg status` checks frozen sources and warns, by id, on a missing, changed, hard-linked or symbolically

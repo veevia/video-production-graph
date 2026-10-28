@@ -9,3 +9,7 @@ __pycache__/
 work/
 .vpg/
 knowledge/preferences/*/
+apps/glassbox/.impeccable/
+apps/glassbox/.pytest-tmp/
+apps/glassbox/.verify-data*/
+apps/glassbox/.ui-check/

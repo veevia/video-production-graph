@@ -1,0 +1,30 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/layout-audit",
+ "title": "layout-audit",
+ "type": "object",
+ "properties": {
+  "film": {"type": "string"},
+  "fps": {"type": "number"},
+  "samples": {"type": "integer", "minimum": 0},
+  "runs": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "kind": {"enum": ["TEXT_OVERLAP", "BOX_OVERLAP", "LINE_THROUGH_TEXT", "TEXT_CLIPPED", "OFFSTAGE", "EMPTY_PANEL"]},
+     "from": {"type": "number", "minimum": 0},
+     "to": {"type": "number", "minimum": 0},
+     "dur": {"type": "number", "minimum": 0},
+     "text": {"type": "string"},
+     "other": {"type": "string"},
+     "value": {"type": "number"}
+    },
+    "required": ["kind", "from", "to", "dur", "text", "other", "value"],
+    "additionalProperties": true
+   }
+  }
+ },
+ "required": ["film", "fps", "samples", "runs"],
+ "additionalProperties": true
+}

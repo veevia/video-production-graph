@@ -1,3 +1,20 @@
+---
+type: decision
+schema_version: decision-record/v2
+record_type: adr
+id: vpg-0001
+status: accepted
+light: yellow
+trigger: "The first real production run needs something the engine lacks: execution across machines, a durable remote queue, or cycles in Workflow OS job contracts. Re-decide then."
+expiry: 2026-12-31
+owner: Wei Wei
+consultation: solo
+created: 2026-09-26
+updated: 2026-09-26
+slug: standalone-graph-engine
+tags: [type/decision, record/adr, status/accepted, light/yellow, scope/workflow, purpose/video-production]
+---
+
 # 0001 — A standalone graph engine for video production
 
 **TL;DR:** Video production runs on a small, standalone Python graph engine (`vpg`: the standard library, pydantic, PyYAML and jsonschema; no service) that borrows LangGraph's vocabulary and Workflow OS's state names. It does not extend Workflow OS or depend on an orchestration framework. 🟡 Yellow until a real production calibrates it.

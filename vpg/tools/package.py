@@ -49,9 +49,17 @@ def build(ctx) -> NodeResult:
         if ctx.control_path(doc).exists():
             (pkg / "controls").mkdir(exist_ok=True)
             shutil.copy2(ctx.control_path(doc), pkg / "controls" / f"{doc}.md")
+    for doc in (d for d in getattr(ctx.controls, "docs", []) if d.startswith("spec-")):   # a quality run's approved spec
+        if ctx.control_path(doc).is_file():
+            (pkg / "spec").mkdir(exist_ok=True)
+            shutil.copy2(ctx.control_path(doc), pkg / "spec" / ctx.control_path(doc).name)
     rs = ctx.artifact_path("release_summary")
     if rs:
         shutil.copy2(rs, pkg / "RELEASE-SUMMARY.md")
+    from ..freshness import fresh_current
+    inv_recs = fresh_current(ctx, "inventory")   # never a stale inventory: the next run's baseline comes from here
+    if inv_recs:
+        shutil.copy2(ctx.project_dir / inv_recs[-1].path, ev / "inventory.json")
     manifest = {"schema": "vpg-package/v1", "project": st.project.id, "version": v, "files": []}
     for p in sorted(pkg.rglob("*")):
         if p.is_file():

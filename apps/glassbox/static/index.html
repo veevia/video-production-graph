@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Glass Box</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <button type="button" class="skip-link" id="skip-link">Skip to content</button>
+  <div id="shell">
+    <header class="masthead" id="masthead">
+      <div class="mast-inner">
+        <nav class="mast-nav" aria-label="Primary">
+          <a href="#/" data-nav="inbox" id="nav-inbox">Inbox<span class="count zero" id="nav-count" aria-hidden="true"></span></a>
+          <a href="#/films" data-nav="films">Films</a>
+          <a href="#/activity" data-nav="activity">Activity</a>
+        </nav>
+        <a class="wordmark" href="#/" aria-label="Glass Box, go to the Inbox">Glass Box</a>
+        <div class="mast-tools">
+          <div class="search" id="search"></div>
+          <button type="button" class="help-btn" id="help-btn" aria-haspopup="dialog">Help</button>
+        </div>
+      </div>
+      <div class="scanline" id="scanline" hidden></div>
+    </header>
+    <main id="main" tabindex="-1">
+      <p class="loading">Loading the films and decisions&#8230;</p>
+    </main>
+    <footer class="footer" id="footer">
+      <span class="label">Read-only view of the projects</span>
+      <span id="footer-text">Your notes are saved on this Mac, outside the projects. Where: Help.</span>
+      <span id="stale" class="stale" hidden>Showing the last data received; the refresh failed.</span>
+    </footer>
+  </div>
+  <div id="drawer-root"></div>
+  <div id="live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

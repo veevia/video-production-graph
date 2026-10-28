@@ -5,7 +5,8 @@ No workspace, model API, MCP server or custom agent is needed for the engine.
 See the [worker capabilities](skill-bindings.md) and [extension guide](extension-guide.md).
 
 1. Run `python -m vpg validate`, `python -m vpg docs --check` and `python -m vpg dry-run`.
-2. Initialize with `python -m vpg init /absolute/path/to/film --name "Film"`.
+2. Initialize with `python -m vpg init /absolute/path/to/film --name "Film"` (add `--workflow quality` for the look
+   and animatic gates; a [benchmark registry](quality-workflow.md#adopting-it) must exist before N03 approves the bar).
 3. Put the requester's actual brief in `sources/brief.md`; add authorized product evidence and brand
    authority. A brief alone does not satisfy source validation.
 4. Bind production commands in `vpg.project.yaml`. The sample demonstrates asset, voice, scene and
@@ -22,6 +23,16 @@ See the [worker capabilities](skill-bindings.md) and [extension guide](extension
    `change-request`. Engine/config changes require `accept-config` and fresh review.
 10. Before handoff, check the package manifest, `ledger-verify`, release approval, outstanding human
     dimensions and learning proposal. Applying learning to the reusable rule base needs human approval.
+
+## Generated files
+
+vpg's documented commands write no bytecode: importing `vpg` sets `sys.dont_write_bytecode` for the process and removes
+the cache its own import wrote. Pytest loads the package-root `conftest.py`, which does the same, before any test, and
+`pytest.ini` turns off pytest's cache, so `--lf` and `--ff` have no effect. Commands a production binds run in their own
+processes and keep their own settings.
+
+`python -m vpg docs` also generates the quality workflow, `graph/workflow-quality.yaml`, and its catalogs
+(`docs/quality-*`). Edit `graph/workflow.yaml` or `vpg/quality.py`, never the generated files.
 
 ## Privacy and publication
 

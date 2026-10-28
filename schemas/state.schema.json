@@ -39,6 +39,138 @@
      "default": "",
      "title": "Grant",
      "type": "string"
+    },
+    "principal": {
+     "default": "",
+     "title": "Principal",
+     "type": "string"
+    },
+    "instruction": {
+     "default": "",
+     "title": "Instruction",
+     "type": "string"
+    },
+    "instruction_at": {
+     "default": "",
+     "title": "Instruction At",
+     "type": "string"
+    },
+    "relayed": {
+     "default": false,
+     "title": "Relayed",
+     "type": "boolean"
+    },
+    "provisional": {
+     "default": false,
+     "title": "Provisional",
+     "type": "boolean"
+    },
+    "confirmed_at": {
+     "default": "",
+     "title": "Confirmed At",
+     "type": "string"
+    },
+    "superseded_at": {
+     "default": "",
+     "title": "Superseded At",
+     "type": "string"
+    },
+    "rejected_at": {
+     "default": "",
+     "title": "Rejected At",
+     "type": "string"
+    },
+    "rejection_feedback": {
+     "default": "",
+     "title": "Rejection Feedback",
+     "type": "string"
+    },
+    "warning_acks": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Warning Acks",
+     "type": "array"
+    },
+    "signoffs": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Signoffs",
+     "type": "array"
+    },
+    "pre_lock_controls": {
+     "additionalProperties": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "title": "Pre Lock Controls",
+     "type": "object"
+    },
+    "confirmed_by": {
+     "default": "",
+     "title": "Confirmed By",
+     "type": "string"
+    },
+    "confirmed_principal": {
+     "default": "",
+     "title": "Confirmed Principal",
+     "type": "string"
+    },
+    "confirmed_instruction": {
+     "default": "",
+     "title": "Confirmed Instruction",
+     "type": "string"
+    },
+    "confirmed_instruction_at": {
+     "default": "",
+     "title": "Confirmed Instruction At",
+     "type": "string"
+    },
+    "confirmation_relayed": {
+     "default": false,
+     "title": "Confirmation Relayed",
+     "type": "boolean"
+    },
+    "rejected_by": {
+     "default": "",
+     "title": "Rejected By",
+     "type": "string"
+    },
+    "rejected_principal": {
+     "default": "",
+     "title": "Rejected Principal",
+     "type": "string"
+    },
+    "rejected_instruction": {
+     "default": "",
+     "title": "Rejected Instruction",
+     "type": "string"
+    },
+    "rejected_instruction_at": {
+     "default": "",
+     "title": "Rejected Instruction At",
+     "type": "string"
+    },
+    "rejection_relayed": {
+     "default": false,
+     "title": "Rejection Relayed",
+     "type": "boolean"
+    },
+    "evidence": {
+     "default": "",
+     "title": "Evidence",
+     "type": "string"
+    },
+    "expires_at": {
+     "default": "",
+     "title": "Expires At",
+     "type": "string"
+    },
+    "expiry_noted_at": {
+     "default": "",
+     "title": "Expiry Noted At",
+     "type": "string"
     }
    },
    "required": [
@@ -128,6 +260,13 @@
      ],
      "title": "Status",
      "type": "string"
+    },
+    "named_files": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Named Files",
+     "type": "object"
     }
    },
    "required": [
@@ -403,6 +542,11 @@
      "default": null,
      "title": "Approved At"
     },
+    "provisional": {
+     "default": false,
+     "title": "Provisional",
+     "type": "boolean"
+    },
     "snapshot": {
      "anyOf": [
       {
@@ -533,6 +677,11 @@
      "title": "Status",
      "type": "string"
     },
+    "resolved_by": {
+     "default": "",
+     "title": "Resolved By",
+     "type": "string"
+    },
     "needs_human": {
      "default": false,
      "title": "Needs Human",
@@ -563,6 +712,11 @@
     "human_hold": {
      "default": "",
      "title": "Human Hold",
+     "type": "string"
+    },
+    "rework_gate": {
+     "default": "",
+     "title": "Rework Gate",
      "type": "string"
     }
    },
@@ -600,6 +754,114 @@
     "sha256"
    ],
    "title": "Deliverable",
+   "type": "object"
+  },
+  "DirectRun": {
+   "additionalProperties": false,
+   "description": "v1.9: a build made outside the governed path (a node's work run directly while the graph waited), recorded so it is\nobservable. Its outputs are hashed but never registered as artifacts: no gate or review ever judged them.",
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "node": {
+     "title": "Node",
+     "type": "string"
+    },
+    "actor": {
+     "title": "Actor",
+     "type": "string"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    },
+    "at": {
+     "title": "At",
+     "type": "string"
+    },
+    "started_at": {
+     "default": "",
+     "title": "Started At",
+     "type": "string"
+    },
+    "label": {
+     "default": "",
+     "title": "Label",
+     "type": "string"
+    },
+    "command": {
+     "default": "",
+     "title": "Command",
+     "type": "string"
+    },
+    "exit_code": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Exit Code"
+    },
+    "duration_s": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Duration S"
+    },
+    "log": {
+     "default": "",
+     "title": "Log",
+     "type": "string"
+    },
+    "outputs": {
+     "additionalProperties": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object"
+     },
+     "title": "Outputs",
+     "type": "object"
+    },
+    "code": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Code",
+     "type": "object"
+    },
+    "inputs": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Inputs",
+     "type": "object"
+    },
+    "version": {
+     "default": 0,
+     "title": "Version",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "id",
+    "node",
+    "actor",
+    "reason",
+    "at"
+   ],
+   "title": "DirectRun",
    "type": "object"
   },
   "Escalation": {
@@ -753,6 +1015,9 @@
      "enum": [
       "open",
       "interpreted",
+      "resolved_pending_confirmation",
+      "confirmed",
+      "reopened",
       "triage",
       "dismissed"
      ],
@@ -1103,6 +1368,13 @@
      },
      "title": "Grants",
      "type": "array"
+    },
+    "direct_runs": {
+     "items": {
+      "$ref": "#/$defs/DirectRun"
+     },
+     "title": "Direct Runs",
+     "type": "array"
     }
    },
    "title": "HistoryState",
@@ -1415,6 +1687,23 @@
      },
      "title": "Failures",
      "type": "array"
+    },
+    "task_notes": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Task Notes",
+     "type": "array"
+    },
+    "task_notes_by_attempt": {
+     "additionalProperties": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": "Task Notes By Attempt",
+     "type": "object"
     },
     "pre_findings": {
      "items": {
@@ -1790,6 +2079,13 @@
      "default": null,
      "title": "Captions Ref"
     },
+    "forks_ref": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Forks Ref",
+     "type": "object"
+    },
     "config": {
      "additionalProperties": true,
      "title": "Config",
@@ -2151,6 +2447,16 @@
      "title": "Config Parts",
      "type": "object"
     },
+    "accepted_policy": {
+     "additionalProperties": true,
+     "title": "Accepted Policy",
+     "type": "object"
+    },
+    "accepted_config": {
+     "additionalProperties": true,
+     "title": "Accepted Config",
+     "type": "object"
+    },
     "loop_extra": {
      "additionalProperties": {
       "type": "integer"
@@ -2168,6 +2474,21 @@
       "type": "integer"
      },
      "title": "Grant Versions",
+     "type": "object"
+    },
+    "end_review_items": {
+     "items": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "title": "End Review Items",
+     "type": "array"
+    },
+    "preference_model_pins": {
+     "additionalProperties": {
+      "type": "integer"
+     },
+     "title": "Preference Model Pins",
      "type": "object"
     }
    },

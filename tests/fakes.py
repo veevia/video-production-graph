@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from vpg.context import NodeResult
+from vpg.evaluation import review_bindings
 from vpg.tools._common import finding
 
 
@@ -20,6 +21,16 @@ def review_check(ctx):
     if (ctx.project_dir / "flags" / "defect").exists():
         return NodeResult(findings=[finding("test:size", "LEG-SIZE", "P2", "label is 14px", traced="d_build", key="d_build", fix="enlarge")])
     return NodeResult()
+
+
+def review_check_bound(ctx):
+    res = review_check(ctx)
+    current = review_bindings(ctx.node, ctx.current)
+    if "d_build" in current:
+        res.review = {"reviewed": {"d_build": current["d_build"][:16]}}
+    else:
+        res.review = {"reviewed": {k: v[:16] for k, v in current.items()}}
+    return res
 
 
 def review_routes(ctx):

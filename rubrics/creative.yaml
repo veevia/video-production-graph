@@ -129,6 +129,36 @@ dimensions:
     - Overly dramatic scoring
     always:
     - Leave a beat of space after the key statement
+- id: REG-VERDICT
+  name: No beat is worse than the released baseline
+  brief_dimension: visual_coherence
+  level: SHOULD
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: when regression.baseline.master is configured, cite strip frames and confirm no beat regressed
+  rule: R-REG-005
+  cases:
+    never:
+    - A baseline strip frame shows the released film was clearer than the candidate
+    always:
+    - Cite baseline-vs-candidate strip frames for every worse-or-equal judgment
+- id: VOI-PRONUNCIATION
+  name: Pronunciation and word endings
+  brief_dimension: voice_quality
+  level: SHOULD
+  check:
+    type: review
+    scale: 1–5
+  threshold: 4
+  target: the reviewer hears complete words with no clipped endings; VOI-SEAMS must already be measured
+  rule: R-VOI-003
+  cases:
+    never:
+    - A word ending or breath is cut off at a narration seam
+    always:
+    - Cite the seam report before scoring the voice row
 - id: VOI-ADULT
   name: Adult professional voice (human listening)
   brief_dimension: voice_quality

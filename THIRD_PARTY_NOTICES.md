@@ -14,6 +14,11 @@ Python dependencies are installed separately, not vendored: pydantic, PyYAML, js
 Pillow and pytest. ffmpeg, ffprobe and Tesseract are separately installed system tools.
 Their own licenses apply. macOS `say` is provided by the operating system and is not distributed.
 
+Glassbox's original backend, frontend and documentation are covered by MIT. It references system
+fonts but bundles no web fonts, CDN scripts or external design-reference files. Playwright and its
+Chromium download are optional test dependencies installed separately; their own licenses apply.
+Node.js is used for router tests and is not an application runtime dependency.
+
 Remotion, cloud image/TTS providers, workspace skills (including video-shotcraft), custom agents,
 MCP servers and Workflow OS are optional integration references, not bundled implementations.
 Verify their licenses, account permissions and data-handling terms before using them.

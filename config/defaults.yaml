@@ -30,6 +30,22 @@ thresholds:
     voice_over_music_min_lu: 16.0  # R-AUD-002  voice over music p10 ≥ 16 LU (Round 07 mix evidence)
     max_speech_dip_db: 6.0         # R-VOI-002  never attenuate inside speech by more than a 6 dB breath dip
     unexplained_silence_s: 1.5     # R-AUD-003  silence longer than this must be a planned pause
+    seams:
+      tail_inside_s: 0.04          # R-VOI-004  last 40 ms inside unit should be silent at a real seam
+      tail_after_s: 0.08           # R-VOI-004  first 80 ms after unit should be silent at a real seam
+      head_inside_s: 0.03          # R-VOI-004  first 30 ms detects hard onset
+      head_before_s: 0.08          # R-VOI-004  80 ms before unit detects silence-to-blast
+      end_gap_s: 0.12              # R-VOI-004
+      no_gap_s: 0.06               # R-VOI-004
+      hard_cut_radius_s: 0.30      # R-VOI-004
+      hard_cut_window_s: 0.01      # R-VOI-004
+      audible_dbfs: -45.0          # R-VOI-004
+      silence_dbfs: -70.0          # R-VOI-004
+      end_tail_inside_dbfs: -30.0   # R-VOI-004 calibrated 2026-10-02: Water v4 6/6, SRA/DSR 0 false positives
+      end_tail_after_dbfs: -40.0    # R-VOI-004 calibrated 2026-10-02: catch sound after a seam, not quiet decay
+      loud_tail_dbfs: -32.0        # R-VOI-004
+      hard_onset_dbfs: -30.0       # R-VOI-004
+      pre_onset_silence_dbfs: -50.0 # R-VOI-004
   flash:
     max_flashes_per_s: 3           # R-LEG-007  WCAG 2.2 SC 2.3.1
     luma_delta: 0.2                # frame-to-frame mean-luma swing counted as a flash transition

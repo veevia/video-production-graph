@@ -7,7 +7,7 @@ import shutil
 import pytest
 
 from tests.conftest import PKG
-from vpg.memory import GovernanceError, RuleBase, apply_proposal, enforcement
+from vpg.memory import ALLOWED, GovernanceError, RuleBase, apply_proposal, enforcement
 
 
 @pytest.fixture
@@ -113,6 +113,16 @@ def test_seed_rules_reference_existing_tests():
         t = r["check"].get("test")
         if t:
             assert t in tests, (r["id"], t)
+
+
+def test_rule_histories_follow_allowed_transitions():
+    rules = json.loads((PKG / "knowledge/rules.json").read_text())["rules"]
+    for r in rules:
+        states = [h["state"] for h in r["lifecycle"]["history"]]
+        assert states and states[0] == "candidate", r["id"]
+        for a, b in zip(states, states[1:]):
+            assert b in ALLOWED[a], (r["id"], a, b)
+        assert states[-1] == r["lifecycle"]["state"], r["id"]
 
 
 def test_advisory_rules_downgrade_rubric_dimensions(project):

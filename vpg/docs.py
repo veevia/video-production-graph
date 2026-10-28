@@ -15,7 +15,7 @@ from typing import Any, Callable
 import yaml
 from pydantic import BaseModel, TypeAdapter
 
-from .controls import CONTROL_DOCS
+from .controls import CONTROL_DOCS, docs_for
 from .evaluation import load_rubrics
 from .graph import GraphIndex, load_workflow
 from .models import EdgeKind, ProjectState, Workflow
@@ -97,14 +97,15 @@ def edge_catalog(wf: Workflow) -> str:
     return "\n".join(out) + "\n"
 
 
-def control_access(wf: Workflow) -> str:
+def control_access(wf: Workflow, docs: list[str] | None = None) -> str:
+    docs = list(docs or CONTROL_DOCS)
     out = [GEN, "# Control-document access", "",
            "> **TL;DR:** who may read (R), write (W) or lock on approval (L) each control document. Every other edit is reverted by "
            "the engine and fails the attempt, and an approved document changes only through an approved change request.", "",
-           "| Node | " + " | ".join(CONTROL_DOCS) + " |", "|---|" + "---|" * len(CONTROL_DOCS)]
+           "| Node | " + " | ".join(docs) + " |", "|---|" + "---|" * len(docs)]
     for n in sorted(wf.nodes, key=lambda x: x.num):
         cells = []
-        for d in CONTROL_DOCS:
+        for d in docs:
             c = ("R" if d in n.controls.read else "") + ("W" if d in n.controls.write else "") + ("L" if d in n.controls.lock_on_approval else "")
             cells.append(c or "·")
         out.append(f"| N{n.num:02d} {n.name} | " + " | ".join(cells) + " |")
@@ -178,7 +179,7 @@ def svg(wf: Workflow) -> str:
              '<marker id="l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
              '<path d="M0,0 L10,5 L0,10 z" fill="#C4151C"/></marker></defs>',
              f'<rect width="100%" height="100%" fill="#FAFBFC"/>',
-             f'<text x="{PAD}" y="{PAD + 10}" font-size="22" font-weight="700" fill="#1A1F26">{html.escape(wf.name)}</text>',
+             f'<text x="{PAD}" y="{PAD + 10}" font-size="22" font-weight="700" fill="#1A1F26">{html.escape(wf.name)} v{wf.version}</text>',
              f'<text x="{PAD}" y="{PAD + 36}" font-size="13" fill="#5A6572">solid = flow (join = all) · dashed red = bounded loop · dotted = escalate · '
              'white = agent · grey = tool · amber = review · thick red border = human gate</text>']
 
@@ -283,7 +284,7 @@ def principles() -> str:
            "> **TL;DR:** Wei's quality bar, as he stated it, turned into rules that a tool or a reviewer can check. Each rule cites its evidence "
            "(case-study iterations and Wei's messages) and its lifecycle state. Enforced rules block the gate; advisory ones are reported "
            "and wait for Wei's approval.", "",
-           f"Rule base: {len(rb.rules)} rules — "
+           f"Rule base v{rb.data['version']}: {len(rb.rules)} rules — "
            + ", ".join(f"{k} {v}" for k, v in sorted(__import__('collections').Counter(r['lifecycle']['state'] for r in rb.rules).items())) + ".",
            "Evidence ids resolve to `knowledge/case-studies/platform-film-2026-09/production-history_TENANT.json`. `wei:Mn` is Wei's message n in the "
            "production session, and `task:` marks evidence from building this workflow. Calibration of every numeric threshold against Wei's own "
@@ -292,7 +293,7 @@ def principles() -> str:
         out = [GEN.replace("graph/workflow.yaml", "knowledge/rules.json"), "# Design principles and craft-feedback library", "",
                "> **TL;DR:** Reusable rules and their enforcement states. Historical evidence identifiers are retained for "
                "traceability, but the private production history and customer sources are not distributed.", "",
-               f"Rule base: {len(rb.rules)} rules. Numeric thresholds remain uncalibrated; "
+               f"Rule base v{rb.data['version']}: {len(rb.rules)} rules. Numeric thresholds remain uncalibrated; "
                "see docs/gaps-and-limitations.md.", ""]
     for cat, title in CATEGORY_TITLES.items():
         rules = [r for r in rb.rules if r["category"] == cat]
@@ -436,6 +437,25 @@ def outputs() -> dict[Path, str]:
         PKG_ROOT / "schemas" / "state.schema.json": json.dumps(ProjectState.model_json_schema(), indent=1) + "\n",
         PKG_ROOT / "schemas" / "workflow.schema.json": json.dumps(Workflow.model_json_schema(by_alias=True), indent=1) + "\n",
         **artifact_schemas(wf),
+        **quality_outputs(),
+    }
+
+
+def quality_outputs() -> dict[Path, str]:
+    """The quality workflow (generated from the default graph and vpg/quality.py) and its catalogs."""
+    from . import quality
+    text = quality.text()
+    wf = Workflow.model_validate(yaml.safe_load(text))
+
+    def q(doc: str, title: str) -> str:
+        return (doc.replace("from graph/workflow.yaml;", "from graph/workflow-quality.yaml;", 1)
+                .replace(f"# {title}", f"# {title}: quality workflow", 1))
+    return {
+        quality.QUALITY_PATH: text,
+        PKG_ROOT / "docs" / "quality-node-catalog.md": q(node_catalog(wf), "Node catalog"),
+        PKG_ROOT / "docs" / "quality-edge-catalog.md": q(edge_catalog(wf), "Edge catalog"),
+        PKG_ROOT / "docs" / "quality-control-access.md": q(control_access(wf, docs_for(wf)), "Control-document access"),
+        PKG_ROOT / "docs" / "quality-graph.mmd": mermaid(wf),
     }
 
 

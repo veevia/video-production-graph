@@ -1,0 +1,104 @@
+flowchart LR
+  START((START))
+  END((END))
+  ESC{{"@escalate → Wei"}}
+  subgraph discovery["Discovery and grounding"]
+    n01_context_intake["N01 Context discovery and intake"]
+    n02_source_validation[["N02 Source validation and context-gap detection"]]
+  end
+  subgraph definition["Definition"]
+    n03_objective_audience["N03 Objective and audience definition 👤"]
+    n04_product_understanding["N04 Product and experience understanding 👤"]
+    n05_narrative_ideation["N05 Narrative and concept ideation"]
+    n06_creative_direction["N06 Creative-direction selection 👤"]
+  end
+  subgraph planning["Planning"]
+    n07_script_development["N07 Script development"]
+    n09_visual_system["N09 Visual-system definition 👤"]
+    n26_look_development["N26 Look development 👤"]
+    n08_storyboard_shots["N08 Storyboard and shot planning"]
+    n27_animatic["N27 Animatic 👤"]
+    n10_asset_planning["N10 Asset planning"]
+  end
+  subgraph production["Production"]
+    n11_asset_generation["N11 Asset generation"]
+    n12_voice_audio["N12 Voice and audio production"]
+    n13_motion_scenes["N13 Motion and scene production"]
+    n14_video_assembly["N14 Video assembly"]
+  end
+  subgraph review["Review"]
+    n15_technical_qa[/"N15 Technical QA"/]
+    n16_creative_critique[/"N16 Creative critique"/]
+    n17_design_compliance[/"N17 Design-system compliance"/]
+    n18_accessibility_legibility[/"N18 Accessibility and legibility validation"/]
+    n19_product_accuracy[/"N19 Product-accuracy validation"/]
+    n20_narrative_pacing[/"N20 Narrative and pacing evaluation"/]
+  end
+  subgraph iteration["Iteration"]
+    n21_feedback_interpretation["N21 Feedback interpretation"]
+    n22_targeted_regeneration[["N22 Targeted regeneration"]]
+  end
+  subgraph delivery["Delivery and learning"]
+    n23_final_verification[["N23 Final verification 👤"]]
+    n24_packaging_delivery[["N24 Packaging and delivery"]]
+    n25_learning_memory["N25 Post-production learning and memory updates"]
+  end
+  START --> n01_context_intake
+  n01_context_intake --> n02_source_validation
+  n02_source_validation --> n03_objective_audience
+  n02_source_validation -.->|gaps_resolvable| n01_context_intake
+  n02_source_validation ==>|gaps_blocking| ESC
+  n03_objective_audience -->|approved| n04_product_understanding
+  n03_objective_audience -.->|rejected| n01_context_intake
+  n04_product_understanding -->|approved| n05_narrative_ideation
+  n04_product_understanding -.->|rejected| n04_product_understanding
+  n05_narrative_ideation --> n06_creative_direction
+  n06_creative_direction -->|approved| n07_script_development
+  n06_creative_direction -->|approved| n09_visual_system
+  n06_creative_direction -.->|rejected| n05_narrative_ideation
+  n07_script_development --> n08_storyboard_shots
+  n09_visual_system -.->|rejected| n09_visual_system
+  n10_asset_planning --> n11_asset_generation
+  n11_asset_generation --> n13_motion_scenes
+  n12_voice_audio --> n13_motion_scenes
+  n13_motion_scenes --> n14_video_assembly
+  n14_video_assembly --> n15_technical_qa
+  n14_video_assembly --> n16_creative_critique
+  n14_video_assembly --> n17_design_compliance
+  n14_video_assembly --> n18_accessibility_legibility
+  n14_video_assembly --> n19_product_accuracy
+  n14_video_assembly --> n20_narrative_pacing
+  n15_technical_qa --> n21_feedback_interpretation
+  n16_creative_critique --> n21_feedback_interpretation
+  n17_design_compliance --> n21_feedback_interpretation
+  n18_accessibility_legibility --> n21_feedback_interpretation
+  n19_product_accuracy --> n21_feedback_interpretation
+  n20_narrative_pacing --> n21_feedback_interpretation
+  n21_feedback_interpretation --> n23_final_verification
+  n21_feedback_interpretation -->|rework| n22_targeted_regeneration
+  n21_feedback_interpretation ==>|blocked| ESC
+  n22_targeted_regeneration -.->|→ n07_script_development| n07_script_development
+  n22_targeted_regeneration -.->|→ n08_storyboard_shots| n08_storyboard_shots
+  n22_targeted_regeneration -.->|→ n10_asset_planning| n10_asset_planning
+  n22_targeted_regeneration -.->|→ n11_asset_generation| n11_asset_generation
+  n22_targeted_regeneration -.->|→ n12_voice_audio| n12_voice_audio
+  n22_targeted_regeneration -.->|→ n13_motion_scenes| n13_motion_scenes
+  n22_targeted_regeneration -.->|→ n14_video_assembly| n14_video_assembly
+  n22_targeted_regeneration -.->|→ n09_visual_system| n09_visual_system
+  n23_final_verification -->|approved| n24_packaging_delivery
+  n23_final_verification -.->|changes_requested| n21_feedback_interpretation
+  n24_packaging_delivery --> n25_learning_memory
+  n25_learning_memory --> END
+  n09_visual_system -->|approved| n26_look_development
+  n26_look_development -->|approved| n08_storyboard_shots
+  n26_look_development -.->|rejected| n26_look_development
+  n08_storyboard_shots --> n27_animatic
+  n27_animatic -->|approved| n10_asset_planning
+  n27_animatic -->|approved| n12_voice_audio
+  n27_animatic -.->|rejected| n07_script_development
+  n22_targeted_regeneration -.->|→ n26_look_development| n26_look_development
+  n22_targeted_regeneration -.->|→ n27_animatic| n27_animatic
+  classDef tool fill:#EEF1F4,stroke:#5A6572
+  classDef review fill:#FFF6E0,stroke:#B7791F
+  class n02_source_validation,n22_targeted_regeneration,n23_final_verification,n24_packaging_delivery tool
+  class n15_technical_qa,n16_creative_critique,n17_design_compliance,n18_accessibility_legibility,n19_product_accuracy,n20_narrative_pacing review

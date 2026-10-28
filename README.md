@@ -123,12 +123,46 @@ python -m vpg run <project>
    python -m vpg ledger-verify /absolute/path/to/my-film
    ```
 
+## Review films with Glassbox
+
+[Glassbox](apps/glassbox/README.md) is the optional local review app included with vpg. It runs on
+macOS/Linux with the Python environment above, without a frontend build or model account.
+
+```sh
+python -B apps/glassbox/server.py --root /absolute/path/to/my-film
+# Open http://127.0.0.1:4420/
+```
+
+Glassbox adds a human-facing review loop around the file-based workflow:
+
+1. **Observe the work.** It reads the project's graph, saved run state, ledger, reviews and artifacts.
+   Inbox shows what needs your attention; Pipeline and Files let you trace each node's status to its evidence.
+2. **Review the film.** Watch versions with captions, key frames and findings, or compare two versions
+   side by side with their scores, runtime targets and measurement-basis warnings.
+3. **Send feedback to the producer.** Record timecoded notes, requested changes or decisions. These go
+   into a separate private log, not the project files. Producers read them with the included CLI:
+
+   ```sh
+   python -B apps/glassbox/inbox.py --project /absolute/path/to/my-film
+   ```
+
+   The producer acknowledges a note with a plan, then marks it addressed in a new version. You can
+   follow that thread in Glassbox and reopen it if the change did not land.
+
+**Glassbox does not advance the graph or approve a production.** Its Approve button records a message
+for the producer; the engine's named-human gates still require their own governed decisions.
+
+Repeat `--root` to include more project folders. Video-library scanning is off unless you explicitly
+add `--library-root /path/to/videos`. See the [app guide](apps/glassbox/README.md) for producer commands
+and [privacy and local storage](apps/glassbox/README.md#privacy-and-local-storage).
+
 ## Repository map
 
 | Directory | Purpose |
 |---|---|
 | `graph/` | Declarative workflow definition (`workflow.yaml`), the single graph authority |
 | `vpg/` | Scheduler, CLI, controls, evaluation, memory, provenance and deterministic tools |
+| `apps/glassbox/` | Local film review app, evidence browser and producer feedback channel |
 | `agents/`, `prompts/`, `templates/` | 18 role specs, node prompts and 6 control-document templates |
 | `rubrics/`, `config/`, `schemas/` | 80 rubric dimensions, thresholds and JSON schemas |
 | `knowledge/` | Governed cross-project rules and design principles |
@@ -142,6 +176,7 @@ python -m vpg run <project>
 | Guide | Covers |
 |---|---|
 | [Operator guide](docs/operator-guide.md) | Step-by-step production operation, privacy scanning and local publishing |
+| [Glassbox](apps/glassbox/README.md) | Local review, producer feedback, setup and privacy |
 | [Agent hosts](docs/agent-hosts.md) | Using vpg with Claude Code, Copilot, Codex, OpenCode, Gemini CLI or Cursor |
 | [AGENTS.md](AGENTS.md) | Rules coding agents load automatically, including the human-only boundary |
 | [Extension guide](docs/extension-guide.md) | Binding renderers and TTS; adding tools, nodes, agents, rubrics and rules |

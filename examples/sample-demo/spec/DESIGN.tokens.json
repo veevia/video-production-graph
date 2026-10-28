@@ -1,0 +1,31 @@
+{
+ "$description": "Example tokens for the fictional sample (W3C Design Tokens 2025.10).",
+ "color": {
+  "$type": "color",
+  "ground": {"$value": {"colorSpace": "srgb", "components": [0.9333, 0.9451, 0.9569], "hex": "#eef1f4"}, "$description": "mist"},
+  "figure": {"$value": {"colorSpace": "srgb", "components": [0.102, 0.1216, 0.149], "hex": "#1a1f26"}, "$description": "ink"},
+  "muted": {"$value": {"colorSpace": "srgb", "components": [0.3529, 0.3961, 0.4471], "hex": "#5a6572"}, "$description": "slate"},
+  "accent": {"$value": {"colorSpace": "srgb", "components": [0.0431, 0.3608, 0.6784], "hex": "#0b5cad"}, "$description": "brand blue"},
+  "breach": {"$value": {"colorSpace": "srgb", "components": [0.8784, 0.2431, 0.1765], "hex": "#e03e2d"}, "$description": "signal red"}
+ },
+ "font": {"$type": "fontFamily", "primary": {"$value": ["Mona Sans", "sans-serif"]}},
+ "space": {
+  "$type": "dimension",
+  "margin": {"$value": {"value": 96, "unit": "px"}},
+  "gutter": {"$value": {"value": 24, "unit": "px"}}
+ },
+ "type": {
+  "$type": "typography",
+  "display": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 88, "unit": "px"}, "fontWeight": 800, "letterSpacing": {"value": 0, "unit": "px"}, "lineHeight": 1.05}},
+  "title": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 56, "unit": "px"}, "fontWeight": 700, "letterSpacing": {"value": 0, "unit": "px"}, "lineHeight": 1.1}},
+  "body": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 34, "unit": "px"}, "fontWeight": 500, "letterSpacing": {"value": 0, "unit": "px"}, "lineHeight": 1.3}},
+  "label": {"$value": {"fontFamily": "{font.primary}", "fontSize": {"value": 26, "unit": "px"}, "fontWeight": 600, "letterSpacing": {"value": 0.5, "unit": "px"}, "lineHeight": 1.2}}
+ },
+ "duration": {
+  "$type": "duration",
+  "fast": {"$value": {"value": 200, "unit": "ms"}},
+  "base": {"$value": {"value": 400, "unit": "ms"}},
+  "hold": {"$value": {"value": 1.5, "unit": "s"}}
+ },
+ "easing": {"$type": "cubicBezier", "standard": {"$value": [0.2, 0.0, 0.0, 1.0]}}
+}

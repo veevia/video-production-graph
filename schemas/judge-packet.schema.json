@@ -1,0 +1,41 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/judge-packet",
+ "title": "vpg pairwise judge packet (vpg-judge-packet/v1)",
+ "description": "What a judging agent receives (`vpg judge pack`). Items are blinded (S01, S02, ...); the batch hides a reference and a degraded anchor among them; every pair appears twice, once in each order. The key that unblinds it is kept apart and never given to the judge.",
+ "type": "object",
+ "required": ["schema", "batch", "criterion", "rules", "instructions", "presentations"],
+ "properties": {
+  "schema": {"const": "vpg-judge-packet/v1"},
+  "batch": {"type": "string", "minLength": 1},
+  "criterion": {"type": "string", "minLength": 1, "description": "one criterion per batch, e.g. a rubric dimension or a spec rule's intent"},
+  "rules": {"type": "array", "items": {"type": "string"}, "description": "spec rule ids the judge must cite"},
+  "instructions": {"type": "string"},
+  "presentations": {
+   "type": "array",
+   "minItems": 2,
+   "items": {
+    "type": "object",
+    "required": ["id", "first", "second"],
+    "properties": {
+     "id": {"type": "string"},
+     "first": {"$ref": "#/$defs/shown"},
+     "second": {"$ref": "#/$defs/shown"}
+    },
+    "additionalProperties": false
+   }
+  }
+ },
+ "additionalProperties": false,
+ "$defs": {
+  "shown": {
+   "type": "object",
+   "required": ["label", "media"],
+   "properties": {
+    "label": {"type": "string", "pattern": "^S\\d{2,}$"},
+    "media": {"type": "object", "additionalProperties": {"type": "object", "properties": {"path": {"type": "string", "description": "a neutral copy, <media dir>/<label>/<key><ext> relative to the packet, staged by vpg judge pack; never the original file name"}, "sha256": {"type": "string", "description": "the copy's sha256, given only when its bytes differ from the original's (remuxed audio or video)"}}, "additionalProperties": false}}
+   },
+   "additionalProperties": false
+  }
+ }
+}

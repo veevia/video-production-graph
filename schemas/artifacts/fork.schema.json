@@ -1,0 +1,66 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vpg/artifacts/fork",
+ "title": "fork",
+ "type": "object",
+ "properties": {
+  "fork_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,40}$"},
+  "fork_type": {"enum": ["concept", "visual", "voice_music", "scene"]},
+  "node": {"type": "string", "minLength": 1},
+  "version": {"type": "integer", "minimum": 0},
+  "dims": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {"type": "string", "minLength": 1},
+     "measured": {"type": "boolean"}
+    },
+    "required": ["id", "measured"],
+    "additionalProperties": true
+   }
+  },
+  "candidates": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {"type": "string", "minLength": 1},
+     "label": {"type": "string", "minLength": 1},
+     "scores": {
+      "type": "object",
+      "additionalProperties": {"type": "number", "minimum": 1, "maximum": 5}
+     },
+     "passes_rubric": {"type": "boolean"},
+     "rationale": {"type": "string", "minLength": 1},
+     "artifact_ref": {"type": "string", "minLength": 1}
+    },
+    "required": ["id", "label", "scores", "passes_rubric", "rationale"],
+    "additionalProperties": true
+   }
+  },
+  "scored": {
+   "type": "object",
+   "properties": {
+    "model_version": {"type": "integer", "minimum": 0},
+    "predicted": {
+     "type": "object",
+     "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "band": {"enum": ["assert", "flag", "refuse"]},
+    "build": {
+     "type": "array",
+     "minItems": 1,
+     "items": {"type": "string", "minLength": 1}
+    }
+   },
+   "required": ["model_version", "predicted", "confidence", "band", "build"],
+   "additionalProperties": true
+  }
+ },
+ "required": ["fork_id", "fork_type", "node", "version", "dims", "candidates", "scored"],
+ "additionalProperties": true
+}

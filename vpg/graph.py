@@ -24,11 +24,28 @@ from typing import Any
 
 import yaml
 
+from .controls import KNOWN_DOCS, doc_label, rel_path
 from .models import EdgeDef, EdgeKind, NodeDef, NodeKind, ProjectState, Workflow
 from .util import PKG_ROOT, model_has_path, read_text, sha256_file
 
 DEFAULT_WORKFLOW = PKG_ROOT / "graph" / "workflow.yaml"
 SPECIAL = {"START", "END", "@escalate"}
+# Workflows shipped with the package, by the name a project's `workflow:` may give. Anything else is a path.
+QUALITY_WORKFLOW = PKG_ROOT / "graph" / "workflow-quality.yaml"
+WORKFLOWS: dict[str, Path] = {"default": DEFAULT_WORKFLOW, "quality": QUALITY_WORKFLOW}
+
+
+def resolve_workflow(ref: str | None, project_root: Path | None = None) -> Path:
+    """`default` (or nothing) or another shipped name, else a path: as given (relative to the working directory, as the
+    engine has always read it), or relative to the project when only that exists."""
+    if not ref or ref == "default":
+        return DEFAULT_WORKFLOW
+    if ref in WORKFLOWS:
+        return WORKFLOWS[ref]
+    p = Path(ref)
+    if not p.is_absolute() and not p.exists() and project_root is not None and (Path(project_root) / p).exists():
+        return Path(project_root) / p
+    return p
 
 # The brief's 25 stages, in order: the shipped graph must implement exactly these.
 REQUIRED_STAGES = [
@@ -40,6 +57,8 @@ REQUIRED_STAGES = [
     "Product-accuracy validation", "Narrative and pacing evaluation", "Feedback interpretation",
     "Targeted regeneration", "Final verification", "Packaging and delivery", "Post-production learning and memory updates",
 ]
+# Stages a workflow may add after the 25 (numbered 26 on, placed anywhere in the flow). Only the quality workflow does.
+OPTIONAL_STAGES = ["Look development", "Animatic"]
 
 
 def load_workflow(path: str | Path | None = None) -> Workflow:
@@ -205,9 +224,13 @@ def validate(wf: Workflow, pkg_root: Path = PKG_ROOT, check_stages: bool = True)
     errors.extend(_rubric_placement_errors(wf, pkg_root))
     if check_stages:
         names = [n.name for n in sorted(wf.nodes, key=lambda x: x.num)]
-        if names != REQUIRED_STAGES:
-            missing = [s for s in REQUIRED_STAGES if s not in names]
+        core, extra = names[:len(REQUIRED_STAGES)], names[len(REQUIRED_STAGES):]
+        if core != REQUIRED_STAGES:
+            missing = [s for s in REQUIRED_STAGES if s not in core]
             errors.append(f"graph must implement the 25 brief stages in order; missing or renamed: {missing or names}")
+        unknown = [s for s in extra if s not in OPTIONAL_STAGES]
+        if unknown or len(set(extra)) != len(extra):
+            errors.append(f"stages after the 25 must be distinct optional stages {OPTIONAL_STAGES}; got {extra}")
     sub_nodes = [n for s in wf.subgraphs for n in s.nodes]
     ids = [n.id for n in wf.nodes]
     for n in ids:
@@ -368,7 +391,7 @@ def _recheck_cycle_errors(wf: Workflow, index: "GraphIndex") -> list[str]:
         if not colour.get(w):
             visit(w)
     def hop(x: str) -> str:
-        return f"{x} (writes {', '.join(d + '.md' for d in writers[x].controls.write)})"
+        return f"{x} (writes {', '.join(doc_label(d) for d in writers[x].controls.write)})"
     return [f"control-document re-check cycle {' → '.join(hop(x) for x in c[:-1])} → {c[-1]}: each change re-checks the next "
             "node and comes back round with no loop bound; order these nodes in the flow so one runs after the other, or stop "
             "one reading the other's document" for c in cycles]
@@ -497,7 +520,7 @@ def node_resolution_errors(node: NodeDef, pkg_root: Path) -> list[str]:
         else:
             undeclared = sorted(tool_control_reads(fn) - control_reads(node))
             if undeclared:
-                errs.append(f"node {node.id}: its tool {node.run.tool} reads {', '.join(f'controls/{d}.md' for d in undeclared)}, "
+                errs.append(f"node {node.id}: its tool {node.run.tool} reads {', '.join(rel_path(d) for d in undeclared)}, "
                             "which the node does not declare; list it in controls.read, so a change to it re-checks the node")
     for chk in node.completion:
         if chk.type == "tool":
@@ -511,7 +534,7 @@ def node_resolution_errors(node: NodeDef, pkg_root: Path) -> list[str]:
         if not (pkg_root / "rubrics" / f"{rid}.yaml").exists():
             errs.append(f"node {node.id}: rubric {rid} missing")
     for doc in node.controls.read + node.controls.write + node.controls.lock_on_approval:
-        if doc not in {"product", "creative", "design", "production", "evaluation", "memory"}:
+        if doc not in KNOWN_DOCS:
             errs.append(f"node {node.id}: unknown control document {doc}")
     if node.human_review.required and not node.human_review.outcomes:
         errs.append(f"node {node.id}: human review needs outcomes")

@@ -98,6 +98,13 @@ def sha256_json(obj: Any) -> str:
     return sha256_bytes(canonical(obj).encode())
 
 
+def artifact_identity(a: Any) -> str:
+    """#171: what a consumer's fingerprint, a rework baseline or a reuse check sees of an artifact record: its bytes, plus
+    the files it names by path (`named_files`)."""
+    named = getattr(a, "named_files", None) or {}
+    return a.sha256 if not named else sha256_json([a.sha256, sorted(named.items())])
+
+
 def read_json(path: str | os.PathLike) -> Any:
     return json.loads(read_text(path))
 

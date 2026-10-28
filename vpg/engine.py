@@ -19,12 +19,16 @@ Every transition is appended to the hash-chained ledger, and state is checkpoint
 
 from __future__ import annotations
 
+import collections
 import concurrent.futures as cf
 import functools
 import json
+import math
 import os
 import re
 import shlex
+import shutil
+import time
 import traceback
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -37,20 +41,21 @@ from pydantic import ValidationError
 
 from .budget import budget_problems, convergence, gate_snapshot, hours_since, load_budget, trend_lines, trend_rows
 from .context import CheckResult, NodeContext, NodeResult
-from .controls import CONTROL_DOCS, ControlStore
-from .evaluation import (binding_problems, compare_after_rework, gate, load_rubrics, merge_review, record_findings,
-                         review_bindings)
+from .controls import BAR_DOCS, CONTROL_DOCS, ControlStore, docs_for
+from .evaluation import (binding_problems, compare_after_rework, defect_key, gate, load_rubrics, merge_review, problem_key,
+                         record_findings, review_bindings, review_verdict)
 from .executors import Executor, ScriptedExecutor, TaskPacketExecutor, run_command
-from .graph import (DEFAULT_WORKFLOW, GraphIndex, control_reads, load_workflow, outcome_matches, resolve_tool, structural_errors,
+from .graph import (GraphIndex, control_reads, load_workflow, outcome_matches, resolve_tool, resolve_workflow, structural_errors,
                     workflow_sha256)
 from .memory import DEFAULT_RULES, RuleBase, enforcement, summarize
-from .models import (Approval, ArtifactRecord, ChangeRequest, CheckpointRef, Comparison, Decision, Defect, EdgeDef, EdgeKind, Escalation,
+from .models import (Approval, ArtifactRecord, ChangeRequest, CheckpointRef, Comparison, ControlDocState, Decision, Defect, DirectRun,
+                     EdgeDef, EdgeKind, Escalation,
                      Feedback, GapWaiver, Finding, Grant, KnowledgeRef, NodeDef, NodeKind, NodeRuntime, NodeStatus, ProjectMeta,
-                     ProjectState, RetryRecord, RunStatus, RuntimeState, VersionRecord)
+                     ProjectState, RetryRecord, Review, RunStatus, RuntimeState, VersionRecord)
 from .provenance import Ledger, LedgerBehind, LedgerCorrupt
 from .source_store import SourceStore
-from .util import (PKG_ROOT, ConcurrentChange, NotRegularFile, file_identity, get_path, glob_files, is_human_name, now,
-                   read_json, read_text, rel, set_path, sha256_file, sha256_json, write_json_atomic)
+from .util import (PKG_ROOT, ConcurrentChange, NotRegularFile, artifact_identity, file_identity, get_path, glob_files,
+                   is_human_name, now, read_json, read_text, rel, set_path, sha256_file, sha256_json, write_json_atomic)
 
 S = NodeStatus
 # What a node's fingerprint covers. 0: before v1.1 (a bound command's code was left out). 1: v1.1–v1.4 (a `defects:`
@@ -60,6 +65,10 @@ S = NodeStatus
 # an older one where that is provable (Engine._carry_over_plan).
 FINGERPRINT_SCHEME = 2
 _NO_MATCH = object()
+_GOVERNED_NOTE = re.compile(r" ?\[filed P[123]; not blocking: [^\]]*\]")   # #162: the note `_govern_findings` adds
+MAX_MANIFEST_REFS = 256        # #171: files one JSON output's references hash one by one; the rest fold into one digest
+MAX_MANIFEST_STRINGS = 50_000  # #171: the most strings one manifest scan reads before it stops (and says so)
+LARGE_REF_BYTES = 1 << 30      # #171: a referenced file this big is identified by size and mtime, not hashed
 
 
 class EngineError(Exception):
@@ -81,9 +90,68 @@ REUSE_READ_RE = re.compile(r"(work/[A-Za-z0-9_-]+/a\d+|glob\([^)]*a\*|/a\*/)")
 # delegable action a grant still never touches what needs a human: a hold on a human's feedback, or a defect on a
 # human-judged dimension, marked needs_human or held for a human.
 GRANTABLE = ("unblock", "invalidate", "change-request", "resolve", "restore-control", "feedback-triage")
+RELAY_REFUSED_MID_RUN = frozenset({"a human decision", "waiving an intake gap"})   # never relayed before the release wait
 GRANT_MAX_DAYS = 90
 REVIEW_POLICY_KEYS = {"binding", "independence"}   # vpg.project.yaml `reviews:` (v1.7, #62/#67): each warn | require
 REUSE_HELPER_RE = re.compile(r"^\s*(from\s+vpg\.reuse\s+import\b|from\s+vpg\s+import\s+reuse\b|import\s+vpg\.reuse\b)", re.M)
+PROVISIONAL_GATES = {"n03_objective_audience", "n04_product_understanding", "n06_creative_direction", "n09_visual_system"}
+# The quality workflow's look and animatic gates are named humans' decisions by default; a project may opt them into
+# provisional approval (`autonomy.provisional_gates_extra`) when they stall a run, and nothing else.
+OPTIONAL_PROVISIONAL_GATES = {"n26_look_development", "n27_animatic"}
+POLICY_KEYS = ("humans", "autonomy", "privacy", "reviews", "loop_budget")
+from .scoring import CONCEPT_FORK_DIMS
+_BASELINE_HASH_CACHE: dict[tuple[str, int, int], str] = {}
+
+
+def _cached_sha256_file(path: Path) -> str:
+    st = path.stat()
+    key = (str(path.resolve()), st.st_size, st.st_mtime_ns)
+    if key not in _BASELINE_HASH_CACHE:
+        _BASELINE_HASH_CACHE[key] = sha256_file(path)
+    return _BASELINE_HASH_CACHE[key]
+
+
+def autonomy_precondition_problems(config: dict[str, Any]) -> list[str]:
+    problems: list[str] = []
+    principal = ((config.get("autonomy") or {}).get("principal") or "").strip() if isinstance(config.get("autonomy"), dict) else ""
+    humans = config.get("humans")
+    declared = [h.strip() for h in humans if isinstance(h, str) and h.strip()] if isinstance(humans, list) else []
+    if not principal:
+        problems.append("autonomy.principal is required for provisional mode")
+    elif principal not in declared:
+        problems.append(f"autonomy.principal {principal!r} must be listed in humans")
+    from .tools.privacy import declaration_problem
+    if problem := declaration_problem(config):
+        problems.append(f"privacy names must be declared for provisional mode ({problem})")
+    reviews = config.get("reviews")
+    if not isinstance(reviews, dict) or reviews.get("binding") != "require" or reviews.get("independence") != "require":
+        problems.append("reviews must require binding and independence for provisional mode")
+    budget = load_budget(config)
+    if not budget.declared or not budget.extends:
+        problems.append("loop_budget must extend while converging for provisional mode (on_exhaust: extend_if_converging)")
+    return problems
+
+
+def policy_snapshot(config: dict[str, Any]) -> dict[str, Any]:
+    return {k: config[k] for k in POLICY_KEYS if k in config}
+
+
+def _list_or_all(value: Any) -> list[str]:
+    if value == "all":
+        return ["all"]
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    if value in (None, ""):
+        return []
+    return [str(value)]
+
+
+def _csv_or_all(value: Any) -> str:
+    if value == "all":
+        return "all"
+    if isinstance(value, list):
+        return ",".join(str(v) for v in value)
+    return "" if value is None else str(value)
 
 
 def command_tokens(cmd: str) -> list[str]:
@@ -95,6 +163,11 @@ def command_tokens(cmd: str) -> list[str]:
         return list(lex)
     except ValueError:
         return cmd.split()
+
+
+def _has_git_ancestor(path: Path) -> bool:
+    path = path.resolve()
+    return any((p / ".git").exists() for p in (path, *path.parents))
 
 
 class Project:
@@ -206,9 +279,132 @@ class Project:
         problems += budget_problems(self.config)
         problems += self._preflight_problems(node_ids)
         problems += self._review_policy_problems()
+        humans = self.config.get("humans")
+        if humans is not None:
+            if not isinstance(humans, list) or not humans:
+                problems.append("humans must be a non-empty list of declared human names, e.g. [Wei]")
+            else:
+                bad = [h for h in humans if not isinstance(h, str) or not h.strip() or not is_human_name(h, "dry-run-auto")]
+                if bad:
+                    problems.append(f"humans entries must be named humans (not agent:* or dry-run actors): {bad}")
+        problems += self._autonomy_policy_problems()
+        problems += self._observability_problems()
+        problems += self._privacy_hold_dir_problems()
+        problems += self._regression_problems()
         if "publish" in self.config:
             from .publish import config_problems as publish_config_problems
             problems += publish_config_problems(self.config.get("publish"))
+        return problems
+
+    def _regression_problems(self) -> list[str]:
+        block = self.config.get("regression")
+        if block is None:
+            return []
+        if not isinstance(block, dict):
+            return ["regression must be a mapping"]
+        problems = [f"regression.{k} is not a setting (use baseline, departures, demo_chapters, thresholds, still_pattern)"
+                    for k in sorted(set(block) - {"baseline", "departures", "demo_chapters", "thresholds", "still_pattern"})]
+        baseline = block.get("baseline")
+        if not isinstance(baseline, dict):
+            problems.append("regression.baseline must map label, inventory and optional master")
+        else:
+            problems += [f"regression.baseline.{k} is not a setting (use label, inventory, master, layout_audit)"
+                         for k in sorted(set(baseline) - {"label", "inventory", "master", "layout_audit"})]
+            if not isinstance(baseline.get("label"), str) or not baseline.get("label", "").strip():
+                problems.append("regression.baseline.label must be a non-empty string")
+            if not isinstance(baseline.get("inventory"), str) or not baseline.get("inventory", "").strip():
+                problems.append("regression.baseline.inventory must be a path")
+            if "master" in baseline and (not isinstance(baseline.get("master"), str) or not baseline.get("master", "").strip()):
+                problems.append("regression.baseline.master must be a path when set")
+            if "layout_audit" in baseline and (not isinstance(baseline.get("layout_audit"), str) or not baseline.get("layout_audit", "").strip()):
+                problems.append("regression.baseline.layout_audit must be a path when set")
+        if "departures" in block and (not isinstance(block.get("departures"), str) or not block.get("departures", "").strip()):
+            problems.append("regression.departures must be a path when set")
+        demo = block.get("demo_chapters", [])
+        if not isinstance(demo, list) or not all(isinstance(c, str) for c in demo):
+            problems.append("regression.demo_chapters must be a list of chapter ids")
+        if "still_pattern" in block:
+            if not isinstance(block.get("still_pattern"), str) or not block.get("still_pattern", "").strip():
+                problems.append("regression.still_pattern must be a non-empty regex string")
+            else:
+                try:
+                    re.compile(block["still_pattern"])
+                except re.error as exc:
+                    problems.append(f"regression.still_pattern is invalid: {exc}")
+        thresholds_block = block.get("thresholds", {})
+        if not isinstance(thresholds_block, dict):
+            problems.append("regression.thresholds must be a mapping")
+        else:
+            allowed = {"content_retained", "demo_cast", "demo_pointer", "demo_zoom_max", "demo_static_extra_s"}
+            problems += [f"regression.thresholds.{k} is not a setting" for k in sorted(set(thresholds_block) - allowed)]
+            for k, v in thresholds_block.items():
+                if isinstance(v, bool) or not isinstance(v, (int, float)):
+                    problems.append(f"regression.thresholds.{k} must be a number")
+                elif k in {"content_retained", "demo_cast", "demo_pointer"} and not (0 < v <= 1):
+                    problems.append(f"regression.thresholds.{k} must be > 0 and ≤ 1")
+                elif k == "demo_zoom_max" and v < 1:
+                    problems.append("regression.thresholds.demo_zoom_max must be ≥ 1")
+                elif k == "demo_static_extra_s" and v < 0:
+                    problems.append("regression.thresholds.demo_static_extra_s must be ≥ 0")
+                elif k not in {"content_retained", "demo_cast", "demo_pointer", "demo_zoom_max", "demo_static_extra_s"} and v <= 0:
+                    problems.append(f"regression.thresholds.{k} must be a positive number")
+        return problems
+
+    def _privacy_hold_dir_problems(self) -> list[str]:
+        from .tools.privacy import privacy_feature_enabled, privacy_feature_value_ok
+        block = self.config.get("privacy")
+        if not isinstance(block, dict):
+            return []
+        problems = []
+        enabled = False
+        for key in ("text_scan", "n14_hold"):
+            val = block.get(key, "off")
+            if not privacy_feature_value_ok(val):
+                problems.append(f"privacy.{key} must be on or off")
+            enabled = enabled or privacy_feature_enabled(self.config, key)
+        if not enabled:
+            return problems
+        hold = block.get("hold_dir")
+        if not isinstance(hold, str) or not hold.strip() or not Path(hold).is_absolute():
+            return problems + ["privacy.hold_dir must be an existing, writable absolute directory outside any git working tree"]
+        hold_dir = Path(hold)
+        if _has_git_ancestor(hold_dir):
+            problems.append("privacy.hold_dir must not be inside a git working tree")
+        if not hold_dir.is_dir() or not os.access(hold_dir, os.W_OK):
+            problems.append("privacy.hold_dir must be an existing, writable directory")
+        return problems
+
+    def _autonomy_policy_problems(self) -> list[str]:
+        block = self.config.get("autonomy")
+        if block is None:
+            return []
+        if not isinstance(block, dict):
+            return ["autonomy must be a mapping, e.g. {mode: provisional, principal: Wei}"]
+        problems = [f"autonomy.{k} is not a setting (use mode, principal, provisional_expiry_h, provisional_gates_extra)"
+                    for k in sorted(set(block) - {"mode", "principal", "provisional_expiry_h", "provisional_gates_extra"})]
+        extra = block.get("provisional_gates_extra")
+        if extra is not None and (not isinstance(extra, list) or not set(extra) <= OPTIONAL_PROVISIONAL_GATES):
+            problems.append(f"autonomy.provisional_gates_extra lists only {sorted(OPTIONAL_PROVISIONAL_GATES)} (the quality "
+                            f"workflow's look and animatic gates), not {extra!r}")
+        hours = block.get("provisional_expiry_h")
+        if hours is not None and (isinstance(hours, bool) or not isinstance(hours, (int, float)) or hours <= 0):
+            problems.append("autonomy.provisional_expiry_h must be a positive number of hours")
+        mode = block.get("mode", "gated")
+        if mode not in ("gated", "provisional"):
+            problems.append(f"autonomy.mode must be gated or provisional, not {mode!r}")
+        if mode == "provisional":
+            problems += autonomy_precondition_problems(self.config)
+        return problems
+
+    def _observability_problems(self) -> list[str]:
+        block = self.config.get("observability")
+        if block is None:
+            return []
+        if not isinstance(block, dict):
+            return ["observability must be a mapping, e.g. {evaluation_events: true}"]
+        problems = [f"observability.{k} is not a setting (use evaluation_events)" for k in sorted(set(block) - {"evaluation_events"})]
+        if "evaluation_events" in block and not isinstance(block["evaluation_events"], bool):
+            problems.append("observability.evaluation_events must be true or false")
         return problems
 
     def _review_policy_problems(self) -> list[str]:
@@ -301,6 +497,8 @@ def _human_action(event: str):
     def wrap(fn):
         @functools.wraps(fn)
         def inner(self, *args, **kwargs):
+            if event != "accept_config":
+                self._refuse_if_config_pending(event)
             with self._action(event):
                 result = fn(self, *args, **kwargs)
             self._drain_publish()   # after the action's single commit
@@ -325,7 +523,7 @@ class Engine:
         self.read_only = read_only
         cfg = self.project.config
         wf_ref = workflow_path or cfg.get("workflow")
-        self.workflow_path = Path(wf_ref) if wf_ref and wf_ref != "default" else DEFAULT_WORKFLOW
+        self.workflow_path = resolve_workflow(wf_ref, self.project.root)
         self.wf = load_workflow(self.workflow_path)
         if not read_only:
             # Structure, references and rubric placement: a missing rubric, tool, prompt or schema would silently drop
@@ -358,7 +556,8 @@ class Engine:
         if self.project.state_path.exists():
             self._state_identity = file_identity(self.project.state_path)
             self.state = ProjectState.model_validate(read_json(self.project.state_path))
-            self.controls = ControlStore(self.project.root, self.state, self.project.vpg)
+            self._refuse_other_workflow()
+            self.controls = self._control_store()
             if not read_only:
                 if self.state.runtime.pending_ledger:   # a human action committed but its ledger write did not land
                     written = self.ledger.recover(self.state.runtime.pending_ledger)
@@ -368,7 +567,9 @@ class Engine:
                 self._resume_fixups()
         else:
             self.state = self._new_state()
-            self.controls = ControlStore(self.project.root, self.state, self.project.vpg)
+            self.state.runtime.accepted_policy = policy_snapshot(self.project.config)
+            self.state.runtime.accepted_config = dict(self.project.config)
+            self.controls = self._control_store()
             self.controls.register_all()
             self.controls.accept_all()
             self.ledger.append("run_created", run=self.state.runtime.run_id, workflow=self.wf.version,
@@ -384,6 +585,28 @@ class Engine:
                                   "production, so agents submit their work through task packets")
 
     # ------------------------------------------------------------------ setup
+    def _control_store(self) -> ControlStore:
+        """The one place a run's control store is built (open, resume, rollback): the six documents, plus the spec
+        documents this workflow's nodes use (none for the default workflow). A saved run keeps the set it registered."""
+        docs = docs_for(self.wf)
+        if self.state.controls:
+            docs = [d for d in docs if d in self.state.controls]
+        return ControlStore(self.project.root, self.state, self.project.vpg, docs=docs)
+
+    def _refuse_other_workflow(self) -> None:
+        """A run stays on the workflow it started with: its node ids, gates and control documents belong to that graph.
+        Switching `workflow:` mid-run (say default → quality) is refused rather than half-applied."""
+        started, now_id = self.state.project.workflow_id, self.wf.id
+        tracked, wanted = set(self.state.controls), set(docs_for(self.wf))
+        if started and started != now_id:
+            raise EngineError(f"this run was started on workflow '{started}' and the project now names '{now_id}'. A run "
+                              "cannot switch workflows: set `workflow:` back in vpg.project.yaml to finish this run, or "
+                              "start a new run on the other workflow (move .vpg aside first)")
+        if tracked and tracked != wanted:
+            raise EngineError(f"this run tracks the control documents {sorted(tracked)}, but its workflow now uses "
+                              f"{sorted(wanted)}. A run cannot change its document set: restore the workflow it started "
+                              "with, or start a new run (move .vpg aside first)")
+
     def _default_executor(self) -> Executor:
         if self.project.config.get("executor") == "scripted":
             return ScriptedExecutor(self.project.root / self.project.config.get("fixtures", "fixtures"))
@@ -405,8 +628,9 @@ class Engine:
                 if mode == "inactive":
                     continue
                 if mode == "advisory":
+                    if d.get("level", "MUST") == "MUST":   # #162: only then is the rule why the dimension doesn't block
+                        d["advisory_reason"] = f"rule {d['rule']} is not yet adopted"
                     d["level"] = "SHOULD"
-                    d["advisory_reason"] = f"rule {d['rule']} is not yet adopted"
                 dims.append(d)
             rub["dimensions"] = dims
             out[rid] = rub
@@ -414,6 +638,13 @@ class Engine:
 
     def _dimension_levels(self) -> dict[str, str]:
         return {d["id"]: d.get("level", "MUST") for rub in self.rubrics.values() for d in rub["dimensions"]}
+
+    def _rubric_dimension_specs(self) -> dict[str, dict[str, Any]]:
+        return {d["id"]: d for rub in self.rubrics.values() for d in rub["dimensions"]}
+
+    def _review_dimension_specs(self) -> dict[str, dict[str, Any]]:
+        return {dim: spec for dim, spec in self._rubric_dimension_specs().items()
+                if ((spec.get("check") or {}).get("type") == "review")}
 
     def _new_state(self) -> ProjectState:
         cfg = self.project.config
@@ -435,7 +666,7 @@ class Engine:
         st.inputs.constraints = list(cfg.get("constraints", []))
         return st
 
-    def _check_ledger_anchor(self, accept: tuple[str, str] | None) -> None:
+    def _check_ledger_anchor(self, accept: tuple[str, str] | dict[str, str] | None) -> None:
         """The ledger must still contain the last event the state recorded. Otherwise events were deleted, cut off or the
         ledger was replaced, and appending now would hide that under a new, valid-looking end. Only a named human may
         accept the loss (`vpg accept-ledger-break`); the break is then ledgered, kept in the state and shown at release."""
@@ -449,14 +680,21 @@ class Engine:
         if not accept:
             raise EngineError(f"{lost}. Nothing was written. If no backup exists, a named human may accept the loss: "
                               f"`vpg accept-ledger-break {here} --actor <name> --reason \"…\"`")
-        actor, reason = accept
-        self._require_human(actor, "accepting a ledger break")
+        if isinstance(accept, dict):
+            actor, reason = accept.get("actor", ""), accept.get("reason", "")
+            relay = {k: accept.get(k, "") for k in ("on_behalf_of", "instruction", "instruction_at")}
+        else:
+            actor, reason = accept
+            relay = {}
+        self._require_human(actor, "accepting a ledger break", **relay)
         if not reason.strip():
             raise EngineError("accepting a ledger break needs the human's reason (--reason)")
         brk = {"actor": actor, "reason": reason.strip(), "at": now(), "lost_after_seq": tail[0], "lost_hash": str(tail[1])[:16],
                "problem": lost, "resumes_at_seq": self.ledger._last[0] + 1}
+        brk.update({k: v for k, v in self.ledger.stamp.items() if k in ("principal", "instruction", "instruction_at", "relayed")})
         self.state.runtime.ledger_breaks.append(brk)
         self.ledger.append("ledger_break_accepted", **brk)
+        self.ledger.stamp = {}
 
     def _resume_fixups(self) -> None:
         self.state.runtime.resumes += 1
@@ -482,10 +720,10 @@ class Engine:
                           else "not counted against it")
                 notes = [f"the previous attempt was interrupted: the process stopped {where} ({budget}); this attempt starts again"]
                 for doc in node.controls.write:   # it re-runs from scratch, so a partial edit is rolled back (and kept)
-                    keep = self.project.vpg / "controls" / f"{doc}.interrupted-{nid}-r{self.state.runtime.resumes}.md"
+                    keep = self.project.vpg / "controls" / f"{doc}.interrupted-{nid}-r{self.state.runtime.resumes}{self.controls.suffix(doc)}"
                     if self.controls.undo_interrupted(doc, keep):
                         self.ledger.append("interrupted_edit_undone", node=nid, doc=doc, kept=rel(keep, self.project.root))
-                        notes.append(f"its unfinished edit to controls/{doc}.md was rolled back to the accepted version; the "
+                        notes.append(f"its unfinished edit to {self.controls.rel(doc)} was rolled back to the accepted version; the "
                                      f"discarded text is kept at {rel(keep, self.project.root)}")
                 earlier = [f for f in rt.failures if not f.startswith(("the previous attempt was interrupted", "its unfinished edit"))]
                 rt.failures = notes + earlier   # shown to the next attempt under "The previous attempt failed because"
@@ -506,7 +744,9 @@ class Engine:
         """Which parts of the configuration differ from the ones this run accepted (empty when unknown)."""
         old, new = self.state.runtime.config_parts, self._config_parts()
         if not old:
-            return []
+            old_sha = self.state.runtime.config_sha256
+            new_sha = self._config_fingerprint()
+            return ["configuration"] if old_sha and old_sha != new_sha else []
         out = []
         for key in sorted(set(old) | set(new)):
             if key not in old:   # a part an earlier engine did not cover: name it once, not each of its files
@@ -520,14 +760,33 @@ class Engine:
                 out.append(key)
         return out
 
+    def _refuse_if_config_pending(self, event: str) -> None:
+        changes = self._config_changes()
+        if changes:
+            raise EngineError(f"{event} refused while an unaccepted configuration change is pending ({', '.join(changes[:8])}); "
+                              "run `vpg accept-config` first")
+
     def _config_parts(self) -> dict[str, Any]:
         cfg = self.project.root / "vpg.project.yaml"
+        baseline_files: dict[str, str] = {}
+        reg = self.project.config.get("regression")
+        base = reg.get("baseline") if isinstance(reg, dict) and isinstance(reg.get("baseline"), dict) else {}
+        for key in ("inventory", "master", "layout_audit"):
+            value = base.get(key)
+            if isinstance(value, str) and value.strip():
+                p = Path(value)
+                p = p if p.is_absolute() else self.project.root / p
+                try:
+                    baseline_files[f"baseline.{key}"] = _cached_sha256_file(p)
+                except Exception as exc:
+                    baseline_files[f"baseline.{key}"] = f"unreadable:{type(exc).__name__}"
         return ({
             "project": sha256_file(cfg) if cfg.exists() else None,
             "workflow": sha256_file(self.workflow_path),
             "rules": sha256_file(self.rules_path) if self.rules_path.exists() else None,
             "rubrics": {q.name: sha256_file(q) for q in sorted((PKG_ROOT / "rubrics").glob("*.yaml"))},
             "defaults": sha256_file(PKG_ROOT / "config" / "defaults.yaml"),
+            "regression_baseline": baseline_files,
             "schemas": {q.name: sha256_file(q) for q in sorted((PKG_ROOT / "schemas" / "artifacts").glob("*.json"))},
             "prompts": {q.name: sha256_file(q) for q in sorted((PKG_ROOT / "prompts").glob("*.md"))},
             "agents": {q.name: sha256_file(q) for q in sorted((PKG_ROOT / "agents").glob("*.yaml"))},
@@ -547,6 +806,10 @@ class Engine:
     def current(self, key: str, state: ProjectState | None = None) -> list[ArtifactRecord]:
         st = self.state if state is None else state
         return sorted((a for a in st.artifacts.values() if a.key == key and a.status == "current"), key=lambda a: a.id)
+
+    def _fresh_optional_artifact(self, a: ArtifactRecord) -> bool:
+        from .freshness import OPTIONAL_KEYS, fresh
+        return a.key not in OPTIONAL_KEYS or bool(fresh([a], self.state))
 
     def reviewer_nodes(self) -> list[str]:
         gate_node = next(n for n in self.wf.nodes if n.gate == "review_gate")
@@ -645,7 +908,7 @@ class Engine:
         for ref in node.inputs:
             kind, _, name = ref.partition(":")
             if kind == "artifact":
-                parts[ref] = [a.sha256 for a in self.current(name, st)]
+                parts[ref] = [artifact_identity(a) for a in self.current(name, st)]
             elif kind == "control":
                 parts[ref] = hashes.get(name)
             elif kind == "state":
@@ -672,6 +935,10 @@ class Engine:
         parts["command"] = self.project.command_for(node.id)
         if node.kind == NodeKind.REVIEW and scheme >= 2:   # a verdict belongs to the configuration that judged it
             parts["judged_under"] = st.runtime.config_sha256
+        if node.id == "n06_creative_direction":
+            from . import scoring
+            principal = (((st.runtime.accepted_policy or {}).get("autonomy") or {}).get("principal") or "Wei").strip()
+            parts["preference_model_version"] = st.runtime.preference_model_pins.get(scoring.principal_key(principal))
         if parts["command"] and scheme >= 1:   # the code it runs: editing a script it calls re-runs the node, not a memo-skip
             parts["command_code"] = self.project.command_code(node.id) if code == "current" else [tuple(c) for c in code]
         if node.map_over:
@@ -763,6 +1030,7 @@ class Engine:
             self._save("executed")
 
     def run(self, max_steps: int = 1000) -> dict[str, Any]:
+        self._note_expired_provisionals()
         for _ in range(max_steps):
             progressed = self.step()
             self._drain_publish()   # a version the step cut is published after the step's save
@@ -771,9 +1039,9 @@ class Engine:
         return self.status()
 
     def _integrity_problems(self) -> list[str]:
-        special = [f"controls/{d}.md is not a regular file (a directory, pipe or device). Recreate the accepted version with "
+        special = [f"{self.controls.rel(d)} is not a regular file (a directory, pipe or device). Recreate the accepted version with "
                    f"`vpg restore-control {rel(self.project.root, Path.cwd())} --doc {d} --actor <name>` (move a directory away "
-                   "first), then `vpg unblock … integrity`" for d in CONTROL_DOCS
+                   "first), then `vpg unblock … integrity`" for d in self.controls.docs
                    if self.controls.path(d).exists() and not self.controls.path(d).is_file()]
         if special:   # checked before anything hashes the documents
             return special
@@ -783,10 +1051,19 @@ class Engine:
             problems.append("immutable project inputs changed after they were frozen")
         for doc in self.controls.unaccounted(self._inflight_writers()):
             if not self.controls.path(doc).exists():
-                problems.append(f"{doc}.md was deleted outside the workflow. Recreate the accepted version with `vpg restore-control "
+                problems.append(f"{self.controls.label(doc)} was deleted outside the workflow. Recreate the accepted version with `vpg restore-control "
                                 f"{rel(self.project.root, Path.cwd())} --doc {doc} --actor <name>`, then `vpg unblock … integrity`")
                 continue
-            problems.append(f"{doc}.md changed outside the workflow. Restore the accepted version with `vpg restore-control "
+            pending, writer = self.controls._open_cr(doc), self.control_writer(doc)
+            if pending is not None and writer and self.state.controls[doc].status == "approved" and self._will_dispatch(writer):
+                # the request is approved and `vpg run` hands its writer a task; the edit was made outside one (#147). Neutral on
+                # timing: before the dispatch, or in a task that a later approval cancelled
+                problems.append(f"{self.controls.label(doc)} changed outside its writer's task: {writer} re-runs for approved {pending.id}, and only "
+                                f"its task may make the edit. Restore the accepted version with `vpg restore-control "
+                                f"{rel(self.project.root, Path.cwd())} --doc {doc} --actor <name>` (the edit is kept aside), then "
+                                f"`vpg unblock … integrity`. {self.edit_window_advice(doc, how=' (copy the kept-aside text back)')}")
+                continue
+            problems.append(f"{self.controls.label(doc)} changed outside the workflow. Restore the accepted version with `vpg restore-control "
                             f"{rel(self.project.root, Path.cwd())} --doc {doc} --actor <name>` (the edit is kept aside), then "
                             "`vpg unblock … integrity`. To make the change, have its writer make it: reject with feedback at its "
                             "gate, or open `vpg change-request` for an approved document")
@@ -822,10 +1099,25 @@ class Engine:
 
     def _prepare(self, nid: str) -> NodeContext | None:
         node, rt = self.node(nid), self.rt(nid)
+        if nid == "n06_creative_direction" and self._autonomy_mode() == "provisional":
+            from . import scoring
+            principal = self._principal()
+            self._pin_model_version(principal, int(scoring.load_current(self._preference_store(principal)).get("version", 0)))
+        if rt.status == S.STALE and node.kind != NodeKind.TOOL and not self._router(nid):
+            adopted = self._unrouted_open_defects(nid)
+            if adopted:   # #160: set before the fingerprint, so the node re-runs with them instead of memo-passing
+                rt.rework_defects = sorted(set(rt.rework_defects) | set(adopted))
+                decided = self.state.evaluation.gate_results[-1].id
+                for d in self.state.evaluation.defects:
+                    if d.id in adopted:   # as the plan's routing does: comparisons and failure counts see it
+                        d.status, d.rework_gate = "in_rework", decided
+                self.ledger.append("rework_adopted", node=nid, defects=adopted, gate=decided,
+                                   reason="open blocking defects traced to this node were never routed to it: an "
+                                          "invalidation re-staled the gate and the regeneration plan before the plan ran")
         fp = self.fingerprint(node)
         # Memoisation is for pure producers. Gates and routers (gate hooks, loop/escalate edges) always re-evaluate,
         # because skipping them would skip their routing.
-        router = bool(node.gate) or any(e.kind != EdgeKind.FLOW for e in self.index.outgoing(nid))
+        router = self._router(nid)
         if rt.status == S.STALE and rt.last_pass_fingerprint == fp and not rt.rework_defects and not router and not rt.force_rerun:
             rt.status = S.STEP_PASS
             rt.memo_hits += 1
@@ -850,6 +1142,27 @@ class Engine:
                            executor=getattr(self.executor, "name", "?"), rework=rt.rework_defects,
                            **({"sources": seen} if seen else {}))
         return ctx
+
+    def _unrouted_open_defects(self, nid: str) -> list[str]:
+        """#160: the blocking defects traced to `nid` that the latest gate decided to rework but nothing has put in rework
+        yet. Routing happens only in the regeneration plan, which marks them `in_rework`; an invalidation that
+        re-stales the gate and the plan before the plan runs (an approved change request does) used to drop it, so the
+        node memo-passed on unchanged inputs and the defect came back a whole review round later.
+
+        The plan and adoption both stamp the deciding gate on the defect, so a gate decision puts a defect in rework at
+        most once, even after a reviewer reports it again (which flips it to `persisting`) before the next gate. A
+        defect reported again since that gate decided is the next gate's to decide: a correction now would not be
+        reviewed before that gate, and a routing recorded before v1.8 carries no stamp. A gate that blocked or passed
+        routes nothing, and defects held for a human stay held."""
+        gates = self.state.evaluation.gate_results
+        if not gates or gates[-1].outcome != "rework":
+            return []
+        decided, rt = gates[-1], self.rt(nid)
+        blocking = set(self.wf.policies.blocking_severities)
+        return sorted(d.id for d in self.state.evaluation.defects
+                      if d.id in decided.open_blocking and d.traced_node == nid and d.status in ("open", "persisting")
+                      and d.rework_gate != decided.id and d.last_seen_version <= decided.version
+                      and d.severity in blocking and not d.needs_human and not d.human_hold and d.id not in rt.rework_defects)
 
     def _source_bytes(self) -> dict[str, str]:
         """#100: each registered source's bytes (sha256, 16 hex) as a node that reads them is dispatched, so the release
@@ -902,19 +1215,55 @@ class Engine:
             return NodeResult(outcome="__error__", data={"error": f"{type(exc).__name__}: {exc}",
                                                          "trace": traceback.format_exc()[-1500:]})
 
-    def _govern_findings(self, findings: list[Finding]) -> list[Finding]:
+    def _govern_findings(self, findings: list[Finding], governed: list[dict[str, Any]] | None = None) -> list[Finding]:
+        """The rubric sets each finding's level: a SHOULD dimension's finding is a nit, and a dimension whose rule is
+        inactive judges nothing. A reviewer's P1–P3 is never demoted or dropped silently (#162). A demoted one keeps
+        its filed severity and the reason in its message; a note quoted back by a reviewer is always stripped first.
+        `governed` (if given) receives one record per demoted or dropped reviewer finding (`index` in the result, or
+        None when dropped)."""
         levels = self._dimension_levels()
         out = []
         for f in findings:
+            reviewer = str(f.check).startswith("review:")
+            if reviewer and _GOVERNED_NOTE.search(f.message):
+                f = f.model_copy(update={"message": _GOVERNED_NOTE.sub("", f.message)})
             lvl = levels.get(f.dimension)
             if lvl is None and f.dimension in _all_dim_ids(load_rubrics(PKG_ROOT)):
+                if reviewer and f.severity != "nit" and governed is not None:
+                    rule, reason = self._inactive_cause(f.dimension)
+                    governed.append({"index": None, "filed": f.severity, "to": "dropped", "dimension": f.dimension,
+                                     "rule": rule, "reason": reason})
                 continue   # dimension disabled: its rule is inactive
             if lvl == "SHOULD":
-                f = f.model_copy(update={"level": "SHOULD", "severity": "nit"})
+                update: dict[str, Any] = {"level": "SHOULD", "severity": "nit"}
+                if reviewer and f.severity != "nit":
+                    rule, reason = self._advisory_cause(f.dimension)
+                    update["message"] = f"{f.message} [filed {f.severity}; not blocking: {reason}]"
+                    if governed is not None:
+                        governed.append({"index": len(out), "filed": f.severity, "to": "nit", "dimension": f.dimension,
+                                         "rule": rule, "reason": reason})
+                f = f.model_copy(update=update)
             elif lvl == "MUST" and f.level != "MUST":
                 f = f.model_copy(update={"level": "MUST"})   # the rubric sets the level; a reviewer cannot downgrade it
             out.append(f)
         return out
+
+    def _advisory_cause(self, dim_id: str) -> tuple[str, str]:
+        """Why a SHOULD dimension doesn't block, as (rule, reason): a rule not yet adopted on a dimension its rubric
+        declares MUST, or else the rubric itself (no rule to promote)."""
+        spec = self._rubric_dimension_specs().get(dim_id, {})
+        if spec.get("advisory_reason"):
+            return str(spec.get("rule") or ""), str(spec["advisory_reason"])
+        return "", f"{dim_id} is a SHOULD dimension in its rubric"
+
+    def _inactive_cause(self, dim_id: str) -> tuple[str, str]:
+        spec = {d["id"]: d for rub in load_rubrics(PKG_ROOT).values() for d in rub["dimensions"]}.get(dim_id, {})
+        rule = str(spec.get("rule") or "")
+        try:
+            state = RuleBase(self.rules_path).get(rule)["lifecycle"]["state"]
+        except (OSError, KeyError, ValueError):
+            state = "not in the rule base"
+        return rule, f"rule {rule} is {state}, so {dim_id} is not judged"
 
     def _handle(self, ctx: NodeContext, res: NodeResult) -> None:
         rt = self.rt(ctx.node.id)
@@ -938,12 +1287,20 @@ class Engine:
         self._save("judging")   # a crash while this node is judged is charged to it on resume
         failures: list[str] = []
         others = [n for n in self._inflight() if n != node.id]
-        accepted_before = {d: self.state.controls[d].sha256 for d in CONTROL_DOCS}
+        accepted_before = {d: self.state.controls[d].sha256 for d in self.controls.docs}
+        changed_docs_pre = [d for d in self.controls.docs if self.controls.path(d).is_file()
+                            and sha256_file(self.controls.path(d)) != accepted_before[d]]
+        pre_problems, _pre_warnings = self._text_privacy_scan_outputs(node, ctx, {}, {o.key: o.kind for o in node.outputs},
+                                                                      changed_docs=changed_docs_pre)
+        if pre_problems:
+            self.controls.restore_to_state("privacy-refused")
+            self._fail(node, self.rt(node.id), pre_problems)
+            return
         violations, ambiguous = self.controls.check_changes(node, others)
-        changed_docs = [d for d in CONTROL_DOCS if self.state.controls[d].sha256 != accepted_before[d]]
+        changed_docs = [d for d in self.controls.docs if self.state.controls[d].sha256 != accepted_before[d]]
         failures += violations
         if ambiguous:
-            self._escalate_run("control-integrity", f"unauthorized edits to {', '.join(d + '.md' for d in ambiguous)} while "
+            self._escalate_run("control-integrity", f"unauthorized edits to {', '.join(self.controls.label(d) for d in ambiguous)} while "
                                                     f"{', '.join([node.id] + others)} were in flight; the editor cannot be identified, "
                                                     "so the edits were reverted and a human must review")
         backup_prod = self.state.production.model_copy(deep=True)
@@ -953,16 +1310,34 @@ class Engine:
         self._defect_events = []
         registered: dict[str, list[ArtifactRecord]] = {}
         review, findings, version = None, [], self.state.runtime.current_version
+        governed: list[dict[str, Any]] = []
+        privacy_text_warnings: list[str] = []
         try:   # anything that raises while judging a submission is a failed attempt with a message, never a traceback
+            self._prepare_scored_fork(ctx, res)
+            self._attach_voice_seams(ctx, res)
+            engine_written = set(res.data.pop("_engine_written_outputs", []))
+            scan_problems, privacy_text_warnings = self._text_privacy_scan_outputs(node, ctx, res.outputs,
+                                                                                   {o.key: o.kind for o in node.outputs},
+                                                                                   changed_docs=changed_docs,
+                                                                                   engine_written=engine_written)
+            failures += scan_problems
             registered, reg_fail = self._register_outputs(ctx, res)
             failures += reg_fail
             ctx.registered = registered
             if not reg_fail:
                 failures += self._apply_state_writes(node, registered)
+            if node.kind != NodeKind.REVIEW and ctx.pre_findings:
+                governed = self._govern_findings(ctx.pre_findings)
+                ctx.pre_findings = governed
+                # Only the voice seam audit blocks a producing node (#155), and only once its rule is adopted. Any other
+                # pre-tool finding on a non-review node stays what it was before v1.8: guidance in the agent's packet.
+                failures += [f"{f.dimension}: {f.message}" for f in governed
+                             if f.dimension == "VOI-SEAMS" and f.level == "MUST" and f.severity != "nit"]
             if node.kind == NodeKind.REVIEW:
                 review, findings, unscored = merge_review(node, version, ctx.pre_findings, res.review, self.rubrics)
                 failures += self._bind_review(node, review, res)
-                findings = self._govern_findings(findings)
+                findings = self._govern_findings(findings, governed)
+                review.verdict = review_verdict(review.scores, findings)   # #162: judged after the rubric's levels
                 if unscored:
                     failures.append(f"reviewer left MUST dimensions unscored: {unscored} (score the whole rubric)")
                 for s in review.scores:
@@ -979,18 +1354,31 @@ class Engine:
         if failures:
             self.state.production, self.state.inputs, self.state.evaluation = backup_prod, backup_inputs, backup_eval
             self.state.runtime.defect_failures, self._defect_events = backup_failures, []
+            if any("privacy scan could not complete before video registration" in f for f in failures):
+                rt.status = S.WAITING_RUNTIME
+                rt.failures = failures
+                return
             for recs in registered.values():
                 for r in recs:
                     self.state.artifacts[r.id] = r.model_copy(update={"status": "superseded"})
             self._fail(node, rt, failures)
             return
+        for warning in privacy_text_warnings:
+            self.ledger.append("privacy_text_warning", node=node.id, warning=warning)
         self._commit_outputs(registered)
         self._flush_defect_events()   # the interpretation's defect changes are kept now, so their events are too
         if changed_docs and not self._recheck_readers(node, changed_docs):
             return   # a re-check cycle escalated: the writer stays BLOCKED and re-runs once a human unblocks it
         data = dict(res.data)
+        if fork_event := data.pop("_fork_scored", None):
+            self.ledger.append("fork_scored", **fork_event)
         if review is not None:
             ids = self._record_findings(findings, review.id, version)
+            for g in governed:   # #162: each reviewer P1–P3 the rubric's levels demoted or dropped, for the end review
+                idx = g.pop("index")
+                self._defect_events.append({"event": "finding_governed", "node": node.id, "review": review.id,
+                                            "version": version, "attempt": rt.attempts,
+                                            "defect": ids[idx] if idx is not None else "", **g})
             self._flush_defect_events()
             review.defect_ids = sorted(set(ids))
             self.state.evaluation.reviews.append(review)
@@ -999,6 +1387,7 @@ class Engine:
         if node.gate == "review_gate":
             outcome, gdata = self._review_gate(node)
             data.update(gdata)
+            self._flush_defect_events()
         elif node.gate == "freeze_inputs" and outcome == "pass":
             self._freeze_inputs()
         elif node.gate == "package":
@@ -1015,6 +1404,8 @@ class Engine:
                 rt.status = S.WAITING_HUMAN
                 self.ledger.append("awaiting_human", node=node.id, decision=node.human_review.decision,
                                    approver=node.human_review.approver)
+                if node.id == self._release_node():
+                    self._note_review_forks_offered(node.id)
             return
         if outcome not in node.outcomes:
             self._fail(node, rt, [f"outcome '{outcome}' is not one of {node.outcomes}"])
@@ -1023,6 +1414,512 @@ class Engine:
             self._request_preflight(node, rt, outcome, data)
             return
         self._pass(node, rt, outcome, data)
+
+    def _preference_store(self, principal: str | None = None) -> Path:
+        from . import scoring
+        return scoring.preference_store(PKG_ROOT, (principal or self._principal()).strip())
+
+    def _principal(self) -> str:
+        return (((self.state.runtime.accepted_policy or {}).get("autonomy") or {}).get("principal") or "Wei").strip()
+
+    def _pinned_model_version(self, principal: str) -> int | None:
+        from . import scoring
+        return self.state.runtime.preference_model_pins.get(scoring.principal_key(principal))
+
+    def _pin_model_version(self, principal: str, version: int) -> None:
+        from . import scoring
+        key = scoring.principal_key(principal)
+        if key not in self.state.runtime.preference_model_pins:
+            self.state.runtime.preference_model_pins[key] = version
+
+    def _prepare_scored_fork(self, ctx: NodeContext, res: NodeResult) -> None:
+        if ctx.node.id != "n06_creative_direction" or "fork" in res.outputs:
+            return
+        concepts_doc = ctx.load("concepts") or {}
+        concepts = concepts_doc.get("concepts") if isinstance(concepts_doc, dict) else None
+        if not concepts:
+            return
+        from . import scoring
+        if self._autonomy_mode() != "provisional":
+            return
+        dim_ids = [d["id"] for d in scoring.CONCEPT_FORK_DIMS]
+        if any(set((c.get("scores") or {}).keys()) != set(dim_ids) for c in concepts):
+            return
+        principal = self._principal()
+        store = self._preference_store(principal)
+        current = scoring.load_current(store)
+        self._pin_model_version(principal, int(current.get("version", 0)))
+        model = scoring.load_model_version(store, self._pinned_model_version(principal))
+        fork_no = len(get_path(self.state, "production.forks_ref") or {}) + 1
+        fork_id = f"F-{fork_no:03d}"
+        concept_ref = next(iter(reversed(ctx.current("concepts"))), None)
+        agent_pick = (read_json(ctx.output_path("creative_decision", res.outputs["creative_decision"])).get("selected")
+                      if res.outputs.get("creative_decision") else "")
+        candidates = []
+        for c in concepts:
+            scores = c["scores"]
+            candidates.append({
+                "id": c["id"],
+                "label": c.get("title") or c["id"],
+                "description": {"logline": c.get("logline", ""), "structure": c.get("structure", [])},
+                "scores": {d["id"]: float(scores[d["id"]]) for d in scoring.CONCEPT_FORK_DIMS},
+                "fidelity": "film" if c["id"] == agent_pick else "description",
+                "passes_rubric": True,
+                "rationale": c.get("score_rationale") or c.get("logline") or c["id"],
+                **({"artifact_ref": concept_ref.id} if concept_ref else {}),
+            })
+        fork = {"fork_id": fork_id, "fork_type": "concept", "node": ctx.node.id, "version": self.state.runtime.current_version + 1,
+                "dims": scoring.CONCEPT_FORK_DIMS, "candidates": candidates}
+        s = scoring.score(model, fork)
+        fork["scored"] = {"model_version": s["model_version"],
+                          "predicted": {r["id"]: round(r["p"], 4) for r in s["ranked"]},
+                          "confidence": round(s["confidence"], 4), "band": s["band"], "build": s["build"],
+                          "agent_pick": agent_pick,
+                          "model_top": s["ranked"][0]["id"]}
+        ctx.workdir.mkdir(parents=True, exist_ok=True)
+        out = ctx.workdir / f"{fork_id}.fork.json"
+        fork = self._mask_engine_text(fork)
+        write_json_atomic(out, fork)
+        res.outputs["fork"] = {fork_id: out.name}
+        res.data.setdefault("_engine_written_outputs", []).append("fork")
+        res.data["_fork_scored"] = {"fork_id": fork_id, "node": ctx.node.id, "version": fork["version"],
+                                    "model_version": s["model_version"], "top": s["ranked"][0]["id"],
+                                    "confidence": round(s["confidence"], 4), "band": s["band"], "build": s["build"]}
+
+    def _mask_engine_text(self, value: Any) -> Any:
+        from .tools import privacy
+        try:
+            names, _skipped = privacy.load_names(self.project.root, self.project.config)
+        except privacy.PrivacyConfigError:
+            names = []
+        if not names:
+            return value
+        if isinstance(value, str):
+            text = privacy.masker(names)(value)
+            for idx, name in enumerate(names, 1):
+                parts = privacy.folded_spelling(name).split()
+                if not parts:
+                    continue
+                sep = r"[\W_]*"
+                pats = [sep.join(map(re.escape, parts))]
+                if len(parts) >= 2:
+                    pats.append(sep.join(map(re.escape, reversed(parts))))
+                for pat in pats:
+                    text = re.sub(pat, f"[list entry #{idx}]", text, flags=re.I)
+            return text
+        if isinstance(value, list):
+            return [self._mask_engine_text(v) for v in value]
+        if isinstance(value, dict):
+            return {k: self._mask_engine_text(v) for k, v in value.items()}
+        return value
+
+    @_human_action("fork_record")
+    def record_fork(self, fork_path: str | Path, actor: str) -> dict[str, Any]:
+        if self._at_release_wait():
+            raise EngineError("fork record refused: the release node is waiting, so the packet's forks are frozen")
+        fork = read_json(Path(fork_path))
+        schema = read_json(PKG_ROOT / "schemas" / "artifacts" / "fork.schema.json")
+        validator = jsonschema.validators.validator_for(schema)(schema)
+        errors = [f"{err.json_path}: {err.message}" for err in sorted(validator.iter_errors(fork), key=lambda x: list(x.path))]
+        if errors:
+            raise EngineError("fork record refused: " + "; ".join(errors))
+        failing = [c["id"] for c in fork.get("candidates", []) if not c.get("passes_rubric", True)]
+        if failing:
+            raise EngineError(f"fork record refused: rubric-failing candidates cannot be recorded for review: {', '.join(failing)}")
+        self._validate_fork_record(fork)
+        fork_id = str(fork["fork_id"])
+        if fork_id in (getattr(self.state.production, "forks_ref", {}) or {}):
+            raise EngineError(f"fork record refused: fork id {fork_id} is already recorded; use a new id")
+        dest_dir = self.project.work / "forks"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = (dest_dir / f"{fork_id}.json").resolve()
+        if not dest.is_relative_to(dest_dir.resolve()):
+            raise EngineError("fork record refused: fork path escapes work/forks")
+        write_json_atomic(dest, fork)
+        rec = ArtifactRecord(id=f"fork@record#{fork_id}", key="fork", path=rel(dest, self.project.root),
+                             sha256=sha256_file(dest), bytes=dest.stat().st_size, node=str(fork["node"]), attempt=0,
+                             item=fork_id, produced_at=now(), tool=actor, version=self.state.runtime.current_version)
+        for aid, old in list(self.state.artifacts.items()):
+            if old.key == "fork" and old.item == fork_id and old.status == "current":
+                self.state.artifacts[aid] = old.model_copy(update={"status": "superseded"})
+        self.state.artifacts[rec.id] = rec
+        self.state.production.forks_ref[fork_id] = rec.path
+        self.ledger.append("fork_recorded", fork_id=fork_id, fork_type=fork["fork_type"], node=fork["node"],
+                           version=fork["version"], actor=actor, artifact=rec.id)
+        self._save("fork_record")
+        return self.status()
+
+    def _validate_fork_record(self, fork: dict) -> None:
+        dims = [d["id"] for d in fork.get("dims", [])]
+        eligible = [c for c in fork.get("candidates", []) if c.get("passes_rubric", True)]
+        ids = [c.get("id") for c in eligible]
+        if len(ids) != len(set(ids)):
+            raise EngineError("fork record refused: candidate ids must be unique")
+        for c in eligible:
+            scores = c.get("scores") if isinstance(c.get("scores"), dict) else {}
+            if set(scores) != set(dims):
+                raise EngineError(f"fork record refused: candidate {c.get('id')} scores must cover every dimension")
+            bad = [d for d, v in scores.items() if not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= 5]
+            if bad:
+                raise EngineError(f"fork record refused: candidate {c.get('id')} has non-integer/out-of-range scores: {bad}")
+        predicted = ((fork.get("scored") or {}).get("predicted") or {})
+        if not predicted or set(predicted) != set(ids):
+            raise EngineError("fork record refused: scored.predicted must cover every eligible candidate")
+
+    @_human_action("review_record")
+    def record_review(self, decision_path: str | Path, actor: str, on_behalf_of: str = "", instruction: str = "",
+                      instruction_at: str = "") -> dict[str, Any]:
+        release = self._release_node()
+        if not release:
+            raise EngineError("review record refused: no release node in this workflow")
+        node, rt = self.node(release), self.rt(release)
+        if rt.status != S.WAITING_HUMAN:
+            raise EngineError(f"review record refused: {release} is not waiting for the end review ({rt.status.value})")
+        relay = self._require_human(actor, "recording the end review", on_behalf_of, instruction, instruction_at)
+        accepted_principal = self._principal()
+        acting_principal = relay.get("principal") or actor
+        principal = accepted_principal
+        decision = read_json(Path(decision_path))
+        forks = self._load_review_forks()
+        packet = self._release_packet_template()
+        self._validate_review_decision(decision, forks, packet)
+        verdict_ratings = self._validate_verdict_ratings(decision.get("verdict_ratings"))
+        approve = decision.get("release") == "approve"
+        outcome = node.human_review.outcomes[0] if approve else node.human_review.outcomes[1]
+        confirm = decision.get("confirm_provisional")
+        reject = decision.get("reject_provisional") or {}
+        if reject and not isinstance(reject, dict):
+            raise EngineError("review record refused: reject_provisional must be an object of node → feedback")
+        item_rejected = self._apply_review_item_decisions(decision, packet, actor, rt.started_at or "")
+        if item_rejected:
+            approve = False
+            outcome = node.human_review.outcomes[1]
+            decision["release"] = "changes"
+        acked, signed, rejected_any = self._release_decision(node, outcome, actor, approve=approve,
+                                                             confirm_provisional=_csv_or_all(confirm),
+                                                             reject_provisional=reject, rejection_feedback="",
+                                                             ack_warnings=_list_or_all(decision.get("ack_warnings")),
+                                                             signoffs=decision.get("signoffs") or [],
+                                                             on_behalf_of=on_behalf_of, instruction=instruction,
+                                                             instruction_at=instruction_at, release_started_at=rt.started_at or "")
+        locked = [] if reject or item_rejected else self._lock_on_approval(node, outcome, actor)
+
+        from . import scoring
+        store = self._preference_store(principal)
+        review_id = f"{self.state.runtime.run_id}:v{self.state.runtime.current_version}:{release}:a{rt.attempts}"
+        self._undo.append(lambda s=store, rid=review_id: scoring.remove_review_rows(s, rid))
+        should_learn = (acting_principal == accepted_principal)
+        forecast, forecast_pass, unscored_must = self._review_forecast(self.state.runtime.current_version)
+        for fid, answer in sorted((decision.get("forks") or {}).items()):
+            fork = forks[fid]
+            scored = fork.get("scored", {})
+            prediction = {"model_version": scored.get("model_version"), "predicted": scored.get("predicted", {}),
+                          "confidence": scored.get("confidence"), "confidence_raw": scored.get("confidence_raw"),
+                          "agent_top": scored.get("model_top") or max(scored.get("predicted", {"": 0}), key=scored.get("predicted", {"": 0}).get)}
+            blind = not self._fork_shown_before(fid, release)
+            row = scoring.record_choice(store, fork, answer.get("ranking") or [], answer.get("ratings") or {}, principal,
+                                        answer.get("why") or "", blind, False, f"review record: {Path(decision_path).name}",
+                                        prediction=prediction, run=self.state.runtime.run_id, review_id=review_id,
+                                        actor=(actor if should_learn else ""), equal_fidelity=self._equal_fidelity(fork), append=False)
+            if should_learn:
+                scoring.append_decision_atomic(store, row)
+            self.ledger.append("human_choice", run=self.state.runtime.run_id, review_id=review_id,
+                               fork_id=fid, actor=actor, principal=acting_principal, learned=should_learn, ranking=row["ranking"],
+                               ratings=row["ratings"], why=row["why"], prediction={
+                                   "model_version": fork.get("scored", {}).get("model_version"),
+                                   "predicted": fork.get("scored", {}).get("predicted"),
+                                   "confidence": fork.get("scored", {}).get("confidence"),
+                                   "band": fork.get("scored", {}).get("band"),
+                               }, blind=row["blind"], retrospective=False, source=row["source"])
+        verdict_row = {"type": "build_verdict", "schema": 1, "principal": principal, "run": self.state.runtime.run_id,
+                       "version": self.state.runtime.current_version, "review_id": review_id, "at": now(),
+                       "outcome": "approved" if approve else "changes_requested",
+                       "words": self._mask_engine_text(str(decision.get("feedback") or "")),
+                       "forecast": forecast, "forecast_pass": forecast_pass, "unscored_must": unscored_must,
+                       "verdict_ratings": verdict_ratings,
+                       "forks_ranked": len(decision.get("forks") or {})}
+        if should_learn:
+            scoring.append_verdict_atomic(store, verdict_row)
+        self.ledger.append("build_verdict", **{k: v for k, v in {**verdict_row, "principal": acting_principal}.items() if k != "words"},
+                           actor=actor, learned=should_learn)
+        feedback = decision.get("feedback") or ""
+        if rejected_any:
+            if feedback:
+                self.add_feedback(str(feedback), actor, reopen=False, on_behalf_of=on_behalf_of, instruction=instruction,
+                                  instruction_at=instruction_at)
+            self._update_status()
+            self._save("review_record")
+            return self.status()
+
+        self._record_approval(node, outcome, actor, human=not actor.strip().lower().startswith("agent:"), reason=feedback or "end review",
+                              locked=locked, warning_acks=acked, signoffs=signed)
+        if not approve and feedback:
+            self.add_feedback(str(feedback), actor, reopen=False, on_behalf_of=on_behalf_of, instruction=instruction,
+                              instruction_at=instruction_at)
+        self._pass(node, rt, outcome, rt.result_data)
+        self._update_status()
+        self._save("review_record")
+        return self.status()
+
+    def _item_decision_ids(self, value: Any, item_map: dict[str, Any]) -> set[str]:
+        if value in (None, "", []):
+            return set()
+        if value == "all":
+            return {k for k, v in item_map.items() if (v or {}).get("default")}
+        raw = value if isinstance(value, list) else str(value).split(",")
+        return {str(x).strip() for x in raw if str(x).strip()}
+
+    def _apply_review_item_decisions(self, decision: dict[str, Any], packet: dict[str, Any], actor: str,
+                                     release_started_at: str) -> bool:
+        item_map = packet.get("item_map") if isinstance(packet.get("item_map"), dict) else {}
+        confirm_value = decision.get("confirm_items")
+        if confirm_value in (None, "", []) and decision.get("confirm_provisional") == "all":
+            confirm_value = [k for k, v in item_map.items() if (v or {}).get("section") == "confirm" and (v or {}).get("default")]
+        confirm = self._item_decision_ids(confirm_value, item_map)
+        reject = self._item_decision_ids(decision.get("reject_items"), item_map)
+        if decision.get("release") == "approve":
+            missing_required = sorted(k for k, v in item_map.items()
+                                      if (v or {}).get("section") == "confirm" and "default" not in (v or {})
+                                      and k not in confirm and k not in reject)
+            if missing_required:
+                raise EngineError("review record refused: explicit decision required for item(s): " + ", ".join(missing_required))
+        unknown = sorted((confirm | reject) - set(item_map))
+        if unknown:
+            raise EngineError(f"review record refused: unknown item id(s): {', '.join(unknown)}")
+        both = sorted(confirm & reject)
+        if both:
+            raise EngineError(f"review record refused: item(s) cannot be both confirmed and rejected: {', '.join(both)}")
+        if (confirm or reject) and self.ledger.stamp.get("relayed"):
+            self._check_release_relay_time(self.ledger.stamp.get("instruction_at", ""), release_started_at, "item decision")
+        acked_warnings = []
+        feedback_by_id = {f.id: f for f in self.state.evaluation.feedback}
+        for item_id in sorted(confirm):
+            target = str((item_map.get(item_id) or {}).get("target", ""))
+            if target.startswith("feedback."):
+                fid = target.split(".", 1)[1]
+                if fid in feedback_by_id:
+                    feedback_by_id[fid].status = "confirmed"
+                    feedback_by_id[fid].hold = ""
+                    self.ledger.append("feedback_confirmed", id=fid, actor=actor, item=item_id)
+            elif target.startswith("end_review_items."):
+                eri = target.split(".", 1)[1]
+                for entry in self.state.runtime.end_review_items:
+                    if entry.get("id") == eri:
+                        entry["disposition"] = "acknowledged"
+                        entry["decided_by"] = actor
+                        entry["decided_at"] = now()
+                        self.ledger.append("end_review_item_acknowledged", id=eri, actor=actor, item=item_id)
+            elif target.startswith("ack_warnings."):
+                acked_warnings.append(target.rsplit(".", 1)[-1])
+        if acked_warnings:
+            current = _list_or_all(decision.get("ack_warnings"))
+            decision["ack_warnings"] = sorted(set(current + acked_warnings), key=str)
+        for item_id in sorted(reject):
+            target = str((item_map.get(item_id) or {}).get("target", ""))
+            if target.startswith("feedback."):
+                fid = target.split(".", 1)[1]
+                if fid in feedback_by_id:
+                    fb = feedback_by_id[fid]
+                    fb.status, fb.hold, fb.no_action_reason, fb.defect_ids = "open", "", "", []
+                    self.ledger.append("feedback_reopened", id=fid, actor=actor, item=item_id)
+            elif target.startswith("end_review_items."):
+                eri = target.split(".", 1)[1]
+                for entry in self.state.runtime.end_review_items:
+                    if entry.get("id") == eri:
+                        entry["disposition"] = "rejected"
+                        entry["decided_by"] = actor
+                        entry["decided_at"] = now()
+                        self.ledger.append("end_review_item_rejected", id=eri, actor=actor, item=item_id)
+            elif target.startswith("ack_warnings.") or target.startswith("relayed."):
+                self.add_feedback(f"Rejected end-review item {item_id}: {target}", actor, reopen=False)
+        return bool(reject)
+
+    def _check_release_relay_time(self, instruction_at: str, release_started_at: str, what: str) -> None:
+        if not instruction_at:
+            raise EngineError(f"relayed {what} needs --instruction-at")
+        try:
+            given = datetime.fromisoformat(instruction_at)
+            started = datetime.fromisoformat(release_started_at)
+            if given.tzinfo is None or started.tzinfo is None:
+                raise EngineError("--instruction-at must be an ISO timestamp with timezone")
+            if given <= started:
+                raise EngineError(f"--instruction-at for relayed {what} must be later than the current release attempt")
+        except ValueError:
+            raise EngineError("--instruction-at must be an ISO timestamp with timezone") from None
+
+    def _release_decision(self, node: NodeDef, decision: str, actor: str, *, approve: bool,
+                          confirm_provisional: str | list[str] | None, reject_provisional: dict | str | None,
+                          rejection_feedback: str, ack_warnings: list[str], signoffs: list[str],
+                          on_behalf_of: str, instruction: str, instruction_at: str,
+                          release_started_at: str) -> tuple[list[str], list[str], bool]:
+        if node.id != self._release_node():
+            raise EngineError("release decision helper is only for the release node")
+        rejected_any = False
+        confirm = _csv_or_all(confirm_provisional)
+        if confirm in ("all|[…]", "all|[...]"):
+            confirm = ""
+        if approve and reject_provisional:
+            raise EngineError("release approval refused: approve cannot also reject provisional approvals")
+        if confirm:
+            self._handle_release_provisional_controls(confirm, "", "", actor, on_behalf_of, instruction, instruction_at,
+                                                       release_started_at)
+        if isinstance(reject_provisional, dict):
+            if reject_provisional and (self.ledger.stamp.get("relayed")):
+                self._check_release_relay_time(instruction_at, release_started_at, "provisional confirmation/rejection")
+            for provisional_node, text in reject_provisional.items():
+                self._reject_standing_provisional(str(provisional_node), str(text), actor)
+                rejected_any = True
+        elif reject_provisional:
+            self._handle_release_provisional_controls("", str(reject_provisional), rejection_feedback, actor, on_behalf_of,
+                                                       instruction, instruction_at, release_started_at)
+            rejected_any = True
+        if approve:
+            return (*self._release_approval_requirements(ack_warnings, signoffs), rejected_any)
+        return [], [], rejected_any
+
+    def _reject_standing_provisional(self, node: str, feedback: str, actor: str) -> None:
+        standing = {a.node: a for a in self._standing_provisional()}
+        meta = {k: v for k, v in self.ledger.stamp.items() if k in ("principal", "instruction", "instruction_at", "relayed")}
+        if node not in standing:
+            raise EngineError(f"no standing provisional approval to reject for {node}")
+        if not feedback.strip():
+            raise EngineError("reject_provisional needs feedback")
+        standing[node].rejected_at, standing[node].rejection_feedback = now(), feedback.strip()
+        standing[node].rejected_by = actor
+        standing[node].rejected_principal = meta.get("principal", "")
+        standing[node].rejected_instruction = meta.get("instruction", "")
+        standing[node].rejected_instruction_at = meta.get("instruction_at", "")
+        standing[node].rejection_relayed = bool(meta.get("relayed"))
+        for doc, before in standing[node].pre_lock_controls.items():
+            self.state.controls[doc] = ControlDocState.model_validate(before)
+        self.ledger.append("provisional_rejected", node=node, actor=actor, feedback=feedback.strip())
+        principal = meta.get("principal") or self._principal()
+        target_rt = self.rt(node)
+        target_rt.task_notes_by_attempt.setdefault(target_rt.attempts + 1, []).append(
+            f"{principal}'s rejection of the provisional approval (verbatim): {feedback.strip()}")
+        self.invalidate([node], reason=f"provisional approval rejected at release by {actor}")
+
+    def _load_review_forks(self) -> dict[str, dict]:
+        from .review_forks import offered_review_forks
+        answered = {e["data"].get("fork_id") for e in self.ledger.events("human_choice")}
+        forks = offered_review_forks(self.project.root, getattr(self.state.production, "forks_ref", {}) or {},
+                                     self.state.artifacts.values(), {str(x) for x in answered},
+                                     set(self.index.ids), {nid: rt.attempts for nid, rt in self.state.runtime.nodes.items()})
+        return {str(f["fork_id"]): f for f in forks}
+
+    def _release_packet_template(self) -> dict:
+        latest = next(iter(reversed(self.current("decision_template"))), None)
+        if latest is None:
+            return {"forks": {}}
+        path = self.project.root / latest.path
+        if not path.is_file():
+            raise EngineError("review record refused: registered decision.template.json is missing")
+        if sha256_file(path) != latest.sha256:
+            raise EngineError("review record refused: registered decision.template.json changed on disk; rerun final verification")
+        return read_json(path)
+
+    def _note_review_forks_offered(self, node_id: str) -> None:
+        """Record which forks this waiting period's packet put in front of the principal (its reveal shows the agent's
+        pick). The ledger is append-only, so a later rollback or re-run cannot make them look unseen."""
+        try:
+            fork_ids = sorted((self._release_packet_template().get("forks") or {}))
+        except EngineError:
+            return
+        rt = self.rt(node_id)
+        self.ledger.append("review_forks_offered", node=node_id, attempt=rt.attempts, started_at=rt.started_at or "",
+                           version=self.state.runtime.current_version, fork_ids=fork_ids)
+
+    def _fork_shown_before(self, fork_id: str, release: str) -> bool:
+        """Whether an earlier waiting period of the release node already showed this fork (and so its reveal): a
+        ranking given after that is not blind. The current period's event is the latest one, when it matches the
+        release node's (attempt, started_at); a rollback can repeat both, but never removes the earlier event."""
+        rt = self.rt(release)
+        events = [e for e in self.ledger.events("review_forks_offered") if e["data"].get("node") == release]
+        if events and (events[-1]["data"].get("attempt"), events[-1]["data"].get("started_at") or "") == (rt.attempts, rt.started_at or ""):
+            events = events[:-1]   # this waiting period's own packet is the first showing; every earlier one counts
+        return any(fork_id in (e["data"].get("fork_ids") or []) for e in events)
+
+    def _equal_fidelity(self, fork: dict) -> bool:
+        vals = [c.get("fidelity") for c in fork.get("candidates", []) if c.get("passes_rubric", True)]
+        return bool(vals) and all(vals) and len(set(vals)) == 1
+
+    def _review_forecast(self, version: int) -> tuple[dict[str, float], bool | None, list[str]]:
+        specs = self._review_dimension_specs()
+        current = {r.node: r for r in self.state.evaluation.reviews if r.version == version}
+        scores_by_dim: dict[str, list[float]] = {}
+        passed_by_dim: dict[str, list[bool]] = {}
+        for review in current.values():
+            for score in review.scores:
+                if score.dimension in specs:
+                    scores_by_dim.setdefault(score.dimension, []).append(float(score.score))
+                    passed_by_dim.setdefault(score.dimension, []).append(bool(score.passed))
+        forecast = {dim: min(vals) for dim, vals in scores_by_dim.items()}
+        must_dims = sorted(dim for dim, spec in specs.items() if spec.get("level", "MUST") == "MUST")
+        unscored_must = [dim for dim in must_dims if dim not in passed_by_dim]
+        failed_scored_must = [dim for dim in must_dims if dim in passed_by_dim and not all(passed_by_dim[dim])]
+        forecast_pass: bool | None = False if failed_scored_must else None if unscored_must else True
+        return forecast, forecast_pass, unscored_must
+
+    def _validate_verdict_ratings(self, ratings: Any) -> dict[str, int]:
+        if ratings in (None, ""):
+            return {}
+        if not isinstance(ratings, dict):
+            raise EngineError("review record refused: verdict_ratings must be an object of dimension → 1–5")
+        specs = self._review_dimension_specs()
+        out: dict[str, int] = {}
+        for dim, value in ratings.items():
+            if dim not in specs or not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
+                raise EngineError(f"review record refused: verdict_ratings.{dim} must be a known review-type 1–5 integer rating")
+            out[str(dim)] = value
+        return out
+
+    def _validate_review_decision(self, decision: dict, forks: dict[str, dict], packet: dict) -> None:
+        if not isinstance(decision, dict):
+            raise EngineError("review record refused: decision file must be a JSON object")
+        if decision.get("release") not in {"approve", "changes"}:
+            raise EngineError("review record refused: release must be approve or changes")
+        given = decision.get("forks") or {}
+        if not isinstance(given, dict):
+            raise EngineError("review record refused: forks must be an object")
+        unknown = sorted(set(given) - set(forks))
+        # A rejected build may leave forks unranked (#157: "V4 is a poor production" ranked no option); an approval still
+        # answers every fork, so no agent pick is released without the principal's choice.
+        missing = sorted(set(forks) - set(given)) if decision.get("release") == "approve" else []
+        if unknown or missing:
+            raise EngineError(f"review record refused: fork ids mismatch (unknown {unknown}; missing {missing})")
+        for fid, answer in given.items():
+            if not isinstance(answer, dict):
+                raise EngineError(f"review record refused: {fid} answer must be an object")
+            ids = [c["id"] for c in forks[fid].get("candidates", []) if c.get("passes_rubric", True)]
+            packet_answer = (packet.get("forks") or {}).get(fid) or {}
+            expected_sha = packet_answer.get("sha256")
+            if not expected_sha or forks[fid].get("sha256") != expected_sha:
+                raise EngineError(f"review record refused: {fid}.sha256 does not match the packet")
+            ranking = answer.get("ranking") or []
+            option_map = packet_answer.get("option_map") or {}
+            has_label = any(x in option_map for x in ranking)
+            has_id = any(x in ids for x in ranking)
+            if has_label and has_id:
+                raise EngineError(f"review record refused: {fid}.ranking must use either option labels or candidate ids, not both")
+            if has_label:
+                unknown_labels = [x for x in ranking if x not in option_map]
+                if unknown_labels:
+                    raise EngineError(f"review record refused: {fid}.ranking has unknown option label(s): {unknown_labels}")
+                answer["ranking"] = ranking = [option_map[x] for x in ranking]
+            if ranking != ids and (sorted(ranking) != sorted(ids) or len(set(ranking)) != len(ranking)):
+                raise EngineError(f"review record refused: {fid}.ranking must list every candidate id exactly once")
+            dims = {d["id"] for d in forks[fid].get("dims", [])}
+            ratings = answer.get("ratings") or {}
+            for label in list(ratings):
+                if label in option_map:
+                    ratings[option_map[label]] = ratings.pop(label)
+            answer["ratings"] = ratings
+            for cid, rated in ratings.items():
+                if cid not in ids or not isinstance(rated, dict):
+                    raise EngineError(f"review record refused: {fid}.ratings has unknown candidate {cid}")
+                for dim, value in rated.items():
+                    if dim not in dims or not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
+                        raise EngineError(f"review record refused: {fid}.ratings.{cid}.{dim} must be a known 1–5 dimension rating")
 
     # ------------------------------------------------------------------ independent pre-flight (v1.6)
     def _preflight_node_problems(self) -> list[str]:
@@ -1081,7 +1978,18 @@ class Engine:
         key = self._actor_key(actor)
         return sorted(name for name, keys in self._judged_producers(node).items() if key and key in keys)
 
-    def _review_bind_problems(self, node: NodeDef, reviewed: Any, actor: str) -> list[str]:
+    def _has_voice_seams_result(self) -> bool:
+        if "n12_voice_audio" not in self.state.runtime.nodes:
+            return True
+        version = self.state.runtime.current_version
+        n12 = self.rt("n12_voice_audio")
+        if any(a.version == version or (a.node == "n12_voice_audio" and a.attempt == n12.attempts and n12.status == S.STEP_PASS)
+               for a in self.current("voice_seams")):
+            return True
+        return any(r.version == version and any(f.dimension == "VOI-SEAMS" for f in r.tool_findings)
+                   for r in self.state.evaluation.reviews)
+
+    def _review_bind_problems(self, node: NodeDef, reviewed: Any, actor: str, review: dict[str, Any] | None = None) -> list[str]:
         out = binding_problems(review_bindings(node, self.current), reviewed, self.project.review_policy("binding") == "require")
         if actor.startswith("agent:") and self.project.review_policy("independence") == "require":
             shared = self._shared_with_producers(node, actor)
@@ -1090,6 +1998,9 @@ class Engine:
             elif shared:
                 out.append(f"{actor} produced {', '.join(shared)}, which this review judges; an independent reviewer submits "
                            "it (vpg.project.yaml reviews.independence: require)")
+        if isinstance(review, dict) and any(str(s.get("dimension", "")).startswith("VOI-") for s in review.get("scores", [])):
+            if not self._has_voice_seams_result():
+                out.append("review scoring a VOI-* row refused: missing VOI-SEAMS seam check for the current version")
         return out
 
     def _bind_review(self, node: NodeDef, review: Any, res: NodeResult) -> list[str]:
@@ -1108,7 +2019,7 @@ class Engine:
                               if actor.startswith("agent:") and not self._anonymous(actor) else None)
         if not isinstance(res.review, dict):   # the engine's own tools judged the current bytes: nothing to bind
             return []
-        return self._review_bind_problems(node, echo, actor)
+        return self._review_bind_problems(node, echo, actor, res.review)
 
     def _producer(self, node_id: str, attempt: int) -> str:
         """Who submitted this attempt (the engine itself for a command with no agent)."""
@@ -1231,12 +2142,12 @@ class Engine:
                    and control_reads(n) & set(docs)]
         if not readers:
             return True
-        depth, reason = self.rt(writer.id).rechecks + 1, f"{writer.id} changed {', '.join(d + '.md' for d in docs)}, which these nodes read"
+        depth, reason = self.rt(writer.id).rechecks + 1, f"{writer.id} changed {', '.join(self.controls.label(d) for d in docs)}, which these nodes read"
         limit = sum(1 for n in self.wf.nodes if n.controls.write)
         self.invalidate(readers, reason=reason, recheck_depth=depth)   # nothing that read the old document stays passed
         if depth > limit:
             self._escalate(writer, f"a chain of {depth} control-document re-checks came back round (re-check cycle)",
-                           [f"{writer.id} changed {', '.join(d + '.md' for d in docs)}, re-checking {', '.join(readers)}; this chain "
+                           [f"{writer.id} changed {', '.join(self.controls.label(d) for d in docs)}, re-checking {', '.join(readers)}; this chain "
                             f"of re-checks is longer than the {limit} control writers, so the nodes keep re-running each other"],
                            advice=f"- Order these nodes in the flow so one runs after the other (a graph change needs `vpg accept-config`), "
                                   f"then run `vpg unblock {rel(self.project.root, Path.cwd())} {writer.id} --actor <name>`; unblocking "
@@ -1249,6 +2160,7 @@ class Engine:
         registered: dict[str, list[ArtifactRecord]] = {}
         failures = []
         lineage = [a.id for ref in node.inputs if ref.startswith("artifact:") for a in self.current(ref.split(":", 1)[1])]
+        memo: dict = {}   # #171: one registration hashes a fresh file once, whichever manifests name it
         for spec in node.outputs:
             val = res.outputs.get(spec.key)
             if val is None:
@@ -1265,13 +2177,214 @@ class Engine:
                 if not p.exists():
                     failures.append(f"output '{spec.key}' file is missing: {rel(p, self.project.root)}")
                     continue
+                validate_optional = spec.key in {"inventory", "layout_audit", "voice_seams"}
+                if spec.schema_name and validate_optional:
+                    try:
+                        data = read_json(p)
+                        schema = read_json(PKG_ROOT / "schemas" / "artifacts" / f"{spec.schema_name}.schema.json")
+                        validator = jsonschema.validators.validator_for(schema)(schema)
+                        errs = sorted(validator.iter_errors(data), key=lambda x: list(x.path))
+                        if errs:
+                            ctx.pre_findings.append(Finding(check=f"{spec.key}:schema", dimension=("REG-BASELINE" if spec.key == "inventory" else "LEG-OVERLAP"),
+                                                            severity="P3", message=f"optional output {spec.key} did not match its schema: "
+                                                            + "; ".join(f"{err.json_path}: {err.message}" for err in errs[:3]),
+                                                            traced_node=node.id, artifact_key=spec.key,
+                                                            smallest_fix=f"emit valid {spec.key} or omit it so the harness reports not measured"))
+                            continue
+                    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                        ctx.pre_findings.append(Finding(check=f"{spec.key}:schema", dimension=("REG-BASELINE" if spec.key == "inventory" else "LEG-OVERLAP"),
+                                                        severity="P3", message=f"optional output {spec.key} is not valid JSON ({p.name}: {exc})",
+                                                        traced_node=node.id, artifact_key=spec.key,
+                                                        smallest_fix=f"emit valid {spec.key} or omit it so the harness reports not measured"))
+                        continue
+                if spec.kind == "video" and spec.key in {"master", "silent"}:
+                    privacy_failure = self._scan_video_output_privacy(ctx, p)
+                    if privacy_failure:
+                        failures.append(privacy_failure)
+                        continue
                 suffix = f"[{item}]" if item else (f"[{i}]" if len(entries) > 1 else "")
+                named, scan = self._manifest_refs(p, memo) if spec.kind == "json" or p.suffix.lower() == ".json" else ({}, {})
+                if scan.get("folded") or scan.get("truncated"):   # #171: never silent about what the record doesn't cover
+                    self._defect_events.append({"event": "manifest_refs_folded", "node": node.id, "artifact": spec.key,
+                                                "attempt": ctx.attempt, **scan})
                 recs.append(ArtifactRecord(id=f"{spec.key}@{node.id}#a{ctx.attempt}{suffix}", key=spec.key,
                                            path=rel(p, self.project.root), sha256=sha256_file(p), bytes=p.stat().st_size,
                                            node=node.id, attempt=ctx.attempt, item=item, produced_at=now(), inputs=lineage,
-                                           tool=res.executor, version=self.state.runtime.current_version))
+                                           tool=res.executor, version=self.state.runtime.current_version, named_files=named))
             registered[spec.key] = recs
         return registered, failures
+
+    def _manifest_refs(self, path: Path, memo: dict | None = None) -> tuple[dict[str, str], dict[str, Any]]:
+        """#171: the regular files inside the project that a JSON output names by path, relative to its own folder or to
+        the project root, with their digests, and what the scan did. A consumer's fingerprint covers them, so a changed
+        referenced file (a re-rendered film.mp4 that scenes.json names) re-runs the consumer even when the manifest's
+        bytes didn't change.
+        - The walk is breadth-first, so top-level references come first.
+        - A relative reference is keyed as written; an absolute one by its project-relative path (never a home path).
+        - The first MAX_MANIFEST_REFS files are hashed (a file over LARGE_REF_BYTES by size and mtime). The rest fold
+          into one digest of their sizes and mtimes, so nothing past the cap goes unseen.
+        - The run's `.vpg` folder and the manifest itself are skipped. The scan stops after MAX_MANIFEST_STRINGS strings
+          and says so."""
+        stats: dict[str, Any] = {"hashed": 0, "folded": 0, "truncated": False}
+        try:
+            data = read_json(path)
+        except Exception:
+            return {}, stats
+        root, vpg_dir = self.project.root.resolve(), self.project.vpg.resolve()
+        found: dict[str, str] = {}
+        overflow: list[tuple[str, int, int]] = []
+        seen: set[str] = set()
+        queue = collections.deque([data])
+        scanned = 0
+        while queue:
+            x = queue.popleft()
+            if isinstance(x, dict):
+                queue.extend(x.values())
+                continue
+            if isinstance(x, list):
+                queue.extend(x)
+                continue
+            if not (isinstance(x, str) and 0 < len(x) < 512 and ("/" in x or "." in x) and "\n" not in x
+                    and "://" not in x and x not in seen):
+                continue
+            scanned += 1
+            if scanned > MAX_MANIFEST_STRINGS:   # what it didn't read can't be vouched for: the consumer re-runs
+                stats["truncated"] = True
+                found["<scan stopped>"] = sha256_json([str(path), time.time_ns()])
+                break
+            seen.add(x)
+            for base in (path.parent, root):
+                try:
+                    if not os.path.isfile(base / x):   # cheap before resolving: most strings aren't paths
+                        continue
+                    cand = (base / x).resolve()
+                    if cand == path or not cand.is_relative_to(root) or cand.is_relative_to(vpg_dir) or not cand.is_file():
+                        continue
+                    key = rel(cand, root) if Path(x).is_absolute() else x
+                    st = cand.stat()
+                    if len(found) < MAX_MANIFEST_REFS:
+                        found[key] = self._file_digest(cand, st, memo)
+                    elif key not in found:
+                        overflow.append((key, st.st_size, st.st_mtime_ns))
+                except (OSError, ValueError, NotRegularFile):
+                    continue
+                break
+        stats["hashed"] = len(found) - (1 if stats["truncated"] else 0)
+        if overflow:
+            stats["folded"] = len(overflow)
+            found[f"<+{len(overflow)} more>"] = sha256_json(sorted(overflow))
+        return dict(sorted(found.items())), stats
+
+    def _file_digest(self, path: Path, st: os.stat_result, memo: dict | None = None) -> str:
+        """sha256 of a referenced file, or its size and mtime when it's over LARGE_REF_BYTES. Cached for this engine by
+        the file's stat identity (with ctime, which no tool can set back), so one film named by several manifests is hashed
+        once. As in SourceStore, a file changed within the last RACY_S seconds is hashed but not cached across
+        registrations; `memo` (one registration's) still keeps it from being hashed again for the next manifest."""
+        if st.st_size > LARGE_REF_BYTES:
+            return f"size:{st.st_size}:mtime:{st.st_mtime_ns}:ctime:{st.st_ctime_ns}"
+        cache = self.__dict__.setdefault("_digests", {})
+        key = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+        if key in cache:
+            return cache[key]
+        if memo is not None and key in memo:
+            return memo[key]
+        digest = sha256_file(path)
+        if memo is not None:
+            memo[key] = digest
+        after = os.stat(path)
+        if ((after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns) == key
+                and time.time() - max(after.st_mtime, after.st_ctime) >= SourceStore.RACY_S):
+            cache[key] = digest
+        return digest
+
+    def _attach_voice_seams(self, ctx: NodeContext, res: NodeResult) -> None:
+        if ctx.node.id != "n12_voice_audio" or res.pending or "voice" not in res.outputs or "timings" not in res.outputs:
+            return
+        from .tools import audio
+        ctx.pending_outputs = dict(res.outputs)
+        seam = audio.check_seams(ctx)
+        ctx.pre_findings = self._govern_findings(list(ctx.pre_findings) + seam.findings)
+        report = ctx.workdir / "voice-seams-report.json"
+        if report.exists():
+            res.outputs = {**res.outputs, "voice_seams": "voice-seams-report.json"}
+            res.data = {**res.data, "voice_seams": seam.metrics}
+
+    def _privacy_hold_dir(self) -> Path:
+        pcfg = (self.project.config or {}).get("privacy") or {}
+        hold = pcfg.get("hold_dir")
+        hold_dir = Path(hold).expanduser().resolve()
+        if not hold_dir.is_absolute() or _has_git_ancestor(hold_dir) or not hold_dir.is_dir() or not os.access(hold_dir, os.W_OK):
+            raise EngineError("privacy.hold_dir must be an existing, writable absolute directory outside any git working tree")
+        return hold_dir
+
+    def _privacy_feature_on(self, key: str) -> bool:
+        from .tools.privacy import privacy_feature_enabled
+        return privacy_feature_enabled(self.project.config, key)
+
+    def _privacy_cache_key(self, video: Path, names_path: Path | None, live_windows: list[dict[str, Any]]) -> str:
+        from .tools import privacy
+        names_sha = sha256_file(names_path) if names_path and names_path.is_file() else "none"
+        pcfg = (self.project.config or {}).get("privacy") or {}
+        settings = {k: pcfg.get(k) for k in sorted(pcfg) if k not in {"names", "hold_dir"}}
+        return sha256_json({"video": sha256_file(video), "names": names_sha, "scanner": privacy.SCANNER,
+                            "settings": settings, "live_windows": live_windows})
+
+    def _record_privacy_scan_pass(self, video: Path, names_path: Path | None, live_windows: list[dict[str, Any]]) -> None:
+        from .tools import privacy
+        key = self._privacy_cache_key(video, names_path, live_windows)
+        self.ledger.append("privacy_scan_pass", key=key, node="engine",
+                           video_sha256=sha256_file(video), scanner=privacy.SCANNER)
+        mirror = self.project.vpg / "privacy-scan-cache.json"
+        data = read_json(mirror) if mirror.exists() else {"passes": {}}
+        data.setdefault("passes", {})[key] = {"at": now(), "sha256": sha256_file(video), "authoritative": "ledger"}
+        write_json_atomic(mirror, data)
+
+    def _scan_video_output_privacy(self, ctx: NodeContext, video: Path) -> str:
+        from .tools import privacy
+        if not self._privacy_feature_on("n14_hold"):
+            return ""
+        if privacy.none_declared(self.project.config):
+            return ""
+        try:
+            names, skipped = privacy.load_names(self.project.root, self.project.config)
+        except privacy.PrivacyConfigError as exc:
+            return f"privacy scan refused the master before registration: {exc}"
+        if not names:
+            return ""
+        pcfg = (self.project.config or {}).get("privacy") or {}
+        raw_names = pcfg.get("names")
+        names_path = (self.project.root / raw_names).resolve() if isinstance(raw_names, str) and raw_names != "none" else None
+        try:
+            privacy.validate_scan_fps(pcfg.get("scan_fps"))
+            windows = privacy.manifest_live_windows(ctx.load("text_layers") if hasattr(ctx, "load") else None)
+            report = privacy.scan_video(video, names, pcfg.get("scan_fps", "native"), float(pcfg.get("time_budget_s", 1800)),
+                                        **({"live_windows": windows} if windows else {}))
+            report.update(master_sha256=sha256_file(video), scanner=privacy.SCANNER, skipped_entries=skipped)
+            problem = ("readable listed name: " + "; ".join(privacy.describe(w) for w in report.get("windows", [])[:6])
+                       if report.get("windows") else privacy.live_window_problem(report) or "")
+        except (privacy.OcrUnavailable, privacy.PrivacyConfigError, privacy.PrivacyScanError) as exc:
+            return f"privacy scan could not complete before video registration ({type(exc).__name__}: {exc}); no file was moved"
+        if not problem:
+            self._record_privacy_scan_pass(video, names_path, windows)
+            return ""
+        try:
+            hold_dir = self._privacy_hold_dir()
+        except EngineError as exc:
+            return str(exc)
+        try:
+            hold_dir.chmod(0o700)
+        except OSError:
+            pass
+        dest = hold_dir / f"{self.state.runtime.run_id}-{ctx.node.id}-a{ctx.attempt}-{video.name}"
+        (hold_dir / f"{dest.name}.privacy-report.json").write_text(json.dumps(report, indent=1))
+        work_abs = ctx.workdir.absolute()
+        work_real = ctx.workdir.resolve()
+        if work_real == work_abs and video.resolve().is_relative_to(work_real):
+            shutil.move(str(video), dest)
+            moved = f"moved failed video to {dest}"
+        else:
+            moved = "left the failed video in place because it is outside this attempt's workdir"
+        return f"privacy scan failed before video registration ({problem}); {moved}"
 
     def _items_complete(self, node: NodeDef, key: str) -> bool:
         specs = get_path(self.state, node.map_over) if node.map_over else None
@@ -1431,8 +2544,11 @@ class Engine:
                 # An agent may not overrule a human: feedback that leads to no open blocking work (no action, a closed
                 # defect, a nit) waits for its author or the gate's owner.
                 why = fb.no_action_reason or f"mapped only to closed or non-blocking defect(s) {', '.join(fb.defect_ids)}"
-                fb.hold = f"{fb.actor}'s feedback leads to no open blocking defect ({why})"
-                self._defect_events.append({"event": "feedback_held", "id": fb.id, "actor": fb.actor, "reason": why})
+                if self._feedback_waits_for_end_review(fb):
+                    self._mark_feedback_pending_confirmation(fb, why)
+                else:
+                    fb.hold = f"{fb.actor}'s feedback leads to no open blocking defect ({why})"
+                    self._defect_events.append({"event": "feedback_held", "id": fb.id, "actor": fb.actor, "reason": why})
         return failures
 
     def _review_gate(self, node: NodeDef) -> tuple[str, dict[str, Any]]:
@@ -1440,7 +2556,7 @@ class Engine:
         plan = self.state.runtime.nodes.get(self._regen_node(), NodeRuntime()).result_data
         changed = {}
         for key, old in (plan.get("baseline") or {}).items():
-            new = [a.sha256 for a in self.current(key)]
+            new = [artifact_identity(a) for a in self.current(key)]   # #171: a film-only rework counts
             if new != old:
                 changed[key] = [",".join(h[:12] for h in old), ",".join(h[:12] for h in new)]
         # Every unresolved defect, not only those in rework: one fixed outside a rework cycle (an approved change request)
@@ -1450,8 +2566,15 @@ class Engine:
             if (fb.id in self._interpreted_now and not fb.hold and not self._feedback_live(fb)
                     and self._humans_feedback(fb)):
                 why = f"its defect(s) {', '.join(fb.defect_ids)} closed at the gate that mapped them, with no rework"
-                fb.hold = f"{fb.actor}'s feedback leads to no open blocking defect ({why})"
-                self.ledger.append("feedback_held", id=fb.id, actor=fb.actor, reason=why)
+                if self._feedback_waits_for_end_review(fb):
+                    self._mark_feedback_pending_confirmation(fb, why)
+                else:
+                    fb.hold = f"{fb.actor}'s feedback leads to no open blocking defect ({why})"
+                    self.ledger.append("feedback_held", id=fb.id, actor=fb.actor, reason=why)
+            elif (fb.status == "interpreted" and not fb.hold and not self._feedback_live(fb)
+                  and self._humans_feedback(fb) and self._feedback_waits_for_end_review(fb)):
+                why = fb.no_action_reason or f"mapped only to closed or non-blocking defect(s) {', '.join(fb.defect_ids)}"
+                self._mark_feedback_pending_confirmation(fb, why)
         loopable = {e.when.split(":", 1)[1] for e in self.index.outgoing(self._regen_node()) if e.when.startswith("target:")}
         for d in self.state.evaluation.defects:
             blocking = d.status in ("open", "persisting") and d.severity in self.wf.policies.blocking_severities
@@ -1473,17 +2596,257 @@ class Engine:
         g.trend = snapshot
         if g.outcome == "blocked" and self._refused_rework:
             g.reasons.append(f"not extended: {self._refused_rework}")
+        for fb in self.state.evaluation.feedback:
+            if (fb.status == "interpreted" and not fb.hold and not self._feedback_live(fb)
+                    and self._humans_feedback(fb) and self._feedback_waits_for_end_review(fb)):
+                why = fb.no_action_reason or f"mapped only to closed or non-blocking defect(s) {', '.join(fb.defect_ids)}"
+                self._mark_feedback_pending_confirmation(fb, why)
+        if self._autonomy_mode() == "provisional" and g.outcome == "blocked" and self._gate_block_can_wait_for_end_review(g):
+            self._record_end_review_item(node.id, g)
+            g.outcome = "pass"
+            g.reasons.append("autonomy.provisional: recorded for the end review; production continues")
+            g.open_blocking = []
         self.state.evaluation.gate_results.append(g)
         self.ledger.append("gate", node=node.id, version=version, outcome=g.outcome, reasons=g.reasons, open_blocking=g.open_blocking)
+        self._observe_gate(node, version, g)
         holds = ([d.id for d in self.state.evaluation.defects if d.human_hold and d.status in ("open", "persisting", "in_rework")]
                  + [f.id for f in self.state.evaluation.feedback if f.hold])
         return g.outcome, {"gate": g.id, "reasons": g.reasons, "open_blocking": g.open_blocking, "holds": holds}
+
+    # ------------------------------------------------------------------ observability and direct runs (v1.9)
+    def _observing(self) -> bool:
+        """Opt-in (`observability: {evaluation_events: true}` in vpg.project.yaml): write evaluation events into the
+        ledger as nodes pass or fail, gates decide and humans decide. Without it, `vpg telemetry` derives the same
+        events from the ledger and the state on demand."""
+        obs = self.project.config.get("observability")
+        return isinstance(obs, dict) and obs.get("evaluation_events") is True
+
+    def _tool_dims(self) -> set[str]:
+        return {d["id"] for rub in self.rubrics.values() for d in rub["dimensions"] if (d.get("check") or {}).get("type") == "tool"}
+
+    def _observe_pass(self, node: NodeDef, rt: NodeRuntime, outcome: str) -> None:
+        if not self._observing():
+            return
+        from . import telemetry
+        run = self.state.runtime.run_id
+        arts = {a.id: {"node": a.node, "attempt": a.attempt, "key": a.key, "path": a.path, "sha256": a.sha256, "item": a.item}
+                for a in self.state.artifacts.values() if a.node == node.id and a.attempt == rt.attempts}
+        payloads = [telemetry.payload_completion(run, {"artifacts": arts}, node.id, rt.attempts, outcome,
+                                                 [c.description for c in node.completion])]
+        if node.kind == NodeKind.REVIEW:
+            review = next((r for r in reversed(self.state.evaluation.reviews) if r.node == node.id), None)
+            if review is not None:
+                payloads += telemetry.payload_review(run, review.model_dump(), rt.attempts, self._tool_dims())
+        for p in payloads:
+            self.ledger.append("evaluation", **p)
+
+    def _observe_failure(self, node: NodeDef, rt: NodeRuntime, failures: list[str]) -> None:
+        if self._observing():
+            from .telemetry import payload_failure
+            self.ledger.append("evaluation", **payload_failure(self.state.runtime.run_id, node.id, rt.attempts, list(failures)))
+
+    def _observe_gate(self, node: NodeDef, version: int, g: Any) -> None:
+        if self._observing():
+            from .telemetry import payload_gate
+            self.ledger.append("evaluation", **payload_gate(self.state.runtime.run_id, node.id, self.rt(node.id).attempts, version,
+                                                            g.outcome, list(g.reasons), list(g.open_blocking)))
+
+    def _observe_decision(self, node: NodeDef, decision: str, actor: str, reason: str, provisional: bool, relayed: bool,
+                          outputs: dict[str, str], expires_at: str, human: bool = True, grant: str = "") -> None:
+        if self._observing():
+            from .telemetry import payload_decision
+            self.ledger.append("evaluation", **payload_decision(self.state.runtime.run_id, node.id, self.rt(node.id).attempts,
+                                                                decision, actor, reason, provisional, relayed, outputs, expires_at,
+                                                                human, grant))
+
+    def _provisional_expiry(self) -> str:
+        """When a provisional approval made now expires: `autonomy.provisional_expiry_h` hours from now, or never (empty)."""
+        block = (self.state.runtime.accepted_policy or {}).get("autonomy")
+        hours = block.get("provisional_expiry_h") if isinstance(block, dict) else None
+        if isinstance(hours, bool) or not isinstance(hours, (int, float)) or hours <= 0:
+            return ""
+        return (datetime.fromisoformat(now()) + timedelta(hours=float(hours))).isoformat()
+
+    def _expired(self, a: Approval) -> bool:
+        try:
+            return bool(a.expires_at) and datetime.fromisoformat(a.expires_at) <= datetime.fromisoformat(now())
+        except ValueError:
+            return False
+
+    def _note_expired_provisionals(self) -> None:
+        """An expired provisional approval is never silent: the first command that runs after its expiry ledgers it once,
+        and `vpg status` names it until a named human confirms or rejects it (at the release, as before)."""
+        if self.read_only:
+            return
+        noted = False
+        for a in self._standing_provisional():
+            if self._expired(a) and not a.expiry_noted_at:
+                a.expiry_noted_at = now()
+                self.ledger.append("provisional_expired", node=a.node, actor=a.actor, principal=a.principal,
+                                   expired_at=a.expires_at, evidence="assumed")
+                noted = True
+        if noted:
+            self._save("provisional_expired")
+
+    def _quality_warnings(self) -> list[str]:
+        out = []
+        for a in self._standing_provisional():
+            if a.expires_at:
+                when = "EXPIRED at" if self._expired(a) else "expires"
+                out.append(f"provisional approval of {a.node} by {a.actor}" + (f" for {a.principal}" if a.principal else "")
+                           + f" is assumed, not decided; it {when} {a.expires_at}. A named human confirms or rejects it "
+                             "(`vpg approve <project> <release node> --confirm-provisional/--reject-provisional`)")
+        if any(d.startswith("spec-") for d in self.controls.docs):
+            out += self._spec_proposal_lines()
+        runs = self.state.history.direct_runs
+        if runs:
+            latest = runs[-1]
+            out.append(f"{len(runs)} direct run(s) outside the governed path ({', '.join(d.id for d in runs[-5:])}"
+                       f"{', …' if len(runs) > 5 else ''}); the latest, {latest.id} of {latest.node} by {latest.actor}, was never "
+                       "judged by a gate or a review: build it through the graph to get a governed version")
+        return out
+
+    def _spec_proposal_lines(self) -> list[str]:
+        """N21's spec proposals in the current interpretation, each with the change request a person files for it (none is
+        filed automatically). One already filed, with the same reason, is not listed again."""
+        from .spec import CONTROL_IDS, STAGE_OF_DOC
+        recs = sorted((a for a in self.state.artifacts.values() if a.key == "interpretation" and a.status == "current"),
+                      key=lambda a: a.id)
+        if not recs:
+            return []
+        try:
+            data = read_json(self.project.root / recs[-1].path)
+        except (OSError, ValueError):
+            return []
+        import shlex
+        filed = {(cr.doc, " ".join(str(cr.reason).split())) for cr in self.state.history.change_requests}
+        here = shlex.quote(rel(self.project.root, Path.cwd()))
+        out = []
+        for p in data.get("spec_proposals") or [] if isinstance(data, dict) else []:
+            if not isinstance(p, dict) or p.get("doc") not in CONTROL_IDS or p["doc"] not in self.controls_doc_ids():
+                continue
+            doc = CONTROL_IDS[p["doc"]]
+            # agent-written text: one line, and single-quoted for the shell, so pasting the command expands nothing
+            reason = " ".join(f"{p.get('change', 'modify')} {p.get('rule') or 'a new rule'}: {p.get('proposal', '')} "
+                              f"(because {p.get('because', '')})".split())
+            if (doc, reason) in filed:
+                continue
+            reopens = (f"re-opens the {STAGE_OF_DOC[p['doc']]} gate" if p["doc"] in STAGE_OF_DOC
+                       else "changes the bar: only a named human approves it")
+            out.append(f"spec proposal on {self.controls.label(doc)} ({reopens}): {reason}. To file it: `vpg change-request "
+                       f"{here} --doc {doc} --reason {shlex.quote(reason)} --actor <name>`")
+        return out
+
+    def controls_doc_ids(self) -> set[str]:
+        """The spec-family document names (design, story, …) this run tracks as control documents."""
+        from .spec import CONTROL_IDS
+        return {d for d, cid in CONTROL_IDS.items() if cid in self.controls.docs}
+
+    def record_direct_run(self, node_id: str, actor: str, reason: str, outputs: dict[str, str] | None = None,
+                          label: str = "", command: list[str] | None = None, timeout_s: float | None = None) -> dict[str, Any]:
+        """Make a build outside the governed path observable. With `command`, run it in the project folder (the
+        environment carries VPG_DIRECT_RUN) and keep its output in `.vpg/direct-runs/<id>.log`. Either way, hash the
+        named outputs, ledger `direct_run` with the node's code and inputs, and keep the record in the state. The outputs
+        are never registered as artifacts: nothing a gate or review judges comes from a direct run."""
+        import subprocess
+        self._writable()
+        if node_id not in self.index.ids:
+            raise EngineError(f"unknown node '{node_id}'; `vpg status` lists the node ids")
+        if not (actor or "").strip():
+            raise EngineError("a direct run needs --actor: who ran it")
+        if not (reason or "").strip():
+            raise EngineError("a direct run needs --reason: why it ran outside the graph")
+        root = self.project.root.resolve()
+        resolved: dict[str, Path] = {}
+        for key, value in (outputs or {}).items():
+            p = Path(value)
+            p = (p if p.is_absolute() else self.project.root / p).resolve()
+            if not p.is_relative_to(root):
+                raise EngineError(f"output {key}: {value} is outside the project")
+            resolved[key] = p
+        used = [int(d.id.split("-")[-1]) for d in self.state.history.direct_runs if d.id.split("-")[-1].isdigit()]
+        used += [int(str(e["data"].get("id", "")).split("-")[-1]) for e in self.ledger.events("direct_run")
+                 if str(e["data"].get("id", "")).split("-")[-1].isdigit()]
+        n = max(used, default=0) + 1
+        while (self.project.vpg / "direct-runs" / f"DR-{n:03d}.log").exists():   # never reuse a number that has a log
+            n += 1
+        rid = f"DR-{n:03d}"
+        started, exit_code, duration, log, cmd_text = now(), None, None, "", ""
+        if command:
+            cmd_text = shlex.join(command)
+            logp = self.project.vpg / "direct-runs" / f"{rid}.log"
+            logp.parent.mkdir(parents=True, exist_ok=True)
+            t0 = time.monotonic()
+            try:
+                p = subprocess.run(command, cwd=self.project.root, capture_output=True, text=True,
+                                   timeout=timeout_s or float(self.project.config.get("command_timeout_s", 900)),
+                                   env={**os.environ, "VPG_DIRECT_RUN": rid})
+                exit_code, text = p.returncode, (p.stdout or "") + (p.stderr or "")
+            except subprocess.TimeoutExpired as exc:
+                exit_code, text = -1, f"timed out after {exc.timeout} s"
+            except OSError as exc:
+                raise EngineError(f"could not run the direct command ({type(exc).__name__}: {exc}); nothing was recorded") from None
+            duration = round(time.monotonic() - t0, 3)
+            logp.write_text(text[-200_000:])
+            log = rel(logp, self.project.root)
+        recorded = {}
+        for key, p in resolved.items():
+            if not p.is_file():
+                raise EngineError(f"output {key}: {rel(p, self.project.root)} is not a file" + (" (the command ran; its log is "
+                                  f"{log})" if log else ""))
+            recorded[key] = {"path": rel(p, self.project.root), "sha256": sha256_file(p)}
+        code = {f: h[:16] for f, h in self.project.command_code(node_id)} if self.project.command_for(node_id) else {}
+        inputs = {}
+        for ref in self.node(node_id).inputs:
+            if ref.startswith("artifact:"):
+                for a in self.current(ref.partition(":")[2]):
+                    inputs[a.key + (f"[{a.item}]" if a.item else "")] = a.sha256[:16]
+        dr = DirectRun(id=rid, node=node_id, actor=actor.strip(), reason=reason.strip(), at=now(), started_at=started,
+                       label=label, command=cmd_text, exit_code=exit_code, duration_s=duration, log=log, outputs=recorded,
+                       code=code, inputs=inputs, version=self.state.runtime.current_version)
+        self.state.history.direct_runs.append(dr)
+        self.ledger.append("direct_run", **dr.model_dump(), governed=False, evidence="observed")
+        self._save("direct_run")
+        return dr.model_dump()
+
+    def _autonomy_mode(self) -> str:
+        block = (self.state.runtime.accepted_policy or {}).get("autonomy")
+        return block.get("mode", "gated") if isinstance(block, dict) else "gated"
+
+    def _gate_block_can_wait_for_end_review(self, g) -> bool:
+        if any(f.hold for f in self.state.evaluation.feedback):
+            return False
+        if any(str(r).startswith("reviews failed with no blocking defect") for r in g.reasons):
+            return False
+        if any(r.startswith("missing reviews") for r in g.reasons):
+            return False
+        blocking = [d for d in self.state.evaluation.defects if d.id in set(g.open_blocking)]
+        return not any(d.needs_human for d in blocking)
+
+    def _record_end_review_item(self, node_id: str, g) -> None:
+        defects = [d for d in self.state.evaluation.defects if d.id in set(g.open_blocking)]
+        item = {"id": f"ERI-{len(self.state.runtime.end_review_items) + 1:03d}", "node": node_id,
+                "version": self.state.runtime.current_version, "gate": node_id, "gate_result": g.id, "reasons": list(g.reasons),
+                "defects": list(g.open_blocking), "severities": {d.id: d.severity for d in defects},
+                "retrace": "not attempted: v1.8 batch 1 has no alternative-producer search; the rework loop already retried the traced producer",
+                "at": now()}
+        key = (item["gate"], item["version"], tuple(sorted(item["defects"])))
+        if not any((x.get("gate"), x.get("version"), tuple(sorted(x.get("defects") or []))) == key
+                   for x in self.state.runtime.end_review_items):
+            self.state.runtime.end_review_items.append(item)
+            self.ledger.append("end_review_item", **item)
 
     def _regen_node(self) -> str:
         return next(n.id for n in self.wf.nodes if n.gate == "regeneration_plan")
 
     def _gate_node(self) -> str:
         return next(n.id for n in self.wf.nodes if n.gate == "review_gate")
+
+    def _release_node(self) -> str | None:
+        gate = self._gate_node()
+        candidates = {e.target for e in self.wf.edges if e.kind == EdgeKind.FLOW and e.when == "pass"}
+        return next((n for n in self.index.topo if n in self.index.descendants(gate)
+                     and n in candidates and self.node(n).human_review.required), None)
 
     def _needs_a_human(self, d: Defect) -> str:
         """Why a defect is a human's to close, or '' (#18: what a grant never reaches)."""
@@ -1495,9 +2858,36 @@ class Engine:
                 "needs a human decision" if d.needs_human else
                 f"comes from {fb.actor}'s feedback" if fb is not None and self._humans_feedback(fb) else "")
 
+    def _source_review(self, d: Defect) -> Review | None:
+        return next((r for r in self.state.evaluation.reviews if r.id == d.source), None)
+
+    def _from_tool_check(self, d: Defect) -> bool:
+        review = self._source_review(d)
+        if review is None:
+            return False
+        return any(defect_key(d) == problem_key(f.dimension, f.check) for f in review.tool_findings)
+
+    def _independent_review_defect(self, d: Defect) -> Review | None:
+        review = self._source_review(d)
+        return review if review is not None and review.independent is True and not self._from_tool_check(d) else None
+
     def _humans_feedback(self, fb: Feedback) -> bool:
         """A named human's feedback, or an agent's note a human accepted at triage (#14): an agent may not overrule either."""
         return is_human_name(fb.actor, self.wf.policies.dry_run_actor) or fb.triage == "accepted"
+
+    def _feedback_waits_for_end_review(self, fb: Feedback) -> bool:
+        principal = self._principal()
+        owner = fb.triaged_by if fb.triage == "accepted" else fb.actor
+        policy = self.state.runtime.accepted_policy or {}
+        autonomy = policy.get("autonomy") if isinstance(policy.get("autonomy"), dict) else {}
+        return ((self._autonomy_mode() == "provisional" or autonomy.get("mode") == "provisional")
+                and (owner == principal or owner == autonomy.get("principal")))
+
+    def _mark_feedback_pending_confirmation(self, fb: Feedback, why: str) -> None:
+        fb.status = "resolved_pending_confirmation"
+        fb.hold = ""
+        fb.no_action_reason = fb.no_action_reason or why
+        self._defect_events.append({"event": "feedback_pending_confirmation", "id": fb.id, "actor": fb.actor, "reason": why})
 
     def _feedback_live(self, fb: Feedback) -> bool:
         """The feedback leads to at least one unresolved defect of a blocking severity."""
@@ -1551,9 +2941,11 @@ class Engine:
         """Start the rework a regeneration plan routes: one rework cycle, and its defects in rework. Called only once every
         loop the plan needs is within its bound (_pass), so a plan that blocks spends nothing."""
         self.state.runtime.rework_cycles += 1
+        gates = self.state.evaluation.gate_results
+        decided = gates[-1].id if gates else ""
         for d in self.state.evaluation.defects:
             if d.id in data.get("defect_ids", []):
-                d.status = "in_rework"
+                d.status, d.rework_gate = "in_rework", decided   # #160: a gate decision routes a defect once
         self.ledger.append("regeneration_plan", cycle=self.state.runtime.rework_cycles, targets=data.get("targets"),
                            defects=data.get("defect_ids"), preserved=data.get("preserved"))
 
@@ -1597,9 +2989,11 @@ class Engine:
                     a.version = v
             self.state.history.versions.append(VersionRecord(
                 version=v, created_at=now(), node_attempt=f"{node.id}#a{rt.attempts}",
-                artifacts={a.key + (f"[{a.item}]" if a.item else ""): a.sha256 for a in self.state.artifacts.values() if a.status == "current"}))
+                artifacts={a.key + (f"[{a.item}]" if a.item else ""): a.sha256 for a in self.state.artifacts.values()
+                           if a.status == "current" and self._fresh_optional_artifact(a)}))
             self._queue_publish(v)
         self.ledger.append("node_passed", node=node.id, attempt=rt.attempts, outcome=outcome)
+        self._observe_pass(node, rt, outcome)
         if node.gate == "package":   # the released version is published again with its package
             self._queue_publish(self.state.runtime.current_version)
         changed = sorted(rt.self_written_code)
@@ -1773,6 +3167,7 @@ class Engine:
         rt.interruptions, rt.executed = 0, False
         self.ledger.append("node_failed", node=node.id, attempt=rt.attempts, streak=streak, failures=failures,
                            **({"revision": True} if revision else {}))
+        self._observe_failure(node, rt, failures)
         if streak >= bound:
             what = (f"the independent pre-flight returned {streak} attempts without a pass (preflight.max_revisions {bound})"
                     if revision else f"{streak} consecutive attempts failed completion")
@@ -1823,7 +3218,8 @@ class Engine:
             return {}
         ok, why = convergence(rows)
         keep = ("version", "open", "resolved", "new", "persisting")
-        return {"trend": [{k: r[k] for k in keep} for r in rows[-2:]], "converging": ok, "convergence": why}
+        return {"trend": [{**{k: r[k] for k in keep}, **({"reopened_after": r["reopened_after"]} if "reopened_after" in r else {})}
+                          for r in rows[-2:]], "converging": ok, "convergence": why}
 
     def _unblock_advice(self, node: NodeDef, edge: str | None, edges: list[str] | None = None) -> str:
         cmd = f"`vpg unblock {rel(self.project.root, Path.cwd())} {node.id} --actor <name>`"
@@ -1888,26 +3284,165 @@ class Engine:
         self.ledger.append("invalidated", targets=targets, closure=changed, preserved=preserved, reason=reason)
         return changed
 
-    def _require_human(self, actor: str, what: str) -> None:
+    def _declared_humans(self) -> list[str]:
+        humans = (self.state.runtime.accepted_policy or {}).get("humans")
+        return [h.strip() for h in humans if isinstance(h, str) and is_human_name(h, self.wf.policies.dry_run_actor)] \
+            if isinstance(humans, list) else []
+
+    def _relay_meta(self, actor: str, what: str, on_behalf_of: str = "", instruction: str = "",
+                    instruction_at: str = "") -> dict[str, Any] | None:
+        declared = self._declared_humans()
+        actor = (actor or "").strip()
+        if not declared:
+            return None
+        subject = what.removesuffix(", which")   # a sentence written to continue "… which needs …" (#185)
+        if actor in declared:
+            if not is_human_name(actor, self.wf.policies.dry_run_actor):
+                raise EngineError(f"{subject}: --actor must be exactly one of the declared humans ({', '.join(declared)})")
+            if self._has_relay_fields(on_behalf_of, instruction, instruction_at):
+                raise EngineError(f"{subject}: --on-behalf-of/--instruction are only for relayed agent acts")
+            return {}
+        if actor.lower().startswith("agent:"):
+            principal = (on_behalf_of or "").strip()
+            if principal not in declared:
+                raise EngineError(f"{subject}: --on-behalf-of must be one of the declared humans: {', '.join(declared)}")
+            if not (instruction or "").strip():
+                raise EngineError(f"{subject}: a relayed act needs --instruction with the principal's verbatim words")
+            when = (instruction_at or "").strip()
+            if when:   # #185: the record keeps a time, never free text
+                try:
+                    given = datetime.fromisoformat(when)
+                except ValueError:
+                    raise EngineError(f"{subject}: --instruction-at must be an ISO timestamp with timezone") from None
+                if given.tzinfo is None:
+                    raise EngineError(f"{subject}: --instruction-at must be an ISO timestamp with timezone")
+            return {"relayed": True, "principal": principal, "instruction": instruction.strip(),
+                    **({"instruction_at": when} if when else {})}
+        raise EngineError(f"{subject}: --actor must be exactly one of the declared humans ({', '.join(declared)}), or an "
+                          "agent:<id> with --on-behalf-of <declared human> --instruction \"<verbatim words>\"")
+
+    def _stamp_relay(self, meta: dict[str, Any] | None) -> None:
+        if meta:
+            self.ledger.stamp = {**self.ledger.stamp, **meta}
+
+    def _at_release_wait(self) -> bool:
+        rn = self._release_node()
+        return bool(rn and rn in self.state.runtime.nodes and self.rt(rn).status == S.WAITING_HUMAN)
+
+    def _safety_only_config_change(self) -> bool:
+        old = self.state.runtime.accepted_config or {}
+        new = self.project.config
+        parts = self._config_changes()
+        changed = set(old) ^ set(new) | {k for k in set(old) & set(new) if old.get(k) != new.get(k)}
+        adding_regression = "regression" in changed and "regression" not in old and "regression" in new
+        if any(p.startswith("regression_baseline/") for p in parts) and not adding_regression:
+            return False
+        if parts and any(p != "project" and not p.startswith("regression_baseline/") for p in parts):
+            return False
+        allowed = {"privacy", "reviews", "preflight", "loop_budget", "command_deps", "regression"}
+        return bool(changed) and all(k in allowed and k not in old and k in new for k in changed)
+
+    def _check_relay_scope(self, what: str, actor: str, meta: dict[str, Any], action: str = "") -> None:
+        if not meta.get("relayed") or self._relay_scope_ok(what, action):
+            return
+        if what in RELAY_REFUSED_MID_RUN:
+            raise EngineError(f"relayed {what} is refused mid-run")
+        if what == "accepting a configuration change":
+            raise EngineError("relayed accept-config is allowed mid-run only for safety-key-only config changes")
+        raise EngineError(f"relayed {what} is allowed only at the release end review")
+
+    def _relay_scope_ok(self, what: str, action: str = "") -> bool:
+        """Whether a relay of a declared human's words may do this act now: anything at the release node while it waits;
+        mid-run only provisional decisions, the grantable actions (decided by `action`, never by the sentence that
+        describes the act, #185) and a safety-key-only accept-config. Callers refuse what no grant or relay can do before
+        they call _authorize: a bar change (_refuse_delegated_bar_change), an agent's own change request
+        (_not_own_request), an agent's waiver (unblock), and a tool-check or independent-review defect (resolve_defect);
+        a review-raised defect mid-run passes relay_ok=False."""
+        if self._at_release_wait():
+            return True
+        if what in RELAY_REFUSED_MID_RUN:
+            return False
+        if action in GRANTABLE or what.startswith("a provisional"):
+            return True
+        return what == "accepting a configuration change" and self._safety_only_config_change()
+
+    @staticmethod
+    def _has_relay_fields(*fields: str | None) -> bool:
+        return any((f or "").strip() for f in fields)
+
+    def _require_human(self, actor: str, what: str, on_behalf_of: str = "", instruction: str = "",
+                       instruction_at: str = "") -> dict[str, Any]:
+        if what == "accepting a configuration change" and not self._declared_humans():
+            pending = self.project.config.get("humans")
+            if isinstance(pending, list) and pending:
+                names = [h.strip() for h in pending if isinstance(h, str) and is_human_name(h, self.wf.policies.dry_run_actor)]
+                if actor in names:
+                    return {}
+                if (actor.strip().lower().startswith("agent:") and on_behalf_of in names and (instruction or "").strip()
+                        and (instruction_at or "").strip() and self._at_release_wait()):
+                    try:
+                        given = datetime.fromisoformat(instruction_at)
+                        rn = self._release_node()
+                        started = datetime.fromisoformat(self.rt(rn).started_at) if rn else None
+                    except ValueError:
+                        raise EngineError("--instruction-at must be an ISO timestamp with timezone") from None
+                    if given.tzinfo is None:
+                        raise EngineError("--instruction-at must be an ISO timestamp with timezone")
+                    if started is not None and started.tzinfo is None:
+                        raise EngineError("release attempt timestamp is missing timezone")
+                    if started is not None and given <= started:
+                        raise EngineError("--instruction-at for adoption accept-config relay must be later than the current release attempt")
+                    meta = {"relayed": True, "principal": on_behalf_of, "instruction": instruction.strip(),
+                            "instruction_at": instruction_at.strip()}
+                    self._stamp_relay(meta)
+                    return meta
+                raise EngineError("adoption accept-config must use an exact pending human, or a release-node relay with --instruction-at")
+        meta = self._relay_meta(actor, what, on_behalf_of, instruction, instruction_at)
+        if meta is not None:
+            self._check_relay_scope(what, actor, meta)
+            self._stamp_relay(meta)
+            return meta
         if not is_human_name(actor, self.wf.policies.dry_run_actor):
             raise EngineError(f"{what} needs a named human actor (not an agent, not {self.wf.policies.dry_run_actor})")
+        return {}
 
     # ------------------------------------------------------------------ delegation grants (v1.7, #18)
-    def _authorize(self, actor: str, action: str, what: str) -> Grant | None:
-        """A named human acts in their own name. An agent may act only under a live grant for `action` from a named human;
-        every event the action records then carries the grant and its grantor (Ledger.stamp), so the record shows who acted
-        and on whose authority, never the human's name for the agent's act."""
+    def _authorize(self, actor: str, action: str, what: str, on_behalf_of: str = "", instruction: str = "",
+                   instruction_at: str = "", relay_ok: bool = True) -> Grant | None:
+        """A named human acts in their own name. An agent may act under a live grant for `action` from a named human; every
+        event the action records then carries the grant and its grantor (Ledger.stamp), so the record shows who acted and
+        on whose authority, never the human's name for the agent's act. With declared humans, an agent may instead relay
+        one of them: their verbatim words (`on_behalf_of`, `instruction`, optional `instruction_at`), within the relay
+        scope (_relay_scope_ok); the events carry the relay. `relay_ok=False` tells the refusal not to offer a relay that
+        the caller would refuse anyway (#185)."""
         if is_human_name(actor, self.wf.policies.dry_run_actor):
+            self._require_human(actor, what, on_behalf_of, instruction, instruction_at)
             return None
         grant = self._live_grant(actor, action)
-        if grant is None:
-            held = [g.id for g in self.state.history.grants if self._actor_key(g.grantee) == self._actor_key(actor)]
-            raise EngineError(f"{what} needs a named human actor (not an agent, not {self.wf.policies.dry_run_actor}), or an agent "
-                              f"with a live grant for '{action}' (`vpg grant <project> --actor <human> --to agent:<id> --allow "
-                              f"{action} --expires <date> --reason …`)" + (f"; {actor}'s grants {', '.join(held)} don't cover it "
-                                                                         "or have ended" if held else ""))
-        self.ledger.stamp = {"grant": grant.id, "grantor": grant.grantor}
-        return grant
+        if grant is not None:
+            self.ledger.stamp = {"grant": grant.id, "grantor": grant.grantor}
+            return grant
+        if self._has_relay_fields(on_behalf_of, instruction, instruction_at):
+            meta = self._relay_meta(actor, what, on_behalf_of, instruction, instruction_at)
+            if meta:
+                self._check_relay_scope(what, actor, meta, action)
+                self._stamp_relay(meta)
+                return None
+        declared = self._declared_humans()
+        who = (f"one of the declared humans ({', '.join(declared)}) acting in their own name" if declared
+               else f"a named human actor (not an agent, not {self.wf.policies.dry_run_actor})")
+        held = [g.id for g in self.state.history.grants if self._actor_key(g.grantee) == self._actor_key(actor)]
+        grants = f"; {actor}'s grants {', '.join(held)} don't cover it or have ended" if held else ""
+        relay = ""
+        if declared and relay_ok and self._relay_scope_ok(what, action):   # #185: offer a relay only where one is accepted
+            principal = shlex.quote(declared[0]) if len(declared) == 1 else "<" + "|".join(declared) + ">"
+            when = (" --instruction-at \"<ISO time with timezone, after the release attempt started>\""
+                    if self._at_release_wait() else "")
+            relay = (f"; or an agent relaying a declared human's verbatim words (`--actor agent:<id> --on-behalf-of {principal} "
+                     f"--instruction \"<their words>\"{when}`)")
+        raise EngineError(f"{what} needs {who}, or an agent with a live grant for '{action}' "
+                          f"(`vpg grant <project> --actor <human> --to agent:<id> --allow {action} --expires <date> "
+                          f"--reason …`){grants}{relay}")
 
     def _live_grant(self, actor: str, action: str) -> Grant | None:
         key, today = self._actor_key(actor), now()[:10]
@@ -1946,12 +3481,15 @@ class Engine:
         return f"'{action}' is not a delegable action (delegable: {', '.join(GRANTABLE)}, approve:<node>)"
 
     @_human_action("grant")
-    def grant(self, grantee: str, actions: list[str], expires: str, reason: str, actor: str) -> Grant:
+    def grant(self, grantee: str, actions: list[str], expires: str, reason: str, actor: str, on_behalf_of: str = "",
+              instruction: str = "", instruction_at: str = "") -> Grant:
         """`vpg grant`: a named human delegates named human-only actions to one agent until a date. Never delegable itself."""
-        self._require_human(actor, "granting a delegation")
+        relay = self._require_human(actor, "granting a delegation", on_behalf_of, instruction, instruction_at)
         g_raw, key = (grantee or "").strip(), self._actor_key(grantee)
         if not g_raw.lower().startswith("agent:") or not key or key == "cli" or key.startswith("dry-run"):
             raise EngineError("a grant names one agent: --to agent:<id>")
+        if self._actor_key(actor) == key:
+            raise EngineError("an agent cannot relay a grant to itself")
         acts = list(dict.fromkeys(a.strip() for a in actions or [] if a and a.strip()))
         if not acts:
             raise EngineError("a grant lists the actions it allows (--allow ACTION, repeatable)")
@@ -1967,16 +3505,19 @@ class Engine:
             raise EngineError(f"a grant ends between today and {GRANT_MAX_DAYS} days from now (got {end.isoformat()})")
         if not (reason or "").strip():
             raise EngineError("a grant needs the human's reason (--reason)")
-        g = Grant(id=f"G-{self._next_grant_number():03d}", grantor=actor.strip(), grantee=f"agent:{key}", actions=acts,
+        grantor = relay.get("principal") if relay.get("relayed") else actor.strip()
+        g = Grant(id=f"G-{self._next_grant_number():03d}", grantor=grantor, grantee=f"agent:{key}", actions=acts,
                   reason=reason.strip(), at=now(), expires=end.isoformat())
         self.state.history.grants.append(g)
-        self.ledger.append("grant_issued", id=g.id, grantor=g.grantor, grantee=g.grantee, actions=acts, expires=g.expires, reason=g.reason)
+        self.ledger.append("grant_issued", id=g.id, grantor=g.grantor, actor=actor.strip(), grantee=g.grantee, actions=acts,
+                           expires=g.expires, reason=g.reason)
         self._save("grant")
         return g
 
     @_human_action("grant")
-    def revoke_grant(self, grant_id: str, actor: str, reason: str) -> Grant:
-        self._require_human(actor, "revoking a grant")
+    def revoke_grant(self, grant_id: str, actor: str, reason: str, on_behalf_of: str = "", instruction: str = "",
+                     instruction_at: str = "") -> Grant:
+        relay = self._require_human(actor, "revoking a grant", on_behalf_of, instruction, instruction_at)
         g = next((x for x in self.state.history.grants if x.id == grant_id), None)
         if g is None:
             raise EngineError(f"no grant {grant_id}; grants: {[x.id for x in self.state.history.grants] or 'none'}")
@@ -1984,8 +3525,10 @@ class Engine:
             raise EngineError(f"{g.id} was already revoked by {g.revoked_by} ({g.revoked_at[:10]})")
         if not (reason or "").strip():
             raise EngineError("revoking a grant needs the human's reason (--reason)")
-        g.revoked_at, g.revoked_by, g.revoke_reason = now(), actor.strip(), reason.strip()
-        self.ledger.append("grant_revoked", id=g.id, by=g.revoked_by, reason=g.revoke_reason)
+        g.revoked_at = now()
+        g.revoked_by = relay.get("principal") if relay.get("relayed") else actor.strip()
+        g.revoke_reason = reason.strip()
+        self.ledger.append("grant_revoked", id=g.id, by=g.revoked_by, actor=actor.strip(), reason=g.revoke_reason)
         self._save("grant")
         return g
 
@@ -2000,7 +3543,8 @@ class Engine:
         return [g for g in self.state.history.grants if not g.revoked_at and g.expires >= today]
 
     @_human_action("invalidate")
-    def invalidate_nodes(self, targets: list[str], reason: str, actor: str = "") -> list[str]:
+    def invalidate_nodes(self, targets: list[str], reason: str, actor: str = "", on_behalf_of: str = "", instruction: str = "",
+                         instruction_at: str = "") -> list[str]:
         """`vpg invalidate`: force nodes and their dependents to re-check. Budgets and loop counters are untouched.
 
         #13: the request names its actor. Re-opening a human's decision needs a named human, or an agent granted
@@ -2020,7 +3564,10 @@ class Engine:
             gated.append(f"{freezer} (the frozen inputs)")
         if gated:
             self._authorize(actor, "invalidate", f"invalidating {', '.join(targets)} re-opens a human's decision "
-                                                 f"({', '.join(gated)}), which")
+                                                 f"({', '.join(gated)}), which", on_behalf_of, instruction, instruction_at)
+        elif self._has_relay_fields(on_behalf_of, instruction, instruction_at):   # #185: a relay is checked and recorded
+            self._stamp_relay(self._relay_meta(actor, f"invalidating {', '.join(targets)}", on_behalf_of, instruction,
+                                               instruction_at))
         changed = self.invalidate(targets, reason=f"{reason} (requested by {actor})")
         for t in targets:
             self.rt(t).force_rerun = True   # an explicit request re-runs the target even when its inputs are unchanged
@@ -2044,12 +3591,19 @@ class Engine:
         if blocked_by:
             raise EngineError("the run has an integrity problem, so no submission is accepted: " + "; ".join(blocked_by))
         pre = rt.result_data.get("pre_outputs", {})
-        self._check_submission(node, ctx, outputs, review, pre, actor)
+        try:
+            self._check_submission(node, ctx, outputs, review, pre, actor)
+        except EngineError as exc:
+            if "privacy scan could not complete before submission" in str(exc):
+                rt.failures = [str(exc)]
+                return self.status()
+            raise
         executor = self._agent_identity(actor)
         res = NodeResult(outcome=outcome, outputs={**pre, **outputs}, review=review, executor=executor)
         bound = f"agent:{node.agent}" if node.agent else None
         extra = {"bound_agent": node.agent} if bound and executor != bound else {}
         self.ledger.append("node_submitted", node=node_id, attempt=rt.attempts, actor=actor, outputs=sorted(outputs), **extra)
+        rt.task_notes_by_attempt.pop(rt.attempts, None)
         cmd = self.project.command_for(node_id)
         rt.status, rt.executed = S.RUNNING, False
         if cmd:
@@ -2099,6 +3653,10 @@ class Engine:
                         json.loads(read_text(path))
                     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                         problems.append(f"'{key}' is not valid JSON ({path.name}: {exc})")
+                elif kinds.get(key) == "video" and key in {"master", "silent"} and path.is_file():
+                    env_problem = self._video_privacy_environment_problem(path)
+                    if env_problem:
+                        problems.append(env_problem)
         if not self.project.command_for(node.id):
             missing = [o.key for o in node.outputs if o.required and o.key not in outputs and o.key not in pre
                        and not (o.per_item and self._items_complete(node, o.key))]
@@ -2107,81 +3665,394 @@ class Engine:
         if node.kind == NodeKind.REVIEW and review is None and any(d["check"]["type"] == "review" for d in _dims(node, self.rubrics)):
             problems.append("this review node needs --review <review.json> scoring its review dimensions")
         if node.kind == NodeKind.REVIEW and isinstance(review, dict):
-            problems += self._review_bind_problems(node, review.get("reviewed"), self._agent_identity(actor))
+            problems += self._review_bind_problems(node, review.get("reviewed"), self._agent_identity(actor), review)
+            problems += self._text_privacy_review_problems(review)
+        pre_problems, _pre_warnings = self._text_privacy_scan_outputs(node, ctx, outputs, kinds, changed_docs=[])
+        problems += pre_problems
         if problems:
             raise EngineError(f"submission for {node.id} refused, no attempt used: " + "; ".join(problems))
 
+    def _text_privacy_names(self) -> tuple[list[str], Path | None, list[str]]:
+        from .tools import privacy
+        try:
+            names, _skipped = privacy.load_names(self.project.root, self.project.config)
+        except privacy.PrivacyConfigError as exc:
+            return [], None, [f"privacy text scan cannot read the declared name list ({exc})"]
+        names_path = None
+        raw_names = ((self.project.config or {}).get("privacy") or {}).get("names")
+        if isinstance(raw_names, str) and raw_names != "none":
+            names_path = (self.project.root / raw_names).resolve()
+        return names, names_path, []
+
+    def _video_privacy_environment_problem(self, video: Path) -> str:
+        from .tools import privacy
+        if not self._privacy_feature_on("n14_hold"):
+            return ""
+        if privacy.none_declared(self.project.config):
+            return ""
+        try:
+            names, _skipped = privacy.load_names(self.project.root, self.project.config)
+        except privacy.PrivacyConfigError as exc:
+            return f"privacy scan cannot read the declared name list ({exc})"
+        if not names:
+            return ""
+        pcfg = (self.project.config or {}).get("privacy") or {}
+        try:
+            privacy.validate_scan_fps(pcfg.get("scan_fps"))
+            privacy.scan_video(video, names, pcfg.get("scan_fps", "native"), float(pcfg.get("time_budget_s", 1800)))
+        except (privacy.OcrUnavailable, privacy.PrivacyConfigError, privacy.PrivacyScanError) as exc:
+            return f"privacy scan could not complete before submission ({type(exc).__name__}: {exc}); no attempt used"
+        return ""
+
+    def _text_privacy_scan_outputs(self, node: NodeDef, ctx: NodeContext, outputs: dict[str, Any], kinds: dict[str, str],
+                                   *, changed_docs: list[str], engine_written: set[str] | None = None) -> tuple[list[str], list[str]]:
+        from .tools import privacy
+        if not self._privacy_feature_on("text_scan"):
+            return [], []
+        names, names_path, problems = self._text_privacy_names()
+        if problems or not names:
+            return problems, []
+        text_kinds = {"json", "markdown", "md", "txt", "text", "srt", "html"}
+        paths: list[tuple[Path, bool, bool, bool]] = []
+        engine_written = engine_written or (set(outputs) if node.kind == NodeKind.TOOL and not self.project.command_for(node.id) else set())
+        for key, value in outputs.items():
+            values = list(value.values()) if isinstance(value, dict) else (value if isinstance(value, list) else [value])
+            for v in values:
+                path = ctx.output_path(key, v).resolve()
+                if names_path is not None and path == names_path:
+                    return [f"output '{key}' cannot register the privacy name list"], []
+            if kinds.get(key) not in text_kinds:
+                continue
+            warn_only = key in engine_written
+            paths += [(ctx.output_path(key, v).resolve(), kinds.get(key) == "json", warn_only, False) for v in values]
+        paths += [(self.controls.path(doc).resolve(), False, False, True) for doc in changed_docs if self.controls.path(doc).is_file()]
+        hits = []
+        warnings = []
+        for path, json_mode, warn_only, is_doc in dict.fromkeys(paths):
+            try:
+                text = privacy.text_for_privacy_scan(path, json_mode=json_mode)
+            except UnicodeDecodeError:
+                hits.append(f"{rel(path, self.project.root)} is not UTF-8 text")
+                if not is_doc:
+                    self._hold_refused_text(ctx, path)
+                continue
+            except json.JSONDecodeError:
+                hits.append(f"{rel(path, self.project.root)} is not valid JSON")
+                if not is_doc:
+                    self._hold_refused_text(ctx, path)
+                continue
+            except OSError:
+                continue
+            full, part = privacy.text_privacy_hits(text, names)
+            if full:
+                msg = f"{rel(path, self.project.root)} contains " + ", ".join(f"[list entry #{i}]" for i in full)
+                (warnings if warn_only else hits).append(msg)
+                if not warn_only and not is_doc:
+                    self._hold_refused_text(ctx, path)
+            if part:
+                warnings.append(f"{rel(path, self.project.root)} contains a partial privacy-name match for "
+                                + ", ".join(f"[list entry #{i}]" for i in part))
+        problems = ["privacy text scan found listed names; remove or mask them: " + "; ".join(hits)] if hits else []
+        return problems, warnings
+
+    def _hold_refused_text(self, ctx: NodeContext, path: Path) -> None:
+        if not path.exists():
+            return
+        hold = self._privacy_hold_dir()
+        work_real = ctx.workdir.resolve()
+        path_real = path.resolve()
+        if path_real.is_relative_to(work_real):
+            shutil.move(str(path), hold / f"{self.state.runtime.run_id}-{ctx.node.id}-a{ctx.attempt}-refused-text-{path.name}")
+
+    def _text_privacy_review_problems(self, review: dict[str, Any]) -> list[str]:
+        from .tools import privacy
+        if not self._privacy_feature_on("text_scan"):
+            return []
+        names, _names_path, problems = self._text_privacy_names()
+        if problems or not names:
+            return problems
+        text = "\n".join(privacy.iter_json_strings(review))
+        full, _part = privacy.text_privacy_hits(text, names)
+        return ["privacy text scan found listed names in review payload: " + ", ".join(f"[list entry #{i}]" for i in full)] if full else []
+
     @_human_action("decision")
-    def decide(self, node_id: str, decision: str, actor: str, reason: str = "", feedback: list[str] | None = None) -> dict[str, Any]:
+    def decide(self, node_id: str, decision: str, actor: str, reason: str = "", feedback: list[str] | None = None,
+               on_behalf_of: str = "", instruction: str = "", instruction_at: str = "", provisional: bool = False,
+               confirm_provisional: str = "", reject_provisional: str = "", rejection_feedback: str = "",
+               ack_warnings: list[str] | None = None, signoffs: list[str] | None = None) -> dict[str, Any]:
         node, rt = self.node(node_id), self.rt(node_id)
         if rt.status != S.WAITING_HUMAN:
             raise EngineError(f"{node_id} is not waiting for a human decision ({rt.status.value})")
         if decision not in node.human_review.outcomes:
             raise EngineError(f"decision must be one of {node.human_review.outcomes}")
+        if (confirm_provisional or reject_provisional) and node.id != self._release_node():
+            raise EngineError("--confirm-provisional/--reject-provisional are only allowed at the release node while it waits")
+        if node.id == self._release_node():
+            is_release_approval = decision == node.human_review.outcomes[0]
+            acked, signed, rejected_any = self._release_decision(node, decision, actor,
+                                                                 approve=is_release_approval and not bool(reject_provisional),
+                                                                 confirm_provisional=confirm_provisional,
+                                                                 reject_provisional=reject_provisional,
+                                                                 rejection_feedback=rejection_feedback,
+                                                                 ack_warnings=(ack_warnings or []) if is_release_approval else [],
+                                                                 signoffs=(signoffs or []) if is_release_approval else [],
+                                                                 on_behalf_of=on_behalf_of, instruction=instruction,
+                                                                 instruction_at=instruction_at, release_started_at=rt.started_at or "")
+            if rejected_any:
+                self._update_status()
+                self._save("decision")
+                return self.status()
+        if provisional:
+            self._check_provisional_decision(node, decision, actor, on_behalf_of, instruction)
         only = self._human_only_decision(node)
-        if only:   # listening, taste, the release: never delegated
-            if not is_human_name(actor, self.wf.policies.dry_run_actor):
-                raise EngineError(f"{only}: it needs a named human actor, never an agent, and no grant covers it")
+        if provisional:
+            self._require_human(actor, "a provisional human-gate decision", on_behalf_of, instruction, instruction_at)
+            grant = None
+        elif only:   # listening, taste, the release: never delegated
+            self._require_human(actor, only, on_behalf_of, instruction, instruction_at)
             grant = None
         else:
-            grant = self._authorize(actor, f"approve:{node_id}", "a human decision")
+            grant = self._authorize(actor, f"approve:{node_id}", "a human decision", on_behalf_of, instruction, instruction_at)
         locked = self._lock_on_approval(node, decision, actor)   # may refuse; nothing is ledgered before it succeeds
-        self._record_approval(node, decision, actor, human=grant is None, reason=reason, locked=locked,
-                              grant=grant.id if grant else "")
+        self._record_approval(node, decision, actor, human=grant is None and not actor.strip().lower().startswith("agent:"),
+                              reason=reason, locked=locked,
+                              grant=grant.id if grant else "", provisional=provisional,
+                              warning_acks=acked if node.id == self._release_node() and decision == node.human_review.outcomes[0] else [],
+                              signoffs=signed if node.id == self._release_node() and decision == node.human_review.outcomes[0] else [])
         for text in feedback or []:
-            self.add_feedback(text, actor, reopen=False)
+            self.add_feedback(text, actor, reopen=False, on_behalf_of=on_behalf_of, instruction=instruction,
+                              instruction_at=instruction_at)
         self._pass(node, rt, decision, rt.result_data)
         self._update_status()
         self._save("decision")
         return self.status()
 
+    def _check_provisional_decision(self, node: NodeDef, decision: str, actor: str, on_behalf_of: str, instruction: str) -> None:
+        policy = self.state.runtime.accepted_policy or {}
+        cfg = policy.get("autonomy") if isinstance(policy.get("autonomy"), dict) else {}
+        if cfg.get("mode", "gated") != "provisional":
+            raise EngineError("provisional approval requires autonomy.mode: provisional")
+        missing = autonomy_precondition_problems(policy)
+        if missing:
+            raise EngineError("provisional approval refused: " + "; ".join(missing))
+        allowed = PROVISIONAL_GATES | (set(cfg.get("provisional_gates_extra") or []) & OPTIONAL_PROVISIONAL_GATES)
+        if node.id not in allowed:
+            raise EngineError(f"provisional approval is allowed only at {', '.join(sorted(allowed))}, not {node.id}"
+                              + (" (a project may opt the look and animatic gates in with autonomy.provisional_gates_extra)"
+                                 if node.id in OPTIONAL_PROVISIONAL_GATES else ""))
+        if node.id in self.index.descendants(self._gate_node()):
+            raise EngineError(f"provisional approval is refused at {node.id}: it is at or after the release-review side of the graph")
+        if decision != node.human_review.outcomes[0]:
+            raise EngineError("only an approval can be provisional")
+        principal = (on_behalf_of or "").strip()
+        if principal != (cfg.get("principal") or "").strip():
+            raise EngineError(f"provisional approval must be on behalf of autonomy.principal {cfg.get('principal')!r}")
+        if not (actor or "").strip().lower().startswith("agent:") or not (instruction or "").strip():
+            raise EngineError("provisional approval needs --actor agent:<id>, --on-behalf-of and --instruction")
+        approver = self._actor_key(actor)
+        producers = {self._actor_key(node.agent)} if node.agent else set()
+        rt = self.rt(node.id)
+        producers |= {self._actor_key(e["data"].get("actor")) for e in self.ledger.events("node_submitted")
+                      if e["data"].get("node") == node.id and e["data"].get("attempt") == rt.attempts}
+        if approver and approver in producers:
+            raise EngineError(f"provisional approval refused: {actor} submitted or owns {node.id}, so it cannot approve its own output")
+
+    def _standing_provisional(self) -> list[Approval]:
+        return [a for a in self.state.history.approvals if a.provisional and not a.confirmed_at and not a.rejected_at
+                and not a.superseded_at]
+
+    def _handle_release_provisional_controls(self, confirm: str, reject: str, feedback: str, actor: str,
+                                             on_behalf_of: str, instruction: str, instruction_at: str, release_started_at: str) -> None:
+        if confirm and reject:
+            raise EngineError("--confirm-provisional and --reject-provisional are exclusive")
+        relay = self._require_human(actor, "confirming provisional approvals", on_behalf_of, instruction, instruction_at)
+        if relay.get("relayed"):
+            if not instruction_at:
+                raise EngineError("relayed provisional confirmation/rejection needs --instruction-at")
+            try:
+                given = datetime.fromisoformat(instruction_at)
+                started = datetime.fromisoformat(release_started_at)
+                if given.tzinfo is None:
+                    raise EngineError("--instruction-at must be an ISO timestamp with timezone")
+                if started.tzinfo is None:
+                    raise EngineError("release attempt timestamp is missing timezone")
+                if given <= started:
+                    raise EngineError("--instruction-at for relayed provisional confirmation/rejection must be later than the current release attempt")
+            except ValueError:
+                raise EngineError("--instruction-at must be an ISO timestamp with timezone") from None
+        standing_list = self._standing_provisional()
+        standing = {a.node: a for a in standing_list}
+        meta = {k: v for k, v in self.ledger.stamp.items() if k in ("principal", "instruction", "instruction_at", "relayed")}
+        if confirm:
+            nodes = sorted(standing) if confirm == "all" else [n.strip() for n in confirm.split(",") if n.strip()]
+            unknown = [n for n in nodes if n not in standing]
+            if unknown:
+                raise EngineError(f"no standing provisional approval to confirm for: {', '.join(unknown)}")
+            for n in nodes:
+                standing[n].confirmed_at = now()
+                standing[n].confirmed_by = actor
+                standing[n].confirmed_principal = meta.get("principal", "")
+                standing[n].confirmed_instruction = meta.get("instruction", "")
+                standing[n].confirmed_instruction_at = meta.get("instruction_at", "")
+                standing[n].confirmation_relayed = bool(meta.get("relayed"))
+                for doc in self.node(n).controls.lock_on_approval:
+                    if doc in self.state.controls:
+                        self.state.controls[doc].provisional = False
+                self.ledger.append("provisional_confirmed", node=n, actor=actor)
+        if reject:
+            node = reject.strip()
+            if node not in standing:
+                raise EngineError(f"no standing provisional approval to reject for {node}")
+            if not (feedback or "").strip():
+                raise EngineError("--reject-provisional needs --feedback")
+            standing[node].rejected_at, standing[node].rejection_feedback = now(), feedback.strip()
+            standing[node].rejected_by = actor
+            standing[node].rejected_principal = meta.get("principal", "")
+            standing[node].rejected_instruction = meta.get("instruction", "")
+            standing[node].rejected_instruction_at = meta.get("instruction_at", "")
+            standing[node].rejection_relayed = bool(meta.get("relayed"))
+            for doc, before in standing[node].pre_lock_controls.items():
+                self.state.controls[doc] = ControlDocState.model_validate(before)
+            self.ledger.append("provisional_rejected", node=node, actor=actor, feedback=feedback.strip())
+            principal = meta.get("principal") or (self._declared_humans()[0] if self._declared_humans() else actor)
+            target_rt = self.rt(node)
+            target_attempt = target_rt.attempts + 1
+            target_rt.task_notes_by_attempt.setdefault(target_attempt, []).append(
+                f"{principal}'s rejection of the provisional approval (verbatim): {feedback.strip()}")
+            self.invalidate([node], reason=f"provisional approval rejected at release by {actor}")
+
+    def _release_verification(self) -> dict[str, Any]:
+        latest = next(iter(reversed(self.current("verification"))), None)
+        if latest is None:
+            raise EngineError("release approval refused: no registered verification artifact; run final verification first")
+        path = self.project.root / latest.path
+        if not path.is_file():
+            raise EngineError("release approval refused: registered verification artifact is missing")
+        if sha256_file(path) != latest.sha256:
+            raise EngineError("release approval refused: registered verification artifact changed on disk; rerun final verification")
+        try:
+            return read_json(path)
+        except (OSError, ValueError) as exc:
+            raise EngineError(f"release approval refused: registered verification artifact is unreadable ({exc.__class__.__name__})") from None
+
+    def _release_approval_requirements(self, ack_warnings: list[str], signoffs: list[str]) -> tuple[list[str], list[str]]:
+        standing = [a.node for a in self._standing_provisional()]
+        if standing:
+            raise EngineError("release approval refused: confirm or reject standing provisional approvals first "
+                              f"({', '.join(sorted(standing))}); use --confirm-provisional all|<node,...> or "
+                              "--reject-provisional <node> --feedback \"...\"")
+        return self._check_release_structure(ack_warnings, signoffs)
+
+    def _check_release_structure(self, ack_warnings: list[str], signoffs: list[str]) -> tuple[list[str], list[str]]:
+        data = self._release_verification()
+        warnings = data.get("warnings") if isinstance(data.get("warnings"), list) else []
+        pending = data.get("pending_human") if isinstance(data.get("pending_human"), list) else []
+        want_acks = {str(i) for i in range(1, len(warnings) + 1)}
+        raw_acks = {a.strip() for item in ack_warnings for a in str(item).split(",") if a.strip()}
+        acked = want_acks if "all" in raw_acks else raw_acks
+        missing_acks = sorted(want_acks - acked, key=int)
+        if missing_acks:
+            raise EngineError(f"release approval refused: acknowledge warning(s) {', '.join(missing_acks)} with --ack-warning <n>|all")
+        bad_acks = sorted(acked - want_acks, key=lambda x: (not x.isdigit(), x))
+        if bad_acks:
+            raise EngineError(f"release approval refused: warning acknowledgement(s) not in the release packet: {', '.join(bad_acks)}")
+        signed = {s.strip() for item in signoffs for s in str(item).split(",") if s.strip()}
+        missing_signoffs = sorted(set(map(str, pending)) - signed)
+        if missing_signoffs:
+            raise EngineError(f"release approval refused: pending human dimension(s) need --signoff: {', '.join(missing_signoffs)}")
+        return sorted(acked, key=lambda x: int(x) if x.isdigit() else 10**9), sorted(signed)
+
     def _record_approval(self, node: NodeDef, decision: str, actor: str, human: bool, reason: str,
-                         locked: list[tuple[str, Any]] = (), grant: str = "") -> None:
+                         locked: list[tuple[str, Any, dict[str, Any]]] = (), grant: str = "", provisional: bool = False,
+                         warning_acks: list[str] | None = None, signoffs: list[str] | None = None) -> None:
         rt = self.rt(node.id)
         outputs = {k: sha[:16] for k, (_, sha) in sorted(self._attempt_outputs(node.id, rt.attempts).items())}
+        relay = {k: v for k, v in self.ledger.stamp.items() if k in ("principal", "instruction", "instruction_at", "relayed")}
+        pre_lock = {doc: before for doc, _st, before in locked}
+        if provisional:
+            for a in self._standing_provisional():
+                if a.node == node.id:
+                    a.superseded_at = now()
+        elif decision == node.human_review.outcomes[0]:
+            for a in self._standing_provisional():
+                if a.node == node.id:
+                    a.superseded_at = now()
+        from .telemetry import decision_tag
+        evidence = decision_tag(provisional, bool(relay.get("relayed")), human, grant)
+        expires_at = self._provisional_expiry() if provisional else ""
         self.state.history.approvals.append(Approval(node=node.id, decision=decision, actor=actor, human=human, at=now(), reason=reason,
-                                                     outputs=outputs, grant=grant))
+                                                     outputs=outputs, grant=grant, provisional=provisional,
+                                                     warning_acks=warning_acks or [], signoffs=signoffs or [],
+                                                     pre_lock_controls=pre_lock, evidence=evidence, expires_at=expires_at, **relay))
         self.state.history.decisions.append(Decision(id=f"DEC-{len(self.state.history.decisions) + 1:03d}", node=node.id,
                                                      text=f"{node.human_review.decision} → {decision}" + (f" ({reason})" if reason else ""),
                                                      by=actor, at=now()))
         covers = [d["id"] for d in _dims(node, self.rubrics) if d["check"]["type"] == "human"]
         self.ledger.append("decision", node=node.id, decision=decision, actor=actor, human=human, reason=reason, covers=covers,
-                           outputs=self.state.history.approvals[-1].outputs)
-        for doc, st in locked:
+                           outputs=self.state.history.approvals[-1].outputs, provisional=provisional,
+                           warning_acks=warning_acks or [], signoffs=signoffs or [], evidence=evidence,
+                           **({"expires_at": expires_at} if expires_at else {}))
+        self._observe_decision(node, decision, actor, reason, provisional, bool(relay.get("relayed")),
+                               self.state.history.approvals[-1].outputs, expires_at, human, grant)
+        for doc, st, _before in locked:
+            st.provisional = provisional
             self.ledger.append("control_locked", doc=doc, version=st.version, sha256=(st.approved_sha256 or "")[:16], by=actor)
 
-    def _lock_on_approval(self, node: NodeDef, decision: str, actor: str) -> list[tuple[str, Any]]:
+    def _lock_on_approval(self, node: NodeDef, decision: str, actor: str) -> list[tuple[str, Any, dict[str, Any]]]:
         """Lock the documents an approval locks. It is all or nothing, and it runs before the decision is recorded, so a
         refused lock leaves no phantom approval in the state or the ledger."""
         docs = list(node.controls.lock_on_approval) if decision == node.human_review.outcomes[0] else []
         bad = [d for d in docs if not self.controls.path(d).is_file()]
         if bad:
             here = rel(self.project.root, Path.cwd())
-            raise EngineError(f"cannot lock {', '.join(f'controls/{d}.md' for d in bad)}: missing or not a regular file. Recreate "
+            raise EngineError(f"cannot lock {', '.join(self.controls.rel(d) for d in bad)}: missing or not a regular file. Recreate "
                               f"the accepted version with " + "; ".join(f"`vpg restore-control {here} --doc {d} --actor <name>`" for d in bad)
                               + ", then record the decision again")
-        drifted = [f"controls/{d}.md" for d in docs if sha256_file(self.controls.path(d)) != self.state.controls[d].sha256]
+        drifted = [self.controls.rel(d) for d in docs if sha256_file(self.controls.path(d)) != self.state.controls[d].sha256]
         if drifted:   # the human reviewed the accepted version; an edit since then must not be locked in by the approval
             here = rel(self.project.root, Path.cwd())
-            cmds = "; ".join(f"`vpg restore-control {here} --doc {d} --actor <name>`" for d in docs if f"controls/{d}.md" in drifted)
+            cmds = "; ".join(f"`vpg restore-control {here} --doc {d} --actor <name>`" for d in docs if self.controls.rel(d) in drifted)
             raise EngineError(f"cannot lock {', '.join(drifted)}: it changed since the workflow accepted it (an edit outside the "
                               f"workflow). Restore the accepted version with {cmds} (the edit is kept aside), then decide again. "
                               "To make the change, reject with feedback after restoring, so the writer makes it")
         before = {d: self.state.controls[d].model_copy(deep=True) for d in docs}
         try:
-            return [(doc, self.controls.approve(doc, actor)) for doc in docs]
+            return [(doc, self.controls.approve(doc, actor), before[doc].model_dump()) for doc in docs]
         except Exception:
             self.state.controls.update(before)   # all or nothing
             raise
 
     @_human_action("feedback")
-    def add_feedback(self, text: str, actor: str, at: str = "", severity: str = "", reopen: bool = True) -> Feedback:
+    def add_feedback(self, text: str, actor: str, at: str = "", severity: str = "", reopen: bool = True,
+                     on_behalf_of: str = "", instruction: str = "", instruction_at: str = "") -> Feedback:
         """A named human's feedback re-opens a passed gate: N21 interprets it on the next run. An agent's note (#14) never
         re-opens anything by itself: it waits for a named human, or an agent granted 'feedback-triage', to accept or dismiss
         it, and until then no version can pass the gate and N23 refuses the release, so a real problem it names is never
         lost and never acted on without a human."""
         if self._actor_key(actor) in ("", "cli"):
             raise EngineError("feedback names its author: --actor <name> or --actor agent:<id>")
+        if at not in ("", None):
+            try:
+                text_at = str(at)
+                for chunk in re.split(r"\s*[-–]\s*", text_at):
+                    value = (sum(float(part) * factor for part, factor in zip(chunk.split(":"), (60, 1)))
+                             if ":" in chunk else float(chunk))
+                    if not math.isfinite(value):
+                        raise ValueError
+            except (TypeError, ValueError):
+                raise EngineError("--at must be a finite number of seconds (or mm:ss text)") from None
+        has_relay_fields = self._has_relay_fields(on_behalf_of, instruction, instruction_at)
+        relay = self._relay_meta(actor, "feedback", on_behalf_of, instruction, instruction_at) if has_relay_fields else None
+        ledger_extra: dict[str, Any] = {}
+        if relay is not None:
+            if relay.get("relayed"):
+                ledger_extra = dict(relay, relay_actor=actor)
+                actor = relay["principal"]
+            elif not is_human_name(actor, self.wf.policies.dry_run_actor):
+                raise EngineError("feedback needs a declared human or a structured relay")
+        elif self._declared_humans() and is_human_name(actor, self.wf.policies.dry_run_actor) and actor not in self._declared_humans():
+            raise EngineError(f"feedback: --actor must be exactly one of the declared humans ({', '.join(self._declared_humans())}), "
+                              "or an agent:<id> with --on-behalf-of <declared human> --instruction \"<verbatim words>\"")
         human = is_human_name(actor, self.wf.policies.dry_run_actor)
         fb = Feedback(id=f"F{len(self.state.evaluation.feedback) + 1:03d}", text=text, actor=actor, at=at, severity=severity,
                       version=self.state.runtime.current_version, created_at=now())
@@ -2189,7 +4060,8 @@ class Engine:
             fb.status, fb.triage = "triage", "pending"
             fb.hold = f"{actor}'s note awaits a human's triage (`vpg feedback --triage {fb.id} --accept|--dismiss`)"
         self.state.evaluation.feedback.append(fb)
-        self.ledger.append("feedback", id=fb.id, actor=actor, at=at, version=fb.version, **({"triage": "pending"} if not human else {}))
+        self.ledger.append("feedback", id=fb.id, actor=actor, at=at, version=fb.version,
+                           **({"triage": "pending"} if not human else {}), **ledger_extra)
         if human and reopen:
             self._reopen_gate_for(fb.id, f"new human feedback {fb.id}")
         self._save("feedback")
@@ -2201,7 +4073,8 @@ class Engine:
             self.invalidate([gate_node], reason=reason)
 
     @_human_action("feedback_triaged")
-    def triage_feedback(self, fb_id: str, accept: bool, actor: str, reason: str) -> Feedback:
+    def triage_feedback(self, fb_id: str, accept: bool, actor: str, reason: str, on_behalf_of: str = "",
+                        instruction: str = "", instruction_at: str = "") -> Feedback:
         """`vpg feedback --triage F --accept|--dismiss`: a named human (or an agent granted 'feedback-triage', never the note's
         own author) rules on an agent's note. Accepted, it becomes feedback like the human's own and re-opens a passed gate;
         dismissed, it is closed with the reason. Either way its hold on the gate is released."""
@@ -2214,7 +4087,7 @@ class Engine:
             raise EngineError("triage needs the reason (--reason)")
         if self._actor_key(actor) == self._actor_key(fb.actor):
             raise EngineError(f"{fb.id} is {fb.actor}'s own note; another party triages it")
-        self._authorize(actor, "feedback-triage", "triaging an agent's note")
+        self._authorize(actor, "feedback-triage", "triaging an agent's note", on_behalf_of, instruction, instruction_at)
         fb.hold, fb.triaged_by = "", actor.strip()
         if accept:
             fb.triage, fb.status = "accepted", "open"
@@ -2238,25 +4111,67 @@ class Engine:
         return cr
 
     @_human_action("change_request")
-    def approve_change_request(self, cr_id: str, by: str, writer_node: str | None = None, reason: str = "") -> ChangeRequest:
+    def approve_change_request(self, cr_id: str, by: str, reason: str = "", on_behalf_of: str = "", instruction: str = "",
+                               instruction_at: str = "") -> ChangeRequest:
         cr = self._open_change_request(cr_id, "approved")
-        self._authorize(by, "change-request", "approving a change request")
-        self._not_own_request(cr, by)
+        self._refuse_delegated_bar_change(cr, by, on_behalf_of, instruction, instruction_at)
+        self._not_own_request(cr, by)   # before _authorize, whose refusal would suggest a grant or relay that can't help
+        self._authorize(by, "change-request", "approving a change request", on_behalf_of, instruction, instruction_at)
         cr.status, cr.approved_by = "approved", by
         self.ledger.append("change_request_approved", id=cr.id, doc=cr.doc, by=by, reason=(reason or "").strip())
-        writer = writer_node or next((n.id for n in self.wf.nodes if cr.doc in n.controls.write), None)
+        writer = self.control_writer(cr.doc)
         if writer:
-            self.invalidate([writer], reason=f"approved change request {cr.id} on {cr.doc}.md")
+            self.invalidate([writer], reason=f"approved change request {cr.id} on {self.controls.label(cr.doc)}")
+            self.rt(writer).force_rerun = True   # the edit needs the writer's task, even when its inputs are unchanged (#147)
         self._save("change_request")
         return cr
 
+    def control_writer(self, doc: str) -> str | None:
+        """The node whose task may write the control document: the first one the workflow declares."""
+        return next((n.id for n in self.wf.nodes if doc in n.controls.write), None)
+
+    def edit_window_advice(self, doc: str, how: str = "") -> str:
+        """Where an approved change request's edit is made (#147); the approval output and the integrity block share it."""
+        return (f"Make the change inside {self.control_writer(doc)}'s task: `vpg run` dispatches it (`vpg tasks` shows the "
+                f"packet); edit {self.controls.label(doc)} while that task is open{how}, then `vpg submit` it")
+
+    def _router(self, nid: str) -> bool:
+        """Gates and routers (gate hooks, loop or escalate edges) always re-evaluate; only pure producers memo-pass."""
+        return bool(self.node(nid).gate) or any(e.kind != EdgeKind.FLOW for e in self.index.outgoing(nid))
+
+    def _will_dispatch(self, nid: str) -> bool:
+        """Whether the next `vpg run` hands the node a task instead of leaving it or memo-passing it (#147)."""
+        rt = self.state.runtime.nodes.get(nid)
+        if rt is None:   # a node the workflow gained mid-run
+            return False
+        return rt.status in (S.PLANNED, S.READY, S.ITERATE) or (
+            rt.status == S.STALE and (rt.force_rerun or bool(rt.rework_defects) or self._router(nid)
+                                      or (self.node(nid).kind != NodeKind.TOOL and bool(self._unrouted_open_defects(nid)))))
+
+    def _refuse_delegated_bar_change(self, cr: ChangeRequest, by: str, on_behalf_of: str, instruction: str,
+                                     instruction_at: str) -> None:
+        """A change request on evaluation.md moves the bar, so before the release wait only a named human decides it: a relay
+        is refused, and a change-request grant doesn't cover it."""
+        if cr.doc not in BAR_DOCS or self._at_release_wait():
+            return
+        if self._has_relay_fields(on_behalf_of, instruction, instruction_at):
+            raise EngineError("relayed change requests that touch evaluation or thresholds are bar changes and are refused mid-run")
+        if not is_human_name(by, self.wf.policies.dry_run_actor) and self._live_grant(by, "change-request") is not None:
+            raise EngineError("a change-request grant doesn't cover evaluation or thresholds before the release review: they "
+                              "are bar changes, which a named human decides")
+        if not is_human_name(by, self.wf.policies.dry_run_actor):   # #185: say so before any grant or relay is suggested
+            raise EngineError(f"{cr.id} on {self.controls.label(cr.doc)} is a bar change: before the release review only a named human decides "
+                              "it, and neither a grant nor a relay covers it")
+
     @_human_action("change_request")
-    def reject_change_request(self, cr_id: str, by: str, reason: str) -> ChangeRequest:
+    def reject_change_request(self, cr_id: str, by: str, reason: str, on_behalf_of: str = "", instruction: str = "",
+                              instruction_at: str = "") -> ChangeRequest:
         """A named human declines an open change request, with the reason. Nothing is invalidated: the document stays as
         approved, and the request stays in the history and the release summary as rejected."""
         cr = self._open_change_request(cr_id, "rejected")
-        self._authorize(by, "change-request", "rejecting a change request")
-        self._not_own_request(cr, by)
+        self._refuse_delegated_bar_change(cr, by, on_behalf_of, instruction, instruction_at)
+        self._not_own_request(cr, by)   # before _authorize, whose refusal would suggest a grant or relay that can't help
+        self._authorize(by, "change-request", "rejecting a change request", on_behalf_of, instruction, instruction_at)
         if not (reason or "").strip():
             raise EngineError("rejecting a change request needs the human's reason (--reason)")
         cr.status = "rejected"
@@ -2265,12 +4180,14 @@ class Engine:
         return cr
 
     @_human_action("change_request")
-    def defer_change_request(self, cr_id: str, by: str, until: str, reason: str) -> ChangeRequest:
+    def defer_change_request(self, cr_id: str, by: str, until: str, reason: str, on_behalf_of: str = "", instruction: str = "",
+                             instruction_at: str = "") -> ChangeRequest:
         """#102: park an open change request with the trigger that revisits it (e.g. "after the v1 release"). Nothing is
         invalidated; the document stays as approved. It can still be approved or rejected, and the release lists it."""
         cr = self._open_change_request(cr_id, "deferred")
-        self._authorize(by, "change-request", "deferring a change request")
-        self._not_own_request(cr, by)
+        self._refuse_delegated_bar_change(cr, by, on_behalf_of, instruction, instruction_at)
+        self._not_own_request(cr, by)   # before _authorize, whose refusal would suggest a grant or relay that can't help
+        self._authorize(by, "change-request", "deferring a change request", on_behalf_of, instruction, instruction_at)
         if not (until or "").strip():
             raise EngineError("deferring a change request needs its revisit trigger (--until \"<when or what brings it back>\")")
         if not (reason or "").strip():
@@ -2294,7 +4211,7 @@ class Engine:
             doc = cr.doc
         if doc not in self.state.controls:
             raise EngineError(f"unknown control document {doc!r}; documents: {sorted(self.state.controls)}")
-        writer = next((n.id for n in self.wf.nodes if doc in n.controls.write), None)
+        writer = self.control_writer(doc)
         readers = sorted(n.id for n in self.wf.nodes if n.id != writer
                          and (doc in control_reads(n) or f"control:{doc}" in n.inputs))
         reach: set[str] = set()
@@ -2315,12 +4232,23 @@ class Engine:
         return cr
 
     @_human_action("defect_resolved")
-    def resolve_defect(self, defect_id: str, actor: str, evidence: str) -> Defect:
+    def resolve_defect(self, defect_id: str, actor: str, evidence: str, on_behalf_of: str = "", instruction: str = "",
+                       instruction_at: str = "") -> Defect:
         """`vpg resolve`: a named human closes an unresolved defect with the evidence that it is fixed or does not apply,
         when no review can show it (e.g. the reviewer no longer runs). The gate counts it as resolved from its next
         evaluation; its failure history is kept."""
-        grant = self._authorize(actor, "resolve", "resolving a defect")
         d = next((x for x in self.state.evaluation.defects if x.id == defect_id), None)
+        if d is not None and self._from_tool_check(d):   # nobody closes it by hand, so no route is suggested
+            raise EngineError(f"{d.id} came from a deterministic tool check; `vpg resolve` cannot close it. Fix the measured "
+                              "condition and let the next tool check close it, or leave it for the principal's end review")
+        mid_run = not self._at_release_wait()
+        if (d is not None and mid_run and not is_human_name(actor, self.wf.policies.dry_run_actor)
+                and not self._has_relay_fields(on_behalf_of, instruction, instruction_at)   # a relay gets the relay rule below
+                and self._independent_review_defect(d) is not None):
+            raise EngineError(f"{d.id} came from independent review {d.source}; the producer cannot close it. It needs a fresh "
+                              "independent pass or the principal's end-review decision")
+        grant = self._authorize(actor, "resolve", "resolving a defect", on_behalf_of, instruction, instruction_at,
+                                relay_ok=not (d is not None and d.source.startswith("rev-") and mid_run))
         if d is None:
             raise EngineError(f"no defect {defect_id}")
         if grant is not None:
@@ -2331,8 +4259,18 @@ class Engine:
             raise EngineError(f"{d.id} is {d.status}; only an open, persisting or in-rework defect can be resolved")
         if not (evidence or "").strip():
             raise EngineError("resolving a defect needs the human's evidence (--evidence): what shows it is fixed or does not apply")
+        if d.source.startswith("rev-") and self.ledger.stamp.get("relayed"):
+            rn = self._release_node()
+            if not self._at_release_wait():
+                raise EngineError(f"relayed resolve of review-raised {d.id} is allowed only at the release end review")
+            self._check_release_relay_time(instruction_at, self.rt(rn).started_at or "", "defect resolution")
+        independent = self._independent_review_defect(d)
+        effective_actor = self.ledger.stamp.get("principal") if self.ledger.stamp.get("relayed") else actor
+        if independent is not None and effective_actor != self._principal():
+            raise EngineError(f"{d.id} came from independent review {independent.id}; the producer cannot close it. It needs a "
+                              "fresh independent pass or the principal's end-review decision")
         was = d.status
-        d.status, d.needs_human, d.human_hold = "resolved", False, ""
+        d.status, d.needs_human, d.human_hold, d.resolved_by = "resolved", False, "", effective_actor
         version = self.state.runtime.current_version
         self.state.evaluation.comparisons.append(Comparison(
             rework_cycle=self.state.runtime.rework_cycles, defect_id=d.id, before_version=d.last_seen_version,
@@ -2343,20 +4281,25 @@ class Engine:
 
     @_human_action("unblock")
     def unblock(self, node_id: str, actor: str, note: str = "", reset_budget: bool = False, waive: list[str] | None = None,
-                all_loops: bool = False) -> dict[str, Any]:
+                all_loops: bool = False, on_behalf_of: str = "", instruction: str = "", instruction_at: str = "") -> dict[str, Any]:
         """A named human resolves the open escalations of one node (or one run-level name). Nothing else changes state:
         a node without an open escalation is not reset (that would re-run it without re-checking its dependents), and
         the run stays BLOCKED while any other escalation is open. `waive` records intake-gap waivers before the freeze.
         `all_loops` also gives every loop of the node a fresh traversal budget, not only the loops that escalated."""
-        self._authorize(actor, "unblock", "unblocking")
+        if waive and not is_human_name(actor, self.wf.policies.dry_run_actor) and not self._at_release_wait():
+            raise EngineError("waiving an intake gap is refused mid-run for an agent: before the release review only a named "
+                              "human waives a gap, and neither a grant nor a relay covers it")
+        grant = self._authorize(actor, "unblock", "unblocking", on_behalf_of, instruction, instruction_at)
+        relay_principal = self.ledger.stamp.get("principal") if self.ledger.stamp.get("relayed") else ""
+        effective_actor = relay_principal or actor
         if waive:   # a waived intake gap stands in for evidence the film never had: only a human waives it
-            self._require_human(actor, "waiving an intake gap")
+            self._require_human(actor, "waiving an intake gap", on_behalf_of, instruction, instruction_at)
         is_node = node_id in self.state.runtime.nodes
         open_here = [e for e in self.state.runtime.escalations if e.node == node_id and not e.resolved]
         live = ({d.id for d in self.state.evaluation.defects if d.human_hold and d.status in ("open", "persisting", "in_rework")}
                 | {f.id for f in self.state.evaluation.feedback if f.hold})
         held = sorted({h for e in open_here for h in e.holds} & live)   # a hold a human has since cleared no longer counts
-        if held and not is_human_name(actor, self.wf.policies.dry_run_actor):
+        if held and not is_human_name(effective_actor, self.wf.policies.dry_run_actor):
             raise EngineError(f"{node_id}'s escalation holds {', '.join(held)} for a named human; a grant can't release them "
                               "(a named human unblocks it, or triages the notes and resolves the defects first)")
         blocked = is_node and self.rt(node_id).status == S.BLOCKED
@@ -2383,14 +4326,23 @@ class Engine:
                     d.human_hold = ""
                     released.append(d.id)
             owner = self.node(node_id).escalation.to.strip().lower()
-            human = is_human_name(actor, self.wf.policies.dry_run_actor)
+            human = is_human_name(effective_actor, self.wf.policies.dry_run_actor)
+            unreleased_human_holds: list[str] = []
+            allowed_humans: set[str] = set()
             for f in self.state.evaluation.feedback:   # only the feedback's author, or the gate's owner, accepts a dismissal
                 author = f.triaged_by if f.triage == "accepted" else f.actor   # an accepted note is its triager's (#14)
                 if (f.hold and f.triage != "pending" and cited(f.id)   # a note awaiting triage is released only by it
                         and (human or not self._humans_feedback(f))       # a grant never releases a human's feedback
-                        and actor.strip().lower() in (author.strip().lower(), owner)):
+                        and effective_actor.strip().lower() in (author.strip().lower(), owner)):
                     f.hold = ""
                     released.append(f.id)
+                elif f.hold and f.triage != "pending" and cited(f.id) and self._humans_feedback(f):
+                    unreleased_human_holds.append(f.id)
+                    allowed_humans.update(x for x in (author, self.node(node_id).escalation.to.strip()) if x)
+            if unreleased_human_holds:
+                allowed = ", ".join(sorted(allowed_humans)) or self.node(node_id).escalation.to.strip()
+                raise EngineError(f"{node_id}'s escalation holds {', '.join(unreleased_human_holds)} for {allowed}; "
+                                  f"--actor must be one of {allowed}, or an agent relay with --on-behalf-of one of them")
         for esc in open_here:
             esc.resolved = True
             for edge_id in dict.fromkeys(([esc.edge] if esc.edge else []) + esc.edges) if is_node else []:
@@ -2539,19 +4491,20 @@ class Engine:
             self.ledger.append("gap_waived", gap=gid, actor=actor, reason=reason.strip())
 
     @_human_action("restore_control")
-    def restore_control(self, doc: str, actor: str) -> dict[str, Any]:
+    def restore_control(self, doc: str, actor: str, on_behalf_of: str = "", instruction: str = "",
+                        instruction_at: str = "") -> dict[str, Any]:
         """A named human puts a control document back to the version the workflow accepted, after an edit outside the
         workflow. The discarded text is kept as `.vpg/controls/<doc>.discarded[-n].md`."""
-        self._authorize(actor, "restore-control", "restoring a control document")
-        if doc not in CONTROL_DOCS:
-            raise EngineError(f"unknown control document '{doc}' (known: {', '.join(CONTROL_DOCS)})")
+        self._authorize(actor, "restore-control", "restoring a control document", on_behalf_of, instruction, instruction_at)
+        if doc not in self.controls.docs:
+            raise EngineError(f"unknown control document '{doc}' (known: {', '.join(self.controls.docs)})")
         writing = [n for n in self._inflight() if doc in self.node(n).controls.write]
         if writing:
-            raise EngineError(f"{', '.join(writing)} may be writing {doc}.md now; let it finish, or invalidate it, then restore")
+            raise EngineError(f"{', '.join(writing)} may be writing {self.controls.label(doc)} now; let it finish, or invalidate it, then restore")
         restored, keep = self.controls.restore_one(doc, tag="discarded",
                                                    before_change=lambda k: self._undo.append(lambda: self.controls.put_back(doc, k)))
         if not restored:
-            raise EngineError(f"controls/{doc}.md already matches the version the workflow accepted; nothing to restore")
+            raise EngineError(f"{self.controls.rel(doc)} already matches the version the workflow accepted; nothing to restore")
         self.ledger.append("control_restored", doc=doc, actor=actor,
                            kept=rel(keep, self.project.root) if keep else "none (the document was missing or not a regular file)")
         self._update_status()
@@ -2703,14 +4656,18 @@ class Engine:
         return out
 
     @_human_action("accept_config")
-    def accept_config(self, actor: str, reason: str, adopt_code: list[str] | None = None) -> dict[str, Any]:
+    def accept_config(self, actor: str, reason: str, adopt_code: list[str] | None = None, on_behalf_of: str = "",
+                      instruction: str = "", instruction_at: str = "") -> dict[str, Any]:
         """A named human accepts a mid-run change to the workflow, rules, rubrics, thresholds, project config or engine.
         The reviews and the gate re-run under it: a review's fingerprint includes the accepted configuration, so no earlier
         verdict survives a change in how work is judged. Recorded passes are carried over to the current fingerprint
         scheme where that is provable (_carry_over_plan). `adopt_code` names command nodes whose last pass predates code
         fingerprints and whose code the human vouches for."""
         # never delegable: an accepted configuration can rewrite the workflow, rubrics, rules or engine (this boundary too)
-        self._require_human(actor, "accepting a configuration change")
+        self._require_human(actor, "accepting a configuration change", on_behalf_of, instruction, instruction_at)
+        bad = self.project.config_problems(set(self.index.ids))
+        if bad:
+            raise EngineError("accept-config refused: vpg.project.yaml is invalid: " + "; ".join(bad))
         adopt = list(dict.fromkeys(adopt_code or []))
         unknown = [n for n in adopt if n not in self.index.ids]
         if unknown:
@@ -2721,6 +4678,17 @@ class Engine:
         self._carry_over(plan, actor, reason, adopt)
         old, new = self.state.runtime.config_sha256, self._config_fingerprint()
         self.state.runtime.config_sha256, self.state.runtime.config_parts = new, self._config_parts()
+        self.state.runtime.accepted_policy = policy_snapshot(self.project.config)
+        self.state.runtime.accepted_config = dict(self.project.config)
+        migrated = []
+        for fb in self.state.evaluation.feedback:
+            if fb.hold and self._feedback_waits_for_end_review(fb) and not self._feedback_live(fb):
+                fb.status = "resolved_pending_confirmation"
+                fb.hold = ""
+                fb.no_action_reason = fb.no_action_reason or "resolved before provisional mode was accepted"
+                migrated.append(fb.id)
+        for fid in migrated:
+            self.ledger.append("feedback_pending_confirmation", id=fid, actor=actor, reason="migrated at accept-config")
         kb = summarize(self.rules_path)
         k = self.state.knowledge
         k.rules_path, k.rules_version, k.rules_sha256, k.enforced, k.advisory = (str(self.rules_path), kb["version"], kb["sha256"],
@@ -2746,6 +4714,12 @@ class Engine:
         return all(self._edge_satisfied(e) for e in self.index.incoming(self.wf.end, EdgeKind.FLOW))
 
     def _update_status(self) -> None:
+        for fb in self.state.evaluation.feedback:
+            if (fb.status == "interpreted" and not fb.hold and not self._feedback_live(fb)
+                    and self._humans_feedback(fb) and self._feedback_waits_for_end_review(fb)):
+                fb.status = "resolved_pending_confirmation"
+                fb.no_action_reason = fb.no_action_reason or f"mapped only to closed or non-blocking defect(s) {', '.join(fb.defect_ids)}"
+                self.ledger.append("feedback_pending_confirmation", id=fb.id, actor=fb.actor, reason=fb.no_action_reason)
         nodes = self.state.runtime.nodes.values()
         if any(rt.status == S.BLOCKED for rt in nodes) or (self.state.runtime.status == RunStatus.BLOCKED
                                                             and any(not e.resolved for e in self.state.runtime.escalations)):
@@ -2812,10 +4786,11 @@ class Engine:
             "holds": [f"{d.id}: {d.human_hold}" for d in st.evaluation.defects if d.human_hold and d.status in ("open", "persisting", "in_rework")]
                      + [f"{f.id}: {f.hold}" for f in st.evaluation.feedback if f.hold],
             "warnings": self._code_warnings() + self.project.reuse_advisories(set(self.index.ids)) + self._publish_warnings()
-                        + self._source_warnings() + self._threshold_warnings(),
+                        + self._source_warnings() + self._threshold_warnings() + self._privacy_warnings()
+                        + self._human_declaration_warnings() + self._quality_warnings(),
             "grants": [f"{g.id} {g.grantee} may {', '.join(g.actions)} for {g.grantor} until {g.expires}" for g in self._live_grants()],
             "triage": [f"{f.id} by {f.actor} (v{f.version}): {f.text[:120]}" for f in st.evaluation.feedback if f.triage == "pending"],
-            "deferred_change_requests": [f"{c.id} on {c.doc}.md until: {c.revisit}" for c in st.history.change_requests
+            "deferred_change_requests": [f"{c.id} on {self.controls.label(c.doc)} until: {c.revisit}" for c in st.history.change_requests
                                          if c.status == "deferred"],
             "notes": self._status_notes(),
         }
@@ -2831,6 +4806,22 @@ class Engine:
         except Exception as exc:   # a status report never fails on a control document
             return [f"controls/evaluation.md: its thresholds could not be read ({type(exc).__name__})"]
         return []
+
+    def _privacy_warnings(self) -> list[str]:
+        from .tools.privacy import PrivacyConfigError, declaration_problem, load_names
+        problem = declaration_problem(self.project.config)
+        if problem:
+            return [f"privacy: {problem}; N23 fails closed until this is declared"]
+        try:
+            load_names(self.project.root, self.project.config)
+        except PrivacyConfigError as exc:
+            return [f"privacy: the declared name list is unusable ({exc}); N23 fails closed"]
+        return []
+
+    def _human_declaration_warnings(self) -> list[str]:
+        if "humans" in self.project.config:
+            return []
+        return ["humans is not declared; relayed human-only acts cannot be distinguished from free-text human actors"]
 
     def _status_notes(self) -> list[str]:
         """#33: when open human feedback takes effect."""
@@ -2964,7 +4955,7 @@ class Engine:
                 self._save(event)
         except BaseException:
             self.state = snapshot
-            self.controls = ControlStore(self.project.root, self.state, self.project.vpg)
+            self.controls = self._control_store()
             for undo in reversed(self._undo):   # e.g. a rollback's restored documents go back; each one runs regardless
                 try:
                     undo()
@@ -2999,10 +4990,10 @@ class Engine:
         self.ledger.append("checkpoint", seq=seq, node=node_id, event=event)
 
     @_human_action("rollback")
-    def rollback(self, seq: int, actor: str) -> dict[str, Any]:
+    def rollback(self, seq: int, actor: str, on_behalf_of: str = "", instruction: str = "", instruction_at: str = "") -> dict[str, Any]:
         """Restore a checkpoint's content state. Budgets never go backwards: loop traversals, rework cycles and
         repeated-defect counts carry forward, and open escalations stay open until a human unblocks them."""
-        self._require_human(actor, "a rollback")
+        self._require_human(actor, "a rollback", on_behalf_of, instruction, instruction_at)
         ref = next((c for c in self.state.history.checkpoints if c.seq == seq), None)
         if ref is None:
             raise EngineError(f"no checkpoint {seq}; `vpg status --json` lists the run, and .vpg/checkpoints/ holds them")
@@ -3010,6 +5001,7 @@ class Engine:
         restored = ProjectState.model_validate(read_json(self.project.root / ref.path))
         restored.history.checkpoints = cur.history.checkpoints   # keep the full checkpoint list
         restored.history.grants = cur.history.grants   # authority never goes backwards: a revoked grant stays revoked
+        restored.history.direct_runs = cur.history.direct_runs   # a build outside the graph stays on record
         rt_new, rt_cur = restored.runtime, cur.runtime
         rt_new.rework_cycles = max(rt_new.rework_cycles, rt_cur.rework_cycles)
         rt_new.rework_extra = max(rt_new.rework_extra, rt_cur.rework_extra)
@@ -3033,7 +5025,7 @@ class Engine:
                 esc.reopened = ("" if rt_new.nodes[esc.node].status == S.BLOCKED
                                 else "a rollback had restored a checkpoint at which it was not blocked")
         self.state = restored
-        self.controls = ControlStore(self.project.root, self.state, self.project.vpg)
+        self.controls = self._control_store()
         restored = self.controls.restore_to_state(   # each restored document is undoable at once, even if a later one fails
             tag=f"before-rollback-{seq}-r{self.state.runtime.resumes}",
             on_restored=lambda d, k: self._undo.append(lambda d=d, k=k: self.controls.put_back(d, k)))

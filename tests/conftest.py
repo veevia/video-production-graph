@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,15 @@ sys.path.insert(0, str(PKG))
 
 from vpg.context import NodeResult  # noqa: E402
 from vpg.executors import Executor  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def no_default_privacy_hold_dir():
+    default_hold = Path(tempfile.gettempdir()) / "vpg-held"
+    existed = default_hold.exists()
+    yield
+    if not existed and default_hold.exists():
+        pytest.fail(f"test created the real default privacy hold dir: {default_hold}")
 
 
 def node(id, num, kind="agent", **kw):

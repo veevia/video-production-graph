@@ -1,1 +1,2 @@
 {"version": "1.0", "at": "2026-09-26", "seed": true, "rules": 46, "by": "vpg v1.0.0 seed from the 2026-09 platform-film case study", "note": "Initial seed; every later change appends here and archives the prior file under knowledge/history/."}
+{"at": "2026-10-02T17:54:01.370637+00:00", "rules": ["R-CAP-003", "R-LAY-001", "R-LAY-002", "R-LAY-003", "R-LAY-004", "R-REG-001", "R-REG-005", "R-VOI-004"], "from": "validated-illegal-history", "to": "validated", "by": "vpg v1.8 batch 3", "human": false, "reason": "insert observed_again lifecycle step and keep batch 3 rules advisory"}

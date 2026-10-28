@@ -17,3 +17,16 @@ dimensions:
   cases:
     never: []
     always: []
+- id: VOI-SEAMS
+  name: Clean narration seams
+  brief_dimension: voice_quality
+  level: MUST
+  check:
+    type: tool
+    fn: audio:check_seams
+  threshold: 1.0
+  target: no loud tails, hard cuts, overlaps or hard onsets at unit seams
+  rule: R-VOI-004
+  cases:
+    never: []
+    always: []

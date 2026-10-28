@@ -11,6 +11,7 @@ from ..context import NodeResult
 from ..util import read_text, write_json_atomic
 from ._common import contrast, finding, luma_series, reading_words, thresholds
 from .captions import parse_srt, sync
+from . import layout
 
 N13 = "n13_motion_scenes"
 
@@ -117,6 +118,18 @@ def check(ctx) -> NodeResult:
     if unused:   # an exception naming no scene of this film (a typo, a renamed beat) exempts nothing; say so
         report["unused_scene_limits"] = unused
     ctx.workdir.mkdir(parents=True, exist_ok=True)
+    layout_result = NodeResult()
+    caption_script = NodeResult()
+    if hasattr(ctx, "current"):   # engine context: surface optional N13/N14 measurements honestly as nits when absent
+        layout_result = layout.check(ctx)
+        caption_script = layout.check_caption_script(ctx)
+        findings += layout_result.findings + caption_script.findings
+        if layout_result.outputs:
+            report["layout"] = layout_result.data
+        if caption_script.data:
+            report["caption_script"] = caption_script.data
+    report["findings"] = [f.model_dump() for f in findings]
     write_json_atomic(ctx.workdir / "accessibility-report.json", report)
-    return NodeResult(outputs={"accessibility_report": "accessibility-report.json"}, findings=findings,
+    outputs = {"accessibility_report": "accessibility-report.json", **layout_result.outputs}
+    return NodeResult(outputs=outputs, findings=findings,
                       data={"caption_lags": cap_report.get("lags", 0), "flash_max_per_s": worst})

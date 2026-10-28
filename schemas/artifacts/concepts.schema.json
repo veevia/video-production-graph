@@ -40,6 +40,18 @@
        "type": "string"
       },
       "minItems": 1
+     },
+     "scores": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number",
+       "minimum": 1,
+       "maximum": 5
+      }
+     },
+     "score_rationale": {
+      "type": "string",
+      "minLength": 1
      }
     },
     "required": [
