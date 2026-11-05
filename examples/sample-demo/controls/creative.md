@@ -1,32 +1,28 @@
 ---
 doc: creative
 ---
-# Creative — Northwind Water Monitor teaser (fictional)
-
-> Access: written by N06; locked when approved.
+# Creative - synthetic card animation
 
 ## Creative concept
-"See it before it's waste": one plant's signal, from pattern to action, told in three beats.
+Group, select, inspect: three geometric cards become one labelled detail.
 
 ## Narrative structure
-1. The problem: every plant reports, but no one sees the pattern. 2. The signal: the monitor flags use that leaves the plant's own range. 3. The action: the outlook lets the team act first.
+Introduce the group, outline Card B, then show the matching detail panel.
 
 ## Emotional progression
-Unease → clarity → confidence, with a held beat on the outlook card.
+Orientation, focus, confirmation.
 
 ## Storytelling devices
-One recurring signal line that carries across every seam; the plant team is the protagonist.
+Carry the selected shape between adjacent scenes.
 
 ## Tone
-Calm, precise, confident; never hype.
+Clear, literal and explicitly synthetic.
 
 ## Pacing
-15–20 s; one idea per narration unit; a 0.45 s pause between units.
+15-20 seconds; one idea per narration unit.
 
 ## Audience experience
-A plant manager sees their own situation; the director sees an early, plant-specific signal.
+A first-time viewer can identify the selected card and its matching detail.
 
 ## Creative boundaries
-- No invented metrics or UI.
-- No decorative transitions: one motivated seam per beat.
-- No stock "technology background" imagery.
+No business claims, customer context, real recordings or implied product capabilities.

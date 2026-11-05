@@ -19,11 +19,11 @@ import urllib.request
 
 from playwright.sync_api import sync_playwright
 from browser_fixtures import isolated_app
+from glassbox import DEFAULT_DATA_DIR
 
 BASE = ""
 HOST = ""
 APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DATA_DIR = os.path.expanduser("~/.copilot/extension-data/vpg-glassbox")
 results = []
 
 
@@ -51,7 +51,7 @@ def run_checks(base):
     HOST = BASE.split("//", 1)[1].rstrip("/")
     results.clear()
     meta = api("api/meta")
-    if os.path.realpath(meta["data_dir"]) == os.path.realpath(DEFAULT_DATA_DIR):
+    if os.path.realpath(meta["data_dir"]) == os.path.realpath(os.path.expanduser(DEFAULT_DATA_DIR)):
         print(f"Refusing: {BASE} writes to the default data dir {meta['data_dir']}; start a server with a temporary --data-dir.")
         return 2
     films = api("api/films")
@@ -63,7 +63,7 @@ def run_checks(base):
     v = project["focus_version"]
     old = versions[versions.index(v) - 1]
     release = next(d for d in films["decisions"] if d["kind"] == "release")
-    lib = next(r for r in films["rows"] if r["kind"] == "library" and r["name"] == "Water_hub")
+    lib = next(r for r in films["rows"] if r["kind"] == "library" and r["name"] == "Sample_hub")
     assert job.get("film_id"), "synthetic job must have a library twin"
     room = f"#/f/job-{pid}"
 
@@ -426,12 +426,12 @@ def run_checks(base):
             page.locator(".view-menu > summary").click()
             page.locator("#films-q").fill("demo-orbit")
             page.wait_for_timeout(600)
-            fuse = page.locator(".film-row").count()
+            matches = page.locator(".film-row").count()
             page.locator("#films-q").fill("")
             page.get_by_role("button", name=re.compile("^All")).click()
             page.wait_for_timeout(300)
-            return (visible == {"All", "Needs"} and rescan == 1 and sort and url_filter and all(h != "Job" for h in heads) and fuse >= 1,
-                    f"visible {sorted(visible)}; View menu has sort and Rescan; URL mirrors filter {url_filter}; {len(heads)} library rows; 'demo-orbit' finds {fuse}")
+            return (visible == {"All", "Needs"} and rescan == 1 and sort and url_filter and all(h != "Job" for h in heads) and matches >= 1,
+                    f"visible {sorted(visible)}; View menu has sort and Rescan; URL mirrors filter {url_filter}; {len(heads)} library rows; 'demo-orbit' finds {matches}")
 
         @check("Library", "Every file in a list, and Other videos collections")
         def _():
@@ -560,8 +560,8 @@ def run_checks(base):
         def _():
             note = api("api/reactions", {"pid": pid, "kind": "note", "text": "Capability check: producer channel",
                                          "target": {"type": "version", "id": v}})
-            go("#/", ".page-title")
-            producers = page.locator(".producers").inner_text() if page.locator(".producers").count() else ""
+            go("#/", ".producers")
+            producers = page.locator(".producers").inner_text()
             go("#/activity", ".reactions")
             row = page.locator(".reaction", has_text="Capability check: producer channel").first
             waiting = row.locator(".pickup").inner_text()

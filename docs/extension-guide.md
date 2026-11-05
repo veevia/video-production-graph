@@ -7,7 +7,7 @@
 ## Start a new production
 
 ```bash
-# From the standalone checkout, or 02_Workflows/video-production in the workspace:
+# From the standalone checkout, or the toolkit checkout in the workspace:
 python -m vpg init /absolute/path/to/film --name "<film>"   # 6 control docs, brief, vpg.project.yaml
 # fill sources/brief.md, then:
 python -m vpg run <project>          # dispatches task packets / runs tools until it waits for an agent or a human
@@ -190,7 +190,12 @@ Placement (enforced by `vpg validate`): a MUST `review` dimension belongs on a r
 
 ## Add a rule
 
-Never hand-edit `knowledge/rules.json`. Propose it through N25, or with `python -m vpg memory promote --rule <id> --to <state> --by <name> --human --evidence <ref>` for lifecycle moves. Every write archives the previous version and appends to the changelog.
+The shipped `knowledge/rules.json` is a generic, read-only policy pack. Project
+learning uses the private rule file configured by `vpg init`; N25 only proposes.
+Named humans use `vpg memory ... --rules /path/to/project/.vpg/rules.json` for
+governed lifecycle changes. Built-in defaults enter the candidate lifecycle before
+new evidence and approvals are recorded. Each private write archives the prior
+version and appends to its changelog; no project history is exported to this toolkit.
 
 ## Swap the graph for a different film type
 

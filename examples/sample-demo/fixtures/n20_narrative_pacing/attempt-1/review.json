@@ -4,7 +4,7 @@
   {
    "dimension": "NAR-CLARITY",
    "score": 4.5,
-   "evidence": "retellable: signal, then outlook"
+   "evidence": "retellable: signal, then detail panel"
   },
   {
    "dimension": "NAR-RELEVANCE",
@@ -19,12 +19,12 @@
   {
    "dimension": "NAR-PERSPECTIVE",
    "score": 4.5,
-   "evidence": "the plant team acts first"
+   "evidence": "the card team acts first"
   },
   {
    "dimension": "VOI-PRONUNCIATION",
    "score": 4.5,
-   "evidence": "'Northwind' heard correctly"
+   "evidence": "'Sample' heard correctly"
   }
  ],
  "defects": []

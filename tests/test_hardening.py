@@ -93,7 +93,7 @@ def test_rollback_needs_a_human_and_never_restores_spent_budgets(project):
     early = eng.state.history.checkpoints[1]
     with pytest.raises(EngineError, match="named human"):
         eng.rollback(early.seq, actor="agent:rogue")
-    eng.rollback(early.seq, actor="Wei")
+    eng.rollback(early.seq, actor="Reviewer")
     assert eng.state.runtime.rework_cycles == spent and eng.rt("x_regen").traversals == loops
     assert eng.state.runtime.status.value == "BLOCKED"   # open escalations survive; a human must still unblock
 
@@ -109,7 +109,7 @@ def test_config_change_blocks_until_a_human_accepts(project):
     assert any("changed since this run started" in e.report for e in eng.state.runtime.escalations)
     with pytest.raises(EngineError, match="named human"):
         eng.accept_config("agent:x", "because")
-    eng.accept_config("Wei", "added a note")
+    eng.accept_config("Reviewer", "added a note")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
 
@@ -190,7 +190,7 @@ def test_gate_never_passes_a_failing_review(project):
 def test_intake_loop_brings_the_gap_report_back_to_intake(tmp_path):
     """E04 re-asks N01 with N02's gaps, instead of memo-skipping it until the loop budget runs out."""
     proj = tmp_path / "film"
-    assert cli.main(["init", str(proj), "--name", "t"]) == 0
+    assert cli.main(["init", "--human", "Reviewer", str(proj), "--name", "t"]) == 0
     eng = Engine(proj, executor=TaskPacketExecutor())
     n01 = eng.node("n01_context_intake")
     assert "artifact:gaps" in n01.inputs
@@ -206,15 +206,15 @@ def test_intake_loop_brings_the_gap_report_back_to_intake(tmp_path):
 def test_init_from_copies_safety_keys_and_reports_omissions(tmp_path, capsys):
     src = tmp_path / "source"
     dst = tmp_path / "child"
-    assert cli.main(["init", str(src), "--name", "source"]) == 0
+    assert cli.main(["init", "--human", "Reviewer", str(src), "--name", "source"]) == 0
     source_cfg = yaml.safe_load((src / "vpg.project.yaml").read_text())
     source_cfg.update({
         "privacy": {"names": "names.json"},
         "reviews": {"binding": "require", "independence": "require"},
         "loop_budget": {"profile": "quality-first"},
         "command_deps": {"n13_video_render": ["pipeline/**"]},
-        "humans": ["Wei"],
-        "autonomy": {"mode": "gated", "principal": "Wei"},
+        "humans": ["Reviewer"],
+        "autonomy": {"mode": "gated", "principal": "Reviewer"},
     })
     (src / "names.json").write_text(json.dumps(["Jane Placeholder"]))
     (src / "vpg.project.yaml").write_text(yaml.safe_dump(source_cfg, sort_keys=False))
@@ -227,13 +227,13 @@ def test_init_from_copies_safety_keys_and_reports_omissions(tmp_path, capsys):
     assert "safety keys copied: privacy, reviews, loop_budget, command_deps, humans, autonomy" in out
     assert "preflight (not in source)" in out
     before = (dst / "vpg.project.yaml").read_text()
-    assert cli.main(["init", str(dst), "--from", str(src)]) == 1
+    assert cli.main(["init", "--human", "Reviewer", str(dst), "--from", str(src)]) == 1
     assert (dst / "vpg.project.yaml").read_text() == before
     bad = tmp_path / "bad"
     bad.mkdir()
     (bad / "vpg.project.yaml").write_text("id: [unclosed\n")
     with pytest.raises(SystemExit, match="cannot parse"):
-        cli.main(["init", str(tmp_path / "bad-child"), "--from", str(bad)])
+        cli.main(["init", "--human", "Reviewer", str(tmp_path / "bad-child"), "--from", str(bad)])
 
 
 def test_status_warns_when_privacy_names_are_not_declared(tmp_path):
@@ -250,14 +250,14 @@ def test_unblock_grants_the_spent_loop_a_fresh_budget(tmp_path):
     proj = make_project(tmp_path, human_b=True)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=20)
-    eng.decide("b_plan", "rejected", actor="Wei")
+    eng.decide("b_plan", "rejected", actor="Reviewer")
     eng.run(max_steps=20)
-    eng.decide("b_plan", "rejected", actor="Wei")                    # E16 allows one traversal
+    eng.decide("b_plan", "rejected", actor="Reviewer")                    # E16 allows one traversal
     assert eng.rt("b_plan").status == S.BLOCKED
     assert any(e.edge == "E16" and not e.resolved for e in eng.state.runtime.escalations)
     with pytest.raises(EngineError):
         eng.unblock("b_plan", actor="agent:x")
-    eng.unblock("b_plan", actor="Wei", note="new direction supplied")
+    eng.unblock("b_plan", actor="Reviewer", note="new direction supplied")
     assert eng.rt("b_plan").traversals["E16"] == 0
     eng.run(max_steps=20)
     assert eng.rt("b_plan").status == S.WAITING_HUMAN                # asked again, not re-escalated
@@ -266,7 +266,7 @@ def test_unblock_grants_the_spent_loop_a_fresh_budget(tmp_path):
 def test_invalidate_from_the_cli_is_saved(project):
     proj, _ = project
     Engine(proj, executor=FnExecutor()).run(max_steps=200)
-    assert cli.main(["invalidate", str(proj), "d_build", "--reason", "re-check", "--actor", "Wei"]) == 0
+    assert cli.main(["invalidate", str(proj), "d_build", "--reason", "re-check", "--actor", "Reviewer"]) == 0
     state = json.loads((proj / ".vpg/state.json").read_text())
     assert state["runtime"]["nodes"]["d_build"]["status"] == "STALE"
 
@@ -348,7 +348,7 @@ def test_argument_errors_are_refused_without_using_an_attempt(project):
 
 def test_packet_states_the_output_contract_and_the_budget(tmp_path):
     proj = tmp_path / "film"
-    assert cli.main(["init", str(proj), "--name", "t"]) == 0
+    assert cli.main(["init", "--human", "Reviewer", str(proj), "--name", "t"]) == 0
     eng = Engine(proj, executor=TaskPacketExecutor())
     eng.run(max_steps=5)
     text = (proj / eng.rt("n01_context_intake").task_packet).read_text()
@@ -379,8 +379,8 @@ SPEC = {"id": "S2", "path": "sources/spec.md", "kind": "spec", "evidence": "obse
 
 def _init_film(tmp_path):
     proj = tmp_path / "film"
-    assert cli.main(["init", str(proj), "--name", "t"]) == 0
-    (proj / "sources/brief.md").write_text("# Brief\nA 60-second platform film for plant managers.\n")
+    assert cli.main(["init", "--human", "Reviewer", str(proj), "--name", "t"]) == 0
+    (proj / "sources/brief.md").write_text("# Brief\nA 60-second synthetic animation for first-time viewers.\n")
     return proj
 
 
@@ -405,7 +405,7 @@ def test_documented_intake_recovery_works(tmp_path):
     assert any(e.edge == "E04" and not e.resolved for e in eng.state.runtime.escalations)
     (proj / "sources/spec.md").write_text("# Product spec\n")
     (proj / "sources/brand.md").write_text("# Brand guide\n")
-    eng.unblock("n02_source_validation", actor="Wei", note="product and brand sources added")
+    eng.unblock("n02_source_validation", actor="Reviewer", note="product and brand sources added")
     eng.run(max_steps=20)
     assert eng.rt("n01_context_intake").status == S.WAITING_RUNTIME          # intake is asked again
     _submit_sources(eng, proj, [BRIEF, {"id": "S2", "path": "sources/spec.md", "kind": "spec", "evidence": "observed"},
@@ -430,7 +430,7 @@ def _intake_without_brand(tmp_path):
 
 def test_an_agent_question_never_clears_a_coverage_gap(tmp_path):
     """Critic J04 (round 3): the intake agent cannot turn a MUST coverage gap into a note. The old acknowledgement field
-    is refused by the schema; a plain question leaves the gap open, so the intake loop runs out and escalates to Wei."""
+    is refused by the schema; a plain question leaves the gap open, so the intake loop runs out and escalates to Reviewer."""
     from pydantic import ValidationError
     from vpg.models import Question
     with pytest.raises(ValidationError):
@@ -449,25 +449,25 @@ def test_only_a_named_human_can_waive_a_gap(tmp_path):
     with pytest.raises(EngineError, match="named human"):
         eng.unblock("n02_source_validation", actor="agent:intake", waive=["G-BRAND"], note="no guide")
     with pytest.raises(EngineError, match="not a resolvable gap"):
-        eng.unblock("n02_source_validation", actor="Wei", waive=["G-BRAND", "G-BRIEF"], note="no guide")
+        eng.unblock("n02_source_validation", actor="Reviewer", waive=["G-BRAND", "G-BRIEF"], note="no guide")
     with pytest.raises(EngineError, match="reason"):
-        eng.unblock("n02_source_validation", actor="Wei", waive=["G-BRAND"])
+        eng.unblock("n02_source_validation", actor="Reviewer", waive=["G-BRAND"])
     with pytest.raises(EngineError, match="source-validation|n02_source_validation"):
-        eng.unblock("n03_objective_audience", actor="Wei", waive=["G-BRAND"], note="no guide")
+        eng.unblock("n03_objective_audience", actor="Reviewer", waive=["G-BRAND"], note="no guide")
     assert not eng.state.inputs.waivers                                     # a refused waiver leaves no trace …
     assert "gap_waived" not in _ledger_types(proj)
-    assert cli.main(["unblock", str(proj), "n02_source_validation", "--actor", "Wei", "--waive", "G-BRAND",
+    assert cli.main(["unblock", str(proj), "n02_source_validation", "--actor", "Reviewer", "--waive", "G-BRAND",
                      "--note", "the brand guide arrives with the design phase"]) == 0
     eng = Engine(proj, executor=TaskPacketExecutor())
     eng.run(max_steps=20)
     assert eng.rt("n02_source_validation").outcome == "pass" and eng.state.inputs.frozen
-    assert [(w.gap, w.by) for w in eng.state.inputs.waivers] == [("G-BRAND", "Wei")]   # … an accepted one is frozen with the inputs
+    assert [(w.gap, w.by) for w in eng.state.inputs.waivers] == [("G-BRAND", "Reviewer")]   # … an accepted one is frozen with the inputs
     gaps = json.loads((proj / next(a.path for a in eng.state.artifacts.values() if a.key == "gaps" and a.status == "current")).read_text())
-    assert any(g["id"] == "G-BRAND" and g["severity"] == "note" and "waived by Wei" in g["text"] for g in gaps["gaps"])
+    assert any(g["id"] == "G-BRAND" and g["severity"] == "note" and "waived by Reviewer" in g["text"] for g in gaps["gaps"])
     assert "gap_waived" in _ledger_types(proj)
-    assert any("G-BRAND was waived by Wei" in line for line in cli._human_gate_lines(eng, "n03_objective_audience"))
+    assert any("G-BRAND was waived by Reviewer" in line for line in cli._human_gate_lines(eng, "n03_objective_audience"))
     with pytest.raises(EngineError, match="frozen"):
-        eng.unblock("n02_source_validation", actor="Wei", waive=["G-PRODUCT"], note="late")
+        eng.unblock("n02_source_validation", actor="Reviewer", waive=["G-PRODUCT"], note="late")
 
 
 def test_invalidate_regenerates_a_changed_artifact(project):
@@ -480,8 +480,8 @@ def test_invalidate_regenerates_a_changed_artifact(project):
     (proj / art.path).write_text('{"edited": true}')
     eng.step()
     assert eng.state.runtime.status.value == "BLOCKED"
-    eng.invalidate_nodes(["b_plan"], reason="regenerate the edited artifact", actor="Wei")
-    eng.unblock("integrity", actor="Wei")
+    eng.invalidate_nodes(["b_plan"], reason="regenerate the edited artifact", actor="Reviewer")
+    eng.unblock("integrity", actor="Reviewer")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and eng.rt("b_plan").executions == 2
 
@@ -518,7 +518,7 @@ def test_readers_of_a_rewritten_control_document_are_rechecked(tmp_path):
     eng = Engine(proj, executor=FnExecutor({"b_plan": b}))
     eng.run(max_steps=20)
     assert eng.rt("b_plan").status == S.WAITING_HUMAN and eng.rt("c_audio").status == S.STEP_PASS
-    eng.decide("b_plan", "rejected", actor="Wei")
+    eng.decide("b_plan", "rejected", actor="Reviewer")
     eng.run(max_steps=20)
     assert eng.rt("c_audio").executions == 2
 
@@ -625,7 +625,7 @@ def test_a_recheck_cycle_that_slips_past_validation_is_bounded(tmp_path, monkeyp
     esc = eng.state.runtime.escalations[-1]
     assert "re-check cycle" in esc.reason and max(runs.values()) <= 3, runs      # bounded by the 2 control writers
     blocked = esc.node
-    eng.unblock(blocked, actor="Wei", note="granting a fresh chain to confirm the bound restarts")
+    eng.unblock(blocked, actor="Reviewer", note="granting a fresh chain to confirm the bound restarts")
     assert all(rt.rechecks == 0 for rt in eng.state.runtime.nodes.values())
     eng.run(max_steps=300)
     assert eng.state.runtime.status.value == "BLOCKED" and max(runs.values()) <= 6, runs
@@ -668,7 +668,7 @@ def test_gate_lines_name_what_the_approval_locks_and_init_names_the_sources(tmp_
     capsys.readouterr()
     assert cli.main(["tasks", str(proj)]) == 0
     assert "approving locks: controls/design.md" in capsys.readouterr().out
-    assert cli.main(["init", str(tmp_path / "other"), "--name", "t"]) == 0
+    assert cli.main(["init", "--human", "Reviewer", str(tmp_path / "other"), "--name", "t"]) == 0
     assert "product evidence" in capsys.readouterr().out
 
 
@@ -724,9 +724,9 @@ def test_unblocking_one_escalation_keeps_the_run_blocked_while_another_is_open(p
     eng.step()
     eng._escalate_run("control-integrity", "unattributable edit to design.md; reverted; a human must review")
     eng._escalate(eng.node("b_plan"), "simulated node escalation", ["x"])
-    eng.unblock("b_plan", actor="Wei", note="only the node escalation")
+    eng.unblock("b_plan", actor="Reviewer", note="only the node escalation")
     assert eng.state.runtime.status.value == "BLOCKED" and eng.step() == []
-    eng.unblock("control-integrity", actor="Wei", note="reviewed")
+    eng.unblock("control-integrity", actor="Reviewer", note="reviewed")
     assert eng.state.runtime.status.value == "RUNNING" and eng.step()
 
 
@@ -737,9 +737,9 @@ def test_unblock_refuses_a_node_without_an_open_escalation(project):
     eng.step()
     before = (proj / ".vpg/ledger.jsonl").read_text()
     with pytest.raises(EngineError, match="no open escalation"):
-        eng.unblock("a_intake", actor="Wei", note="nothing is blocked")
+        eng.unblock("a_intake", actor="Reviewer", note="nothing is blocked")
     assert eng.rt("a_intake").status == S.STEP_PASS and (proj / ".vpg/ledger.jsonl").read_text() == before
-    assert cli.main(["unblock", str(proj), "a_intake", "--actor", "Wei"]) == 4
+    assert cli.main(["unblock", str(proj), "a_intake", "--actor", "Reviewer"]) == 4
 
 
 def test_a_waiver_can_be_recorded_before_n02_is_blocked(tmp_path):
@@ -750,7 +750,7 @@ def test_a_waiver_can_be_recorded_before_n02_is_blocked(tmp_path):
     _submit_sources(eng, proj, [BRIEF, SPEC])
     eng.run(max_steps=20)                                   # gaps_resolvable → E04 → the intake is asked again
     token, status = eng.rt("n01_context_intake").dispatch_token, eng.rt("n02_source_validation").status
-    eng.unblock("n02_source_validation", actor="Wei", waive=["G-BRAND"], note="the brand guide arrives with the design phase")
+    eng.unblock("n02_source_validation", actor="Reviewer", waive=["G-BRAND"], note="the brand guide arrives with the design phase")
     assert eng.rt("n01_context_intake").dispatch_token == token and eng.rt("n02_source_validation").status == status
     _submit_sources(eng, proj, [BRIEF, SPEC])
     eng.run(max_steps=20)
@@ -759,13 +759,13 @@ def test_a_waiver_can_be_recorded_before_n02_is_blocked(tmp_path):
 
 def test_a_waiver_is_shown_only_while_its_gap_is_open(tmp_path):
     proj, eng = _intake_without_brand(tmp_path)
-    eng.unblock("n02_source_validation", actor="Wei", waive=["G-BRAND"], note="the brand guide arrives with the design phase")
+    eng.unblock("n02_source_validation", actor="Reviewer", waive=["G-BRAND"], note="the brand guide arrives with the design phase")
     eng.run(max_steps=20)
     packet = (proj / eng.rt("n03_objective_audience").task_packet).read_text()
-    assert "Waived intake gaps:** G-BRAND, waived by Wei" in packet and "Never fill one by invention" in packet
+    assert "Waived intake gaps:** G-BRAND, waived by Reviewer" in packet and "Never fill one by invention" in packet
     assert any("G-BRAND was waived" in x for x in cli._human_gate_lines(eng, "n03_objective_audience"))
     (proj / "sources/brand.md").write_text("# Brand guide\n")                       # the source arrives after all
-    eng.invalidate_nodes(["n01_context_intake"], reason="brand guide arrived", actor="Wei")
+    eng.invalidate_nodes(["n01_context_intake"], reason="brand guide arrived", actor="Reviewer")
     eng.run(max_steps=20)
     _submit_sources(eng, proj, [BRIEF, SPEC, {"id": "S3", "path": "sources/brand.md", "kind": "brand", "evidence": "observed"}])
     eng.run(max_steps=20)
@@ -790,7 +790,7 @@ def test_rollback_restores_the_control_documents(tmp_path):
     first = eng.state.history.checkpoints[-1].seq
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and design.read_text() != base
-    eng.rollback(first, actor="Wei")
+    eng.rollback(first, actor="Reviewer")
     assert design.read_text() == base and eng._integrity_problems() == []
     kept = list((proj / ".vpg/controls").glob("design.before-rollback-*.md"))
     assert len(kept) == 1 and "<!-- plan" in kept[0].read_text()
@@ -855,9 +855,9 @@ def test_unblock_after_rollback_never_leaves_dependents_on_stale_work(project):
     checkpoint = next(c.seq for c in eng.state.history.checkpoints if c.node == "d_build" and c.event == "node_passed")   # mid-run
     eng._escalate(eng.node("b_plan"), "a later loop ran out of budget", ["x"])
     eng._save("escalated after the checkpoint")
-    eng.rollback(checkpoint, actor="Wei")
+    eng.rollback(checkpoint, actor="Reviewer")
     assert eng.state.runtime.status.value == "BLOCKED" and eng.rt("b_plan").status == eng.rt("d_build").status == S.STEP_PASS
-    eng.unblock("b_plan", actor="Wei", note="continue from the checkpoint")
+    eng.unblock("b_plan", actor="Reviewer", note="continue from the checkpoint")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and _stale_lineage(eng) == []
 
@@ -867,7 +867,7 @@ def test_unblocking_a_blocked_node_rechecks_its_passed_dependents(project):
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
     eng._escalate(eng.node("b_plan"), "simulated escalation", ["x"])
-    eng.unblock("b_plan", actor="Wei", note="re-run the plan")
+    eng.unblock("b_plan", actor="Reviewer", note="re-run the plan")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and _stale_lineage(eng) == []
     assert eng.rt("b_plan").executions == 2 and eng.rt("d_build").executions == 2   # new plan → the build re-ran on it
@@ -1094,14 +1094,14 @@ def test_a_refused_approval_leaves_no_phantom_decision(tmp_path):
     os.mkfifo(design)
     with _no_hang():
         with pytest.raises(EngineError, match="cannot lock controls/design.md"):
-            eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
-        assert cli.main(["approve", str(proj), "b_plan", "--actor", "Wei", "--reason", "looks right"]) == 4
+            eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
+        assert cli.main(["approve", str(proj), "b_plan", "--actor", "Reviewer", "--reason", "looks right"]) == 4
     decisions = lambda: [x for x in _ledger_types(proj) if x in ("decision", "control_locked")]   # noqa: E731
     assert decisions() == [] and not eng.state.history.approvals and eng.rt("b_plan").status == S.WAITING_HUMAN
     design.unlink()
     design.write_text(text)                                                       # restored: the approval now goes through
     eng = Engine(proj, executor=FnExecutor())
-    eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
     assert decisions() == ["decision", "control_locked"] and eng.state.controls["design"].status == "approved"
 
 
@@ -1141,8 +1141,8 @@ def test_a_human_decision_is_all_or_nothing(tmp_path, monkeypatch, capsys):
         return real(path, obj)
     monkeypatch.setattr(vpg.engine, "write_json_atomic", failing)
     with pytest.raises(PermissionError):
-        eng.decide("b_plan", "rejected", actor="Wei", reason="too long", feedback=["cut the intro"])
-    assert cli.main(["approve", str(proj), "b_plan", "--actor", "Wei", "--reject", "--reason", "too long",
+        eng.decide("b_plan", "rejected", actor="Reviewer", reason="too long", feedback=["cut the intro"])
+    assert cli.main(["approve", str(proj), "b_plan", "--actor", "Reviewer", "--reject", "--reason", "too long",
                      "--feedback", "cut the intro"]) == 4
     assert "could not read or write" in capsys.readouterr().err
     on_disk = json.loads((proj / ".vpg/state.json").read_text())
@@ -1152,7 +1152,7 @@ def test_a_human_decision_is_all_or_nothing(tmp_path, monkeypatch, capsys):
     assert eng.rt("b_plan").status == S.WAITING_HUMAN and not eng.state.history.approvals and not eng.state.evaluation.feedback
     monkeypatch.setattr(vpg.engine, "write_json_atomic", real)
     eng = Engine(proj, executor=FnExecutor())   # the CLI resumed the run meanwhile: reopen it (a stale engine refuses to write)
-    eng.decide("b_plan", "rejected", actor="Wei", reason="too long", feedback=["cut the intro"])
+    eng.decide("b_plan", "rejected", actor="Reviewer", reason="too long", feedback=["cut the intro"])
     types = _ledger_types(proj)
     assert types.count("decision") == 1 and types.count("feedback") == 1
     assert len(eng.state.history.approvals) == 1 and len(eng.state.evaluation.feedback) == 1
@@ -1165,11 +1165,11 @@ def test_change_request_errors_are_refusals(project, capsys):
     """Critic (round 10): an unknown CR id crashed with a StopIteration traceback; re-approving a CR re-opened it."""
     proj, _ = project
     Engine(proj, executor=FnExecutor()).step()
-    assert cli.main(["change-request", str(proj), "--actor", "Wei", "--approve", "CR-999"]) == 4
+    assert cli.main(["change-request", str(proj), "--actor", "Reviewer", "--approve", "CR-999"]) == 4
     assert "no change request CR-999" in capsys.readouterr().err
-    assert cli.main(["change-request", str(proj), "--doc", "design", "--reason", "fix the palette", "--actor", "Wei"]) == 0
-    assert cli.main(["change-request", str(proj), "--actor", "Wei", "--approve", "CR-001"]) == 0
-    assert cli.main(["change-request", str(proj), "--actor", "Wei", "--approve", "CR-001"]) == 4
+    assert cli.main(["change-request", str(proj), "--doc", "design", "--reason", "fix the palette", "--actor", "Reviewer"]) == 0
+    assert cli.main(["change-request", str(proj), "--actor", "Reviewer", "--approve", "CR-001"]) == 0
+    assert cli.main(["change-request", str(proj), "--actor", "Reviewer", "--approve", "CR-001"]) == 4
     assert "only an open or deferred change request can be approved" in capsys.readouterr().err
 
 
@@ -1211,10 +1211,10 @@ def test_an_approval_never_locks_an_unaccepted_edit(tmp_path):
     accepted = design.read_text()
     design.write_text(accepted + "\n<!-- an edit outside the workflow -->\n")
     with pytest.raises(EngineError, match="changed since the workflow accepted it"):
-        eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+        eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     assert "decision" not in _ledger_types(proj) and eng.state.controls["design"].status != "approved"
     design.write_text(accepted)
-    eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     assert eng.state.controls["design"].approved_sha256 == eng.state.controls["design"].sha256
     assert (proj / eng.state.controls["design"].snapshot).read_text() == accepted       # the version the human reviewed
 
@@ -1240,7 +1240,7 @@ def test_a_failed_rollback_puts_the_documents_back(tmp_path, monkeypatch):
         raise ConcurrentChange("simulated failure at the rollback's commit")
     monkeypatch.setattr(Engine, "_write_state", fail)
     with pytest.raises(ConcurrentChange):
-        eng.rollback(first, actor="Wei")
+        eng.rollback(first, actor="Reviewer")
     monkeypatch.undo()
     assert design.read_text() == current and len(_ledger_types(proj)) == events            # nothing happened
     fresh = Engine(proj, executor=FnExecutor())
@@ -1257,7 +1257,7 @@ def test_a_ledger_write_failure_after_commit_catches_up_on_reopen(tmp_path, monk
         raise OSError(28, "No space left on device")
     monkeypatch.setattr(Ledger, "write_lines", fail)
     with pytest.raises(LedgerBehind, match="was saved"):
-        eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+        eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     monkeypatch.undo()
     on_disk = json.loads((proj / ".vpg/state.json").read_text())
     assert on_disk["history"]["approvals"] and on_disk["runtime"]["pending_ledger"]   # committed, events kept write-ahead
@@ -1319,7 +1319,7 @@ def test_a_rollback_failing_partway_puts_back_what_it_restored(tmp_path):
     docs["production"].chmod(0o444)
     try:
         with pytest.raises(OSError) as failed:
-            eng.rollback(first, actor="Wei")
+            eng.rollback(first, actor="Reviewer")
     finally:
         docs["production"].chmod(0o644)
     assert any("could not undo part of this action" in n for n in getattr(failed.value, "__notes__", []))   # shown, not hidden
@@ -1328,7 +1328,7 @@ def test_a_rollback_failing_partway_puts_back_what_it_restored(tmp_path):
     assert fresh._integrity_problems() == [] and fresh.state.runtime.status.value == "RUN_PASS"
     from vpg.util import sha256_file
     assert sha256_file(proj / ".vpg/controls/design.accepted.md") == fresh.state.controls["design"].sha256
-    fresh.rollback(first, actor="Wei")                                                   # repeating it completes it
+    fresh.rollback(first, actor="Reviewer")                                                   # repeating it completes it
     assert {d: p.read_text() for d, p in docs.items()} == base
 
 
@@ -1337,15 +1337,15 @@ def test_restore_control_is_the_working_remedy_for_an_unaccepted_edit(tmp_path, 
     proj, eng, design = _writer_waiting(tmp_path)
     accepted = design.read_text()
     design.write_text(accepted + "\n<!-- an edit outside the workflow -->\n")
-    assert cli.main(["approve", str(proj), "b_plan", "--actor", "Wei", "--reason", "ok"]) == 4
+    assert cli.main(["approve", str(proj), "b_plan", "--actor", "Reviewer", "--reason", "ok"]) == 4
     assert "vpg restore-control" in capsys.readouterr().err
     assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "agent:x"]) == 4    # humans only
-    assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "Wei"]) == 0
+    assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "Reviewer"]) == 0
     assert design.read_text() == accepted
     kept = list((proj / ".vpg/controls").glob("design.discarded*.md"))
     assert len(kept) == 1 and "an edit outside the workflow" in kept[0].read_text()
-    assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "Wei"]) == 4       # nothing left to restore
-    assert cli.main(["approve", str(proj), "b_plan", "--actor", "Wei", "--reason", "ok"]) == 0
+    assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "Reviewer"]) == 4       # nothing left to restore
+    assert cli.main(["approve", str(proj), "b_plan", "--actor", "Reviewer", "--reason", "ok"]) == 0
     assert "control_restored" in _ledger_types(proj) and cli.main(["ledger-verify", str(proj)]) == 0
 
 
@@ -1376,9 +1376,9 @@ def test_a_document_deleted_outside_the_workflow_blocks_until_restored(project, 
     production.unlink()
     assert eng.step() == [] and eng.state.runtime.status.value == "BLOCKED"
     assert "production.md was deleted outside the workflow" in eng.state.runtime.escalations[-1].report
-    assert cli.main(["restore-control", str(proj), "--doc", "production", "--actor", "Wei"]) == 0
+    assert cli.main(["restore-control", str(proj), "--doc", "production", "--actor", "Reviewer"]) == 0
     assert production.read_text() == accepted and "none (the document was missing" in capsys.readouterr().out
-    assert cli.main(["unblock", str(proj), "integrity", "--actor", "Wei"]) == 0
+    assert cli.main(["unblock", str(proj), "integrity", "--actor", "Reviewer"]) == 0
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
@@ -1386,7 +1386,7 @@ def test_a_document_deleted_outside_the_workflow_blocks_until_restored(project, 
 
 @needs_fifo
 def test_restore_control_recreates_a_document_replaced_by_a_pipe(project):
-    """Critic (round 13, minor): restore-control said 'nothing to restore' exactly when every message told Wei to restore."""
+    """Critic (round 13, minor): restore-control said 'nothing to restore' exactly when every message told Reviewer to restore."""
     proj, _ = project
     eng = Engine(proj, executor=FnExecutor())
     eng.step()
@@ -1395,11 +1395,11 @@ def test_restore_control_recreates_a_document_replaced_by_a_pipe(project):
     design.unlink()
     os.mkfifo(design)
     with _no_hang():
-        assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "Wei"]) == 0
+        assert cli.main(["restore-control", str(proj), "--doc", "design", "--actor", "Reviewer"]) == 0
     assert design.is_file() and design.read_text() == accepted
     (proj / "controls/creative.md").unlink()
     (proj / "controls/creative.md").mkdir()               # a directory is never deleted: the refusal says what to do
-    assert cli.main(["restore-control", str(proj), "--doc", "creative", "--actor", "Wei"]) == 4
+    assert cli.main(["restore-control", str(proj), "--doc", "creative", "--actor", "Reviewer"]) == 4
 
 
 def test_release_refuses_an_empty_deliverables_list(project):
@@ -1474,8 +1474,8 @@ def test_blocks_name_what_changed_and_how_to_restore(tmp_path):
     proj, eng, design = _writer_waiting(tmp_path)
     design.unlink()
     with pytest.raises(EngineError, match="vpg restore-control"):
-        eng.decide("b_plan", "approved", actor="Wei", reason="ok")
-    eng.restore_control("design", actor="Wei")
+        eng.decide("b_plan", "approved", actor="Reviewer", reason="ok")
+    eng.restore_control("design", actor="Reviewer")
     cfg = proj / "vpg.project.yaml"
     cfg.write_text(cfg.read_text() + "note: a mid-run edit\n")
     eng.step()
@@ -1502,11 +1502,11 @@ def test_the_next_command_refuses_a_damaged_ledger_until_restored_or_accepted(pr
     led.unlink()                                                                            # lost, with no backup
     assert cli.main(["run", str(proj)]) == 4
     assert cli.main(["accept-ledger-break", str(proj), "--actor", "agent:x", "--reason", "gone"]) == 4
-    assert cli.main(["accept-ledger-break", str(proj), "--actor", "Wei", "--reason", "disk failure; no backup"]) == 0
+    assert cli.main(["accept-ledger-break", str(proj), "--actor", "Reviewer", "--reason", "disk failure; no backup"]) == 0
     assert "ledger_break_accepted" in _ledger_types(proj)
     assert cli.main(["run", str(proj)]) == 0 and cli.main(["ledger-verify", str(proj)]) == 0
-    assert "break accepted by Wei" in capsys.readouterr().out
-    assert cli.main(["accept-ledger-break", str(proj), "--actor", "Wei", "--reason", "again"]) == 4   # nothing to accept now
+    assert "break accepted by Reviewer" in capsys.readouterr().out
+    assert cli.main(["accept-ledger-break", str(proj), "--actor", "Reviewer", "--reason", "again"]) == 4   # nothing to accept now
 
 
 def test_ledger_verify_reports_pending_events_not_a_loss(tmp_path, monkeypatch, capsys):
@@ -1519,7 +1519,7 @@ def test_ledger_verify_reports_pending_events_not_a_loss(tmp_path, monkeypatch, 
         raise OSError(28, "No space left on device")
     monkeypatch.setattr(Ledger, "write_lines", fail)
     with pytest.raises(LedgerBehind):
-        eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+        eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     monkeypatch.undo()
     assert cli.main(["ledger-verify", str(proj)]) == 0
     assert "pending in the state" in capsys.readouterr().out

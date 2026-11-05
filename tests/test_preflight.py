@@ -1,9 +1,4 @@
-"""v1.6: an optional independent pre-flight holds a rework attempt before the graph spends a review round on it.
-
-The SRA side chat took v16 to v19 through an independent reviewer outside the graph, so each graph pass would be spent
-on an already-checked version. `preflight: {nodes: [...], when: rework | always}` in vpg.project.yaml makes that a graph
-step: the finished attempt waits (no version cut, nothing downstream started) until someone other than its producer
-passes it, or returns it with notes as a failed attempt."""
+"""Synthetic regression coverage: test preflight."""
 
 from __future__ import annotations
 
@@ -107,7 +102,7 @@ def test_when_always_holds_the_first_build_too_and_the_cli_records_the_verdict(t
 
 def test_a_pending_pre_flight_is_dropped_with_the_attempt_it_judged(tmp_path):
     proj, eng = held(tmp_path)
-    eng.invalidate_nodes(["d_build"], reason="the plan changed", actor="Wei")
+    eng.invalidate_nodes(["d_build"], reason="the plan changed", actor="Reviewer")
     rt = eng.rt("d_build")
     assert rt.status == S.STALE and rt.preflight is None and events(proj, "preflight_dropped")[0]["attempt"] == 2
 
@@ -137,7 +132,7 @@ def test_a_dropped_hold_never_memo_passes_the_unjudged_attempt(tmp_path):
     eng.preflight("d_build", eng.rt("d_build").preflight["token"], "pass", actor="agent:critic")
     eng.run(max_steps=400)
     assert eng.rt("d_build").preflight["attempt"] == 2 and eng.state.runtime.current_version == 1
-    eng.invalidate_nodes(["c_audio"], reason="the audio source changed", actor="Wei")
+    eng.invalidate_nodes(["c_audio"], reason="the audio source changed", actor="Reviewer")
     assert eng.rt("d_build").force_rerun and events(proj, "preflight_dropped")[0]["attempt"] == 2
     eng.run(max_steps=400)
     rt = eng.rt("d_build")

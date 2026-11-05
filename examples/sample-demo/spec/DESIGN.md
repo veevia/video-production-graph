@@ -13,7 +13,7 @@ rules:
   - id: DS-GROUND-001
     level: MUST
     statement: The ground is the pale mist; the brand blue appears as one accent per frame.
-    rationale: The brief asks for calm and precise; a saturated ground would compete with the plant data.
+    rationale: The brief asks for calm and precise; a saturated ground would compete with the card data.
     source: brief (calm and precise) and the synthetic benchmark SYN-REF
     enforcement: {type: tool, metric: still.ground_colourfulness.median, gate: GT-GROUND-001}
     examples:
@@ -26,16 +26,16 @@ rules:
     source: R-LAY-001
     enforcement: {type: tool, metric: text.overlap_all.count, gate: GT-OVERLAP-001}
     examples:
-      do: ["The plant label clears before the signal label fades up"]
+      do: ["The card label clears before the signal label fades up"]
       dont: ["Two labels cross-fading in one spot"]
   - id: DS-UI-001
     level: MUST
     statement: The dashboard stays readable in a 960-pixel-wide player.
-    rationale: Plant managers watch it embedded in a status page, not full screen.
+    rationale: The fixture must remain readable in an embedded player.
     source: brief (audience)
     enforcement: {type: tool, metric: still.ocr_word_px.median, gate: GT-UI-001}
     examples:
-      do: ["Crop to the plant row and the outlook card"]
+      do: ["Crop to the card row and the detail panel"]
       dont: ["The whole dashboard shrunk into the frame"]
   - id: DS-TYPE-001
     level: SHOULD
@@ -45,7 +45,7 @@ rules:
     enforcement: {type: judge}
     examples:
       do: ["Display for the product name, label for chips"]
-      dont: ["A second family for the outlook card"]
+      dont: ["A second family for the detail panel"]
 ---
 # Design spec
 
@@ -67,7 +67,7 @@ Mona Sans: display for the product name, title for scene heads, body for caption
 Twelve columns inside the 96-pixel margins; nothing essential below the caption band.
 
 ## Product UI
-The dashboard is cropped to the plant row and the outlook card, never shown whole.
+The dashboard is cropped to the card row and the detail panel, never shown whole.
 
 ## Components
 A title card, the UI frame, a data callout and the signal chip.

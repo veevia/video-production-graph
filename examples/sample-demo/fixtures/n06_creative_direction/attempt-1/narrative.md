@@ -1,3 +1,3 @@
-# Narrative
+# Synthetic narrative
 
-Problem → signal → action; the plant team is the protagonist.
+Introduce the card group, select Card B, then read the detail panel.

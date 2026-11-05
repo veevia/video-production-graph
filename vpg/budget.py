@@ -1,32 +1,4 @@
-"""Loop budgets as project settings, and the quality trend that decides whether a spent budget blocks.
-
-A loop bound measures effort, not quality. On the first real run (SRA, 2026-09-27) the bound stopped a converging run:
-cycle 4 had resolved 15 defects when rework loop E43 reached 3 traversals, and the film kept improving outside the
-graph for a day while it waited. So a project may declare, in vpg.project.yaml,
-
-    loop_budget:
-      profile: quality-first          # or `standard`: the workflow's own bounds, and a spent budget blocks
-      max_traversals: 8               # every rework loop (the regeneration plan's loops); other loops keep their bound
-      rework_cycles: 15               # replaces policies.max_rework_cycles
-      on_exhaust: extend_if_converging   # or `block`
-      extend_by: 1                    # traversals (or cycles) granted per extension
-      max_hours: 96                   # optional wall-clock guard, from the run's creation: no extension after it
-
-Explicit keys override the profile's. Without a `loop_budget` block nothing changes: the workflow's bounds hold and a
-spent budget blocks, exactly as before.
-
-When a rework loop or the rework-cycle budget is spent and `on_exhaust` is `extend_if_converging`, the engine extends it
-(and ledgers why) only when the latest review round made progress on the blocking (P1–P3) defects:
-
-  * it resolved at least one, and
-  * it found no more new ones than it resolved, and
-  * the open count fell, or their severity did (fewer P1, then P2, then P3).
-
-Otherwise it escalates as before, with the trend in the escalation. The runaway guards never extend: a defect that
-persisted through `max_same_defect_failures` corrections stops the gate, and so does `max_hours` when set. Other loops
-(the intake loop, a human's rejection loops, the release's change loop) keep their bounds: running out of them means a
-human has to act, not that quality stopped improving.
-"""
+"""Workflow contract: budget."""
 
 from __future__ import annotations
 

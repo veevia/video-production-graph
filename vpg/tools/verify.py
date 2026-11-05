@@ -439,7 +439,7 @@ def _review_packet(ctx, forks: list[dict], verification: dict, warnings: list[st
         for c in blind_candidates:
             lines.append(f"- {c['neutral_label']}: {c['text'] or 'description not provided'}")
     principal = _principal(ctx)
-    model = _current_model(principal)
+    model = _current_model(ctx.project_dir, principal)
     lines += ["", "## 4. Standing provisional approvals to confirm",
               *([f"- {a.node}: {a.decision} by {a.actor}" for a in standing_provisional] or ["- none"]),
               "", "## 5. End-review items",
@@ -596,9 +596,9 @@ def _decision_digest(ctx, forks: list[dict], template: dict, verification: dict,
     return "\n".join(lines) + "\n"
 
 
-def _current_model(principal: str) -> dict:
+def _current_model(project: Path, principal: str) -> dict:
     from .. import scoring
-    return scoring.load_current(scoring.preference_store(PKG_ROOT, principal))
+    return scoring.load_current(scoring.preference_store(project / ".vpg", principal))
 
 
 def _review_html(packet_lines: list[str], decision: dict) -> str:
@@ -676,16 +676,20 @@ def _governed_warnings(events: list[dict], st, version: int, rubrics: dict[str, 
                                         f"{_text(d.get('review'))})" for d in items))
         what = "dropped" if last.get("to") == "dropped" else "counted as nits"
         out.append(mask(f"{dim} {what} reviewer-filed blocking findings ({_text(last.get('reason'))}): {found}; "
-                        + _block_steps(dim, _text(last.get("rule")), rule_states, rubrics, principal, _text(last.get("review")))))
+                        + _block_steps(dim, _text(last.get("rule")), rule_states, rubrics, principal, _text(last.get("review")),
+                                       getattr(getattr(st, "knowledge", None), "rules_path", ""))))
     return out
 
 
-def _block_steps(dim: str, rule: str, rule_states: dict[str, str], rubrics: dict[str, Any], principal: str, review: str) -> str:
+def _block_steps(dim: str, rule: str, rule_states: dict[str, str], rubrics: dict[str, Any], principal: str, review: str,
+                 rules_path: str = "") -> str:
     if not rule:
         return f"making {dim} block is a rubric change"
     state = rule_states.get(rule, "not in the rule base")
     rubric = next((rid for rid, rub in rubrics.items() if any(x.get("id") == dim for x in rub.get("dimensions", []))), "<rubric>")
     cmd, by = f"python -m vpg memory promote --rule {rule}", shlex.quote(principal)
+    if rules_path:
+        cmd += " --rules " + shlex.quote(rules_path)
     adopt = f"`{cmd} --to adopted --by {by} --human --evidence {review} --adopted-in rubrics/{rubric}.yaml`"
     accept = "; then accept the configuration change (`vpg accept-config`), so the reviews judge this version again"
     if state == "validated":
@@ -697,13 +701,16 @@ def _block_steps(dim: str, rule: str, rule_states: dict[str, str], rubrics: dict
         return f"rule {rule} is already {state}{accept}"
     if state in ("retired", "not in the rule base"):
         return f"rule {rule} is {state}: making {dim} block needs a new rule or a rubric change"
+    if state == "builtin":
+        return (f"rule {rule} is a shipped policy default: use the private project rule file, enter candidate "
+                "with a named human, then collect evidence and validate before approval and adoption")
     return (f"rule {rule} is {state}: it needs evidence and validation before it can be approved and adopted "
             "(SOP, Rule lifecycle)")
 
 
 def _principal(ctx) -> str:
-    autonomy = ctx.config.get("autonomy") if isinstance(ctx.config, dict) else None
-    return (autonomy.get("principal") if isinstance(autonomy, dict) else None) or "Wei"
+    from ..util import configured_principal
+    return configured_principal(ctx.config or {}) or "<named reviewer>"
 
 
 def _harness_lines(ctx, mask: Callable[[str], str] = lambda s: s) -> list[str]:

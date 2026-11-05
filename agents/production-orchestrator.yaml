@@ -1,7 +1,7 @@
 # Production Orchestrator — generated from graph/workflow.yaml node assignments; edit responsibilities here, bindings in the graph.
 id: production-orchestrator
 name: Production Orchestrator
-responsibility: 'Run the graph: define the brief with Wei, dispatch agents, interpret feedback, gate versions, plan targeted rework, keep lineage.'
+responsibility: 'Run the graph: define the brief with the project owner, dispatch agents, interpret feedback, gate versions, plan targeted rework, keep lineage.'
 nodes:
 - N03 Objective and audience definition
 - N21 Feedback interpretation
@@ -48,6 +48,6 @@ evaluation:
 - regeneration
 escalation:
   when: Gate blocked, a loop bound is exceeded, or an integrity violation
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: 'none (this engine: vpg)'

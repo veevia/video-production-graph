@@ -3,7 +3,7 @@ doc: creative
 ---
 # Creative — <fill: film title>
 
-> Access: written by N06 Creative Direction; read by N05, N07, N08, N12–N14, N16, N20. Locked when Wei approves N06.
+> Access: written by N06 Creative Direction; read by N05, N07, N08, N12–N14, N16, N20. Locked when the project owner approves N06.
 
 ## Creative concept
 <fill: the selected concept in one sentence, and why it beat the alternatives>
@@ -15,7 +15,7 @@ doc: creative
 <fill: e.g. tension → clarity → confidence; where the space for key statements is>
 
 ## Storytelling devices
-<fill: recurring visual anchors, callbacks, the protagonist (the customer's experts)>
+<fill: recurring visual anchors, callbacks and the subject of the narrative>
 
 ## Tone
 <fill: e.g. warm, confident, precise; never hype>

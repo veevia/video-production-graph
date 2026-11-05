@@ -1,9 +1,4 @@
-"""v1.5: what a producer's fingerprint covers, carrying recorded passes over an engine upgrade, frozen-source provenance
-and verdicts judged under the configuration a human accepted.
-
-Found on the SRA run: a `defects:rework` input hashed every defect of the run, so each new defect re-ran every producer
-it never reached; passes recorded before code fingerprints could never memo-skip again; hard-linked sources were
-rewritten from another project and their registered versions were lost. The rest came from the engineering review."""
+"""Synthetic regression coverage: test carry over."""
 
 from __future__ import annotations
 
@@ -163,7 +158,7 @@ def test_a_defect_routed_elsewhere_leaves_a_producers_fingerprint_alone(tmp_path
 
 
 def test_a_producer_memo_skips_when_only_another_nodes_defects_changed(tmp_path):
-    """#60 on the SRA run: D028–D035, routed to N13, changed N11's and N14's fingerprints, so both would re-run."""
+    """Synthetic regression coverage: test a producer memo skips when only another nodes defects changed."""
     _, eng = _passed(tmp_path)
     eng.state.evaluation.defects.append(_defect("D9", "visual", "d_build", "x"))
     rt = _recheck(eng, "c_audio")
@@ -176,9 +171,9 @@ def test_accept_config_carries_a_pass_recorded_before_v15_over_so_it_still_memo_
     _as_recorded_before(eng, proj, "c_audio", defect=_defect("D1", "visual", "d_build", "x", status="resolved"))
     eng.state.evaluation.defects.append(_defect("D2", "visual", "d_build", "y"))     # a new defect, routed elsewhere
     assert eng.rt("c_audio").last_pass_fingerprint != eng.fingerprint(eng.node("c_audio"))
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     [ev] = events(proj, "passes_carried_over")
-    assert ev["carried"] == ["c_audio"] and ev["adopted"] == [] and ev["kept"] == {} and ev["actor"] == "Wei"
+    assert ev["carried"] == ["c_audio"] and ev["adopted"] == [] and ev["kept"] == {} and ev["actor"] == "Reviewer"
     assert eng.rt("c_audio").last_pass_scheme == FINGERPRINT_SCHEME
     rt = _recheck(eng, "c_audio")
     assert rt.memo_hits == 1 and rt.executions == 1
@@ -195,9 +190,9 @@ def test_a_carried_pass_is_derived_from_its_checkpoint_so_a_later_input_change_s
     eng.rt("c_audio").force_rerun = True
     eng.step()                                                                        # c_audio re-runs; d_build waits
     assert eng.rt("c_audio").executions == 2 and eng.rt("d_build").status == S.STALE
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert events(proj, "passes_carried_over")[0]["carried"] == ["d_build"]
-    eng.accept_config(actor="Wei", reason="a rubric change")
+    eng.accept_config(actor="Reviewer", reason="a rubric change")
     assert len(events(proj, "passes_carried_over")) == 1
     eng.step()
     assert eng.rt("d_build").executions == 2 and eng.rt("d_build").memo_hits == 0
@@ -209,7 +204,7 @@ def test_a_pass_that_recorded_its_code_is_carried_with_that_code_so_a_later_code
     assert eng.rt("c_audio").command_code
     _as_recorded_before(eng, proj, "c_audio", defect=_defect("D1", "visual", "d_build", "x", status="resolved"))
     (proj / "pipeline/helper.py").write_text("STEP = 2\n")                          # its code changed after the pass
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert events(proj, "passes_carried_over")[0]["carried"] == ["c_audio"]
     rt = _recheck(eng, "c_audio")
     assert rt.executions == 2 and rt.memo_hits == 0
@@ -224,7 +219,7 @@ def test_a_pass_that_cannot_be_re_derived_re_runs_once_and_says_why(tmp_path):
             n["purpose"] = "its definition changed since the pass"
     eng.workflow_path.write_text(yaml.safe_dump(wf))
     eng = Engine(proj, executor=FnExecutor())
-    eng.accept_config(actor="Wei", reason="v1.5 engine and a workflow edit")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine and a workflow edit")
     [ev] = events(proj, "passes_carried_over")
     assert ev["carried"] == [] and ev["kept"]["c_audio"].startswith(
         f"checkpoint {int(path.name[:5])} does not reproduce its last pass: something it reads changed between its dispatch")
@@ -236,7 +231,7 @@ def test_a_missing_checkpoint_keeps_the_old_fingerprint(tmp_path):
     proj, eng = _passed(tmp_path)
     path = _as_recorded_before(eng, proj, "c_audio", defect=_defect("D1", "visual", "d_build", "x", status="resolved"))
     path.unlink()
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert events(proj, "passes_carried_over")[0]["kept"]["c_audio"].startswith("no checkpoint records its last pass")
 
 
@@ -255,15 +250,14 @@ def test_a_rework_pass_is_re_derived_with_the_defects_it_was_sent_to_fix(tmp_pat
     attempt = cp.runtime.nodes["d_build"].attempts
     eng.ledger.append("node_dispatched", node="d_build", attempt=attempt, fingerprint=fp[:16], executor="t", rework=["D1"])
     eng._save("test")
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert events(proj, "passes_carried_over")[0]["carried"] == ["d_build"]
     rt = _recheck(eng, "d_build")                                                     # carried as settled: no re-run
     assert rt.memo_hits == 1 and rt.executions == 1
 
 
 def test_a_rework_pass_is_kept_when_a_later_re_check_finds_nothing_changed(tmp_path):
-    """Triage #61: a pass recorded the rework defects it was dispatched to fix, so after the fix the node re-ran once at
-    its next re-check although nothing had changed (on SRA, N12 would have re-synthesized the voice)."""
+    """Synthetic regression coverage: test a rework pass is kept when a later re check finds nothing changed."""
     proj = make_project(tmp_path, workflow=_rework_inputs(tmp_path))
     flag(proj, "defect")
     eng = Engine(proj, executor=FnExecutor())
@@ -289,7 +283,7 @@ def test_a_later_accept_leaves_passes_recorded_under_the_current_scheme_alone(tm
     assert eng.state.runtime.status.value == "RUN_PASS" and eng.state.runtime.rework_cycles >= 1
     passed = [rt for rt in eng.state.runtime.nodes.values() if rt.last_pass_fingerprint]
     assert passed and all(rt.last_pass_scheme == FINGERPRINT_SCHEME for rt in passed)
-    eng.accept_config(actor="Wei", reason="a rubric change")
+    eng.accept_config(actor="Reviewer", reason="a rubric change")
     assert events(proj, "passes_carried_over") == []
 
 
@@ -301,16 +295,16 @@ def test_adopt_code_keeps_a_pass_from_before_code_fingerprints_only_while_its_co
     assert any("c_audio: its last pass predates command-code fingerprints" in w and "--adopt-code c_audio" in w
                for w in eng.status()["warnings"])
     with pytest.raises(EngineError, match=r"pipeline/run.py changed after its last pass began"):
-        eng.accept_config(actor="Wei", reason="v1.5 engine", adopt_code=["c_audio"])
+        eng.accept_config(actor="Reviewer", reason="v1.5 engine", adopt_code=["c_audio"])
     assert not events(proj, "passes_carried_over") and not events(proj, "config_accepted")
     for adopt, message in [(["c_audoi"], "unknown node"), (["d_build"], "d_build: it runs no bound command"),
                            (["r1_review"], "r1_review: it is a review, which re-runs after every accepted change")]:
         with pytest.raises(EngineError, match=message):
-            eng.accept_config(actor="Wei", reason="v1.5 engine", adopt_code=adopt)
+            eng.accept_config(actor="Reviewer", reason="v1.5 engine", adopt_code=adopt)
     with pytest.raises(EngineError, match="named human"):
         eng.accept_config(actor="agent:x", reason="v1.5 engine", adopt_code=["c_audio"])
     _as_recorded_before(eng, proj, "c_audio", code=False, started_at=_iso(now + 5))       # its code predates the pass
-    assert cli.main(["accept-config", str(proj), "--actor", "Wei", "--reason", "v1.5 engine; run.py unchanged since v3",
+    assert cli.main(["accept-config", str(proj), "--actor", "Reviewer", "--reason", "v1.5 engine; run.py unchanged since v3",
                      "--adopt-code", "c_audio"]) == 0
     eng = Engine(proj, executor=FnExecutor())
     [ev] = events(proj, "passes_carried_over")
@@ -321,14 +315,14 @@ def test_adopt_code_keeps_a_pass_from_before_code_fingerprints_only_while_its_co
     rt = _recheck(eng, "c_audio")
     assert rt.memo_hits == 1 and rt.executions == 1
     with pytest.raises(EngineError, match="c_audio: its last pass already records its code"):
-        eng.accept_config(actor="Wei", reason="again", adopt_code=["c_audio"])
+        eng.accept_config(actor="Reviewer", reason="again", adopt_code=["c_audio"])
     rows = [r for r in verify.human_record(eng.ledger.events()) if r["action"] == "config_accepted"]   # critic I3: one row
     assert [r["subject"] for r in rows] == ["configuration change; kept the last pass of c_audio"]
     assert "adopted" in rows[0]["codes"] and "shared" not in rows[0]["codes"]
 
 
 def test_adopt_code_records_the_code_hashed_before_the_file_times_were_checked(tmp_path, monkeypatch):
-    """Critic r2 N2: an edit landing after the file-time check was hashed as the code Wei vouched for. The code is hashed
+    """Critic r2 N2: an edit landing after the file-time check was hashed as the code Reviewer vouched for. The code is hashed
     first now, so that edit is not vouched for, and the node re-runs at its next re-check."""
     proj, eng = _passed(tmp_path, command="{python} pipeline/run.py")
     _as_recorded_before(eng, proj, "c_audio", code=False, started_at=_iso(time.time() + 5))   # its code predates the pass
@@ -340,7 +334,7 @@ def test_adopt_code_records_the_code_hashed_before_the_file_times_were_checked(t
         (proj / "pipeline/run.py").write_text(COMMAND_SCRIPT + "# edited during the acceptance\n")
         return out
     monkeypatch.setattr(eng, "_changed_since", check_then_edit)
-    eng.accept_config(actor="Wei", reason="v1.5 engine", adopt_code=["c_audio"])
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine", adopt_code=["c_audio"])
     assert eng.rt("c_audio").command_code == vouched
 
 
@@ -352,23 +346,23 @@ def test_restoring_an_older_modification_time_does_not_hide_a_code_edit(tmp_path
     (proj / "pipeline/run.py").write_text(COMMAND_SCRIPT + "# edited after the pass\n")
     os.utime(proj / "pipeline/run.py", (now - 3600, now - 3600))
     with pytest.raises(EngineError, match=r"pipeline/run.py changed after its last pass began"):
-        eng.accept_config(actor="Wei", reason="v1.5 engine", adopt_code=["c_audio"])
+        eng.accept_config(actor="Reviewer", reason="v1.5 engine", adopt_code=["c_audio"])
     changed = os.stat(proj / "pipeline/run.py").st_ctime                               # an edit in the second the pass began
     _as_recorded_before(eng, proj, "c_audio", code=False, started_at=_iso(changed))
     with pytest.raises(EngineError, match=r"pipeline/run.py changed after its last pass began"):
-        eng.accept_config(actor="Wei", reason="v1.5 engine", adopt_code=["c_audio"])
+        eng.accept_config(actor="Reviewer", reason="v1.5 engine", adopt_code=["c_audio"])
     ref = [r for r in eng.state.history.checkpoints if r.event == "node_passed" and r.node == "c_audio"][-1]
     cp = read_json(proj / ref.path)
     cp["runtime"]["nodes"]["c_audio"]["started_at"] = None                           # no start time: nothing is ruled out
     write_json_atomic(proj / ref.path, cp)
     with pytest.raises(EngineError, match="c_audio: its last pass records no start time"):
-        eng.accept_config(actor="Wei", reason="v1.5 engine", adopt_code=["c_audio"])
+        eng.accept_config(actor="Reviewer", reason="v1.5 engine", adopt_code=["c_audio"])
 
 
 def test_without_adopt_code_a_pass_from_before_code_fingerprints_re_runs_once(tmp_path):
     proj, eng = _passed(tmp_path, command="{python} pipeline/run.py")
     _as_recorded_before(eng, proj, "c_audio", code=False)
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert "--adopt-code c_audio" in events(proj, "passes_carried_over")[0]["kept"]["c_audio"]
     rt = _recheck(eng, "c_audio")
     assert rt.memo_hits == 0 and rt.executions == 2 and rt.command_code and rt.last_pass_scheme == FINGERPRINT_SCHEME
@@ -385,17 +379,17 @@ def test_a_rollback_past_an_accepted_change_judges_the_restored_version_again(tm
     cfg = proj / "vpg.project.yaml"
     cfg.write_text(cfg.read_text() + "note: a stricter rubric was adopted mid-run\n")
     eng = Engine(proj, executor=FnExecutor())
-    eng.accept_config("Wei", "stricter rubric")
+    eng.accept_config("Reviewer", "stricter rubric")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
-    eng.rollback(seq, actor="Wei")
+    eng.rollback(seq, actor="Reviewer")
     judged = {n.id for n in eng.wf.nodes if n.kind == NodeKind.REVIEW} | {"g_gate"}
     assert set(events(proj, "rollback")[-1]["rechecked"]) >= judged
     assert eng.state.runtime.config_parts == eng._config_parts()
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
     assert _after(proj, "rollback", "node_dispatched") >= judged - {"g_gate"} and not (_after(proj, "rollback", "memo_hit") & judged)
-    eng.rollback(eng.state.history.checkpoints[-1].seq, actor="Wei")
+    eng.rollback(eng.state.history.checkpoints[-1].seq, actor="Reviewer")
     assert events(proj, "rollback")[-1]["rechecked"] == []
 
 
@@ -642,7 +636,7 @@ def test_a_command_node_without_a_defects_input_is_still_checked_for_its_code(tm
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
     _as_recorded_before(eng, proj, "c_audio", code=False)
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert "--adopt-code c_audio" in events(proj, "passes_carried_over")[0]["kept"]["c_audio"]
     assert eng.rt("c_audio").last_pass_scheme is None
     assert any("c_audio: its last pass predates command-code fingerprints" in w for w in eng.status()["warnings"])
@@ -667,7 +661,7 @@ def test_the_next_scheme_bump_re_derives_passes_recorded_under_this_one(tmp_path
     eng.rt("c_audio").force_rerun = True
     eng.step()
     monkeypatch.setattr(ve, "FINGERPRINT_SCHEME", 3)
-    eng.accept_config(actor="Wei", reason="the next engine")
+    eng.accept_config(actor="Reviewer", reason="the next engine")
     [ev] = events(proj, "passes_carried_over")
     assert "d_build" in ev["carried"] and ev["kept"] == {}
 
@@ -688,7 +682,7 @@ def test_the_next_scheme_bump_re_derives_a_settled_rework_pass(tmp_path, monkeyp
     eng.rt("c_audio").force_rerun = True
     eng.step()
     monkeypatch.setattr(ve, "FINGERPRINT_SCHEME", 3)
-    eng.accept_config(actor="Wei", reason="the next engine")
+    eng.accept_config(actor="Reviewer", reason="the next engine")
     [ev] = events(proj, "passes_carried_over")
     assert "d_build" in ev["carried"] and "d_build" not in ev["kept"]
 
@@ -722,7 +716,7 @@ def test_a_pass_whose_script_is_gone_is_not_carried_onto_empty_code(tmp_path):
     _as_recorded_before(eng, proj, "c_audio", defect=_defect("D1", "visual", "d_build", "x", status="resolved"))
     (proj / "pipeline/run.py").unlink()
     assert eng.project.command_code("c_audio") == []
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert eng.rt("c_audio").last_pass_fingerprint != eng.fingerprint(eng.node("c_audio"))
 
 
@@ -734,9 +728,9 @@ def test_a_rollback_across_the_upgrade_carries_the_restored_passes_over(tmp_path
     cfg = proj / "vpg.project.yaml"
     cfg.write_text(cfg.read_text() + "note: the v1.5 engine\n")
     eng = Engine(proj, executor=FnExecutor())
-    eng.accept_config("Wei", "v1.5 engine")
+    eng.accept_config("Reviewer", "v1.5 engine")
     eng.run(max_steps=200)
-    eng.rollback(int(path.name[:5]), actor="Wei")
+    eng.rollback(int(path.name[:5]), actor="Reviewer")
     ev = events(proj, "passes_carried_over")[-1]
     assert ev["carried"] == ["d_build"] and ev["reason"].startswith("rollback to checkpoint")
     assert eng.rt("d_build").last_pass_scheme == FINGERPRINT_SCHEME
@@ -808,11 +802,11 @@ def test_a_pass_whose_code_was_only_narrowed_is_carried_with_the_narrower_code(t
             (proj / "pipeline/run.py").write_text(COMMAND_SCRIPT + "# a real edit\n")
         _bind(proj, "{python} pipeline/run.py", command_code_exclude=["pipeline/film/data.js"])
         eng = Engine(proj, executor=FnExecutor())
-        [before] = [w for w in eng.status()["warnings"] if w.startswith("c_audio:")]     # #97: what Wei reads before accepting
+        [before] = [w for w in eng.status()["warnings"] if w.startswith("c_audio:")]     # #97: what Reviewer reads before accepting
         assert ("its code changed" in before and "1 file(s) it recorded are no longer counted" in before) if edit_real_code \
             else (before.startswith("c_audio: command_deps or command_code_exclude now leave out 1 file(s)")
                   and "accepting the configuration keeps its pass" in before and "re-runs" not in before), before
-        eng.accept_config(actor="Wei", reason="v1.5 engine; exclude the generated scene data")
+        eng.accept_config(actor="Reviewer", reason="v1.5 engine; exclude the generated scene data")
         assert events(proj, "passes_carried_over")[-1]["carried"] == ["c_audio"]
         assert events(proj, "config_accepted")[-1]["rerun"] == (["c_audio"] if edit_real_code else []), edit_real_code   # #99
         # #73: a narrowed carry records the narrower code, so status reports no change that re-runs nothing
@@ -844,7 +838,7 @@ def test_a_narrowed_carry_records_the_code_its_proof_hashed(tmp_path, monkeypatc
     monkeypatch.setattr(eng, "_narrowed_code", narrow)
     monkeypatch.setattr(eng.project, "command_code",
                         lambda nid: [(p, "0" * 64) for p, _ in real_code(nid)] if nid in seen else real_code(nid))
-    eng.accept_config(actor="Wei", reason="exclude the generated scene data")
+    eng.accept_config(actor="Reviewer", reason="exclude the generated scene data")
     monkeypatch.undo()
     code, narrowed = seen["c_audio"]
     assert narrowed and eng.rt("c_audio").command_code == dict(code)
@@ -871,7 +865,7 @@ def test_a_rework_pass_of_a_node_with_no_command_or_defects_input_is_carried_too
         r.last_pass_fingerprint, r.last_pass_scheme = fp, None
     write_json_atomic(proj / ref.path, cp)
     eng._save("test")
-    eng.accept_config(actor="Wei", reason="v1.5 engine")
+    eng.accept_config(actor="Reviewer", reason="v1.5 engine")
     assert "d_build" in events(proj, "passes_carried_over")[0]["carried"]
     before = eng.rt("d_build").executions
     rt = _recheck(eng, "d_build")

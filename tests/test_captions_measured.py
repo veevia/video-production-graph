@@ -1,11 +1,4 @@
-"""Caption sync on measured word times (triage #70, the SRA side chat's #69).
-
-`captions.word_times` spread each unit's duration over its words by character length. At clause breaks that estimate
-was off from the measured speech by up to 0.75 s (SRA v10: p90 0.43 s over 242 words), so captions chunked on real
-speech failed the tool, and captions chunked to satisfy it really lagged speech. The measured word times the voice node
-already writes (`timings.words`) are used now, unit by unit, whenever they are consistent. Since v1.5.1 (#74) a word the
-voice node could not measure no longer drops its whole unit back to the character spread: it is bounded by the measured
-words around it."""
+"""Synthetic regression coverage: test captions measured."""
 
 from __future__ import annotations
 
@@ -14,18 +7,18 @@ from vpg.tools import captions
 
 RULES = {"max_lag_s": 0.0, "max_chain_lead_s": 0.2, "max_first_lead_s": 0.45, "max_early_clear_s": 0.1, "max_cps": 20,
          "min_duration_s": 0.8}
-UNIT = {"unit": "u02", "text": "Trade policy, media and scientific experts.", "start": 0.0, "end": 3.0}
-# A long breath after "policy," — the character spread puts "media" at 0.93 s; it is spoken at 1.60 s.
-SPOKEN = [("Trade", 0.00, 0.30), ("policy", 0.30, 0.90), ("media", 1.60, 2.00), ("and", 2.00, 2.10),
-          ("scientific", 2.10, 2.60), ("experts", 2.60, 3.00)]
+UNIT = {"unit": "u02", "text": "Basic shapes, cards and decorative symbols.", "start": 0.0, "end": 3.0}
+# A long breath after "shapes," — the character spread puts "cards" at 0.93 s; it is spoken at 1.60 s.
+SPOKEN = [("Basic", 0.00, 0.30), ("shapes", 0.30, 0.90), ("cards", 1.60, 2.00), ("and", 2.00, 2.10),
+          ("decorative", 2.10, 2.60), ("symbols", 2.60, 3.00)]
 MEASURED = [{"unit": "u02", "i": i, "word": w, "start": a, "end": b, "measured": True} for i, (w, a, b) in enumerate(SPOKEN)]
-# Split at the clause break, where real speech pauses (r07 style).
-CUES = [{"start": 0.0, "end": 1.2, "text": "Trade policy,"}, {"start": 1.5, "end": 3.1, "text": "media and scientific experts."}]
+# Split at the synthetic clause break, where the fixture pauses.
+CUES = [{"start": 0.0, "end": 1.2, "text": "Basic shapes,"}, {"start": 1.5, "end": 3.1, "text": "cards and decorative symbols."}]
 
 
 def test_cues_split_at_a_measured_onset_pass_and_the_character_spread_would_fail_them():
     """The positive control: the same split judged by the old word clock is a 0.57 s lag."""
-    late = [dict(CUES[1], start=2.0, end=3.6)]                                                  # 0.40 s after "media"
+    late = [dict(CUES[1], start=2.0, end=3.6)]                                                  # 0.40 s after "cards"
     assert [f.check for f in captions.sync([CUES[0], *late], [UNIT], RULES, measured=MEASURED)["findings"]] == ["captions:lag"]
     nan = [dict(e, start=float("nan")) if e["i"] == 2 else e for e in MEASURED]                # critic: NaN must not hide it
     assert [f.check for f in captions.sync([CUES[0], *late], [UNIT], RULES, measured=nan)["findings"]] == ["captions:lag"]
@@ -65,12 +58,11 @@ def test_a_unit_falls_back_to_the_character_spread_unless_its_measured_times_are
 
 
 def test_a_word_not_measured_is_bounded_by_the_measured_words_around_it():
-    """#74: v1.5 dropped a whole unit to the character spread when one of its words was not measured. On SRA's a6
-    timings that was 4 units, and 3 of the side chat's 35 speech-chunked cues were flagged for it."""
+    """Synthetic regression coverage: test a word not measured is bounded by the measured words around it."""
     guessed = [dict(e, measured=False, start=0.0, end=0.05) if e["i"] == 3 else e for e in MEASURED]   # a producer's guess
     wt = captions.word_times([UNIT], guessed)
     assert [w["source"] for w in wt] == ["measured"] * 3 + ["bounded"] + ["measured"] * 2
-    assert [(w["start"], w["end"]) for w in wt] == [(a, b) for _, a, b in SPOKEN]      # "and" sits between "media" and "scientific"
+    assert [(w["start"], w["end"]) for w in wt] == [(a, b) for _, a, b in SPOKEN]      # "and" sits between "cards" and "decorative"
     for why, junk in {"a NaN": float("nan"), "a string": "2.0", "another time base": 900.0}.items():
         assert captions.word_times([UNIT], [dict(e, start=junk) if e["i"] == 3 else e for e in guessed]) == wt, why
     real = captions.sync(CUES, [UNIT], RULES, measured=guessed)
@@ -81,20 +73,20 @@ def test_a_word_not_measured_is_bounded_by_the_measured_words_around_it():
 
 def test_a_cue_that_could_lag_is_flagged_even_inside_a_run_not_measured():
     """Every word of a run not measured gets the whole gap, so the no-lag and early-clear checks miss nothing the
-    measured words allow. Here "media and" was not measured and was in fact said straight after "policy,", before a
+    measured words allow. Here "cards and" was not measured and was in fact said straight after "shapes,", before a
     long pause: "and" at about 1.05 s. A cue that starts at 1.5 s lags it. Spreading the run by characters would place
     "and" at 1.62 s and pass that cue."""
     unmeasured = [dict(e, measured=False) if e["i"] in (2, 3) else e for e in MEASURED]
     wt = captions.word_times([UNIT], unmeasured)
     assert [(w["start"], w["end"], w["source"]) for w in wt[2:4]] == [(0.9, 2.1, "bounded")] * 2
-    cues = [{"start": 0.0, "end": 1.5, "text": "Trade policy, media"}, {"start": 1.5, "end": 3.1, "text": "and scientific experts."}]
+    cues = [{"start": 0.0, "end": 1.5, "text": "Basic shapes, cards"}, {"start": 1.5, "end": 3.1, "text": "and decorative symbols."}]
     found = {f.check: f for f in captions.sync(cues, [UNIT], RULES, measured=unmeasured)["findings"]}
     assert sorted(found) == ["captions:early-clear", "captions:lag"]
     assert "could have started (it was not measured)" in found["captions:lag"].message
     assert "could have ended (it was not measured)" in found["captions:early-clear"].message
     assert "start it at a measured word" in found["captions:lag"].smallest_fix
     # Split at measured words instead, and the same run is judged only where it can be.
-    whole = [{"start": 0.0, "end": 1.2, "text": "Trade policy,"}, {"start": 0.9, "end": 3.1, "text": "media and scientific experts."}]
+    whole = [{"start": 0.0, "end": 1.2, "text": "Basic shapes,"}, {"start": 0.9, "end": 3.1, "text": "cards and decorative symbols."}]
     assert captions.sync(whole, [UNIT], RULES, measured=unmeasured)["findings"] == []
     after_pause = captions.sync(CUES, [UNIT], RULES, measured=unmeasured)       # a cue that waits for the pause's end
     assert [f.check for f in after_pause["findings"]] == ["captions:lag"]
@@ -140,8 +132,8 @@ def test_only_a_units_last_word_ends_it():
 
 def test_the_legibility_check_judges_captions_on_the_measured_words(tmp_path):
     srt = tmp_path / "c.srt"
-    srt.write_text("1\n00:00:00,000 --> 00:00:01,200\nTrade policy,\n\n2\n00:00:01,500 --> 00:00:03,100\n"
-                   "media and scientific experts.\n")
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,200\nTrade shapes,\n\n2\n00:00:01,500 --> 00:00:03,100\n"
+                   "cards and decorative symbols.\n")
 
     def caption_checks(timings):
         from tests.test_tools import Ctx, layer
@@ -167,4 +159,4 @@ def test_the_timings_schema_needs_times_only_on_measured_words():
     base = {"units": [UNIT], "sample_rate": 48000}
     unmeasured = {"unit": "u02", "i": 3, "word": "and", "measured": False}
     assert not list(check.iter_errors(dict(base, words=MEASURED[:3] + [unmeasured] + MEASURED[4:])))
-    assert list(check.iter_errors(dict(base, words=[{"unit": "u02", "i": 0, "word": "Trade", "measured": True}])))
+    assert list(check.iter_errors(dict(base, words=[{"unit": "u02", "i": 0, "word": "Basic", "measured": True}])))

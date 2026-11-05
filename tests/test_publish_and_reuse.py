@@ -223,7 +223,7 @@ def test_the_producer_key_covers_the_command_line():
 
 
 def test_the_reuse_advisory_is_per_file_and_needs_the_real_import(tmp_path):
-    """Review S3: SRA's assemble.py defines its own `stamp(t)`, which made every pipeline/ node look like it used vpg.reuse."""
+    """Synthetic regression coverage: test the reuse advisory is per file and needs the real import."""
     proj = make_project(tmp_path)
     (proj / "pipeline").mkdir()
     (proj / "pipeline" / "assets.py").write_text("from pathlib import Path\ndef stamp(t):\n    return t\n"

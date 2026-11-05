@@ -9,15 +9,12 @@ reported (an external source or a production chat) and assumed (a design judgeme
 
 ## Why
 
-A recent 90-second case-study film (NDA) passed every gate and all five reviewers while it regressed against its own
-earlier best and two benchmark films (reported). The reviews scored 4 or 5 on every dimension for good and bad
-versions alike, and nothing measured the ground's saturation, motion share, pauses, or the voice-over-music margin on
-one fixed basis. These metrics measure exactly those things, deterministically, on every frame or window.
+Use deterministic measurements with explicit versions and bases. A sample value is not a production benchmark; projects select their own licensed references and thresholds.
 
 ## Metrics
 
 `vpg measure --catalog` prints the full catalog with each basis and version. All are version 1 except the two
-voice-over-music metrics and `text.overlap_all.count`, which are version 2 (see the real-film evaluation below).
+voice-over-music metrics and `text.overlap_all.count`, which are version 2 (see measurement limits below).
 
 | Metric | Unit | Defect side | What it measures |
 |---|---|---|---|
@@ -129,42 +126,19 @@ commands changes a production run.
 * observed: on synthetic films the metrics separate a good film from a degraded one, three references never flag
   their own envelopes, fresh re-measurements stay inside, and the anchor is caught on six or more metrics
   (`tests/test_craft_metrics.py`).
-* reported: the metric choice and the v1 parameters reproduce the investigation's method on the case-study film.
-* assumed: tolerances are first guesses, to calibrate against Wei's judgements; envelopes, not tolerances, carry the
+* assumed: tolerances are first guesses, to calibrate against the project owner's judgements; envelopes, not tolerances, carry the
   benchmark's character.
 * Colourfulness, coverage and OCR read frames every 2 s, so a two-second event can fall between samples; motion and
   loudness read every frame or window.
 * Aesthetic scores are deliberately absent: no learned "beauty" number gates anything.
 
-### Real-film evaluation (2026-10-27)
+### Measurement limits
 
-The metrics were run, read-only, on a real production's six versions (a recent 90-second case-study film, NDA) and on
-two benchmark films, and compared with an independent set of gates another team wrote for the same films.
+Synthetic tests cover timestamp alignment, digital silence, line-box overlap,
+word timing, OCR and metric-version compatibility. They are not measurements of
+a customer production.
 
-* observed: colourfulness, motion share and pause share reproduce the independent measurements to within 0.1 on every
-  film.
-* observed: four defects were found and fixed:
-  * the voice-over-music windows drifted after digital silence;
-  * pace read 0 on the engine's own timings files;
-  * touching line boxes of one headline counted as overlaps;
-  * a plural ("sub-agents") did not count for a must-say term.
-* observed: the fixed 8 px share could not tell 3 px UI text from 6 px, so `text.ocr_word_px.dense_min` and
-  `still.ocr_word_px.median` were added.
-  * On the masters of the five versions the independent gate judged for UI legibility, `text.ocr_word_px.dense_min`
-    agreed on all five.
-  * Its look-gate counterpart, `still.ocr_word_px.median`, is tested on synthetic frames only: these versions had no
-    look stage.
-* observed: with envelopes from the benchmark films, the engine agreed with the independent verdicts on 29 of the 32
-  checks both could make (the landed version, before these fixes: 23). It would also have failed the two good versions
-  on pace and overlap.
-  * The three differences are all the engine being stricter: a tinted ground on two earlier versions, and 28% motion
-    on one.
-  * The independent tool had no input for overlap on three versions; the engine measured them.
-  * The ratchet against the accepted earlier version flagged every regressed version and neither good one, on the
-    metrics the template ratchets.
-* Envelopes depend on which films are references, and for which media: registering a film's stems without its master
-  keeps it out of the visual envelopes.
-* The overlap count is only as good as the renderer's boxes: a renderer that reports container boxes reports overlaps
-  that are not there (`box_height_vs_type` in the evidence shows it).
-* OCR cannot read the very smallest text, so text too small to read confidently drops out of
-  `text.ocr_word_px.dense_min`; a film with no readable dense frame is not measured.
+- Use tight text boxes; container boxes can produce false overlap reports.
+- Missing stems or unreadable text produce `not_measured`, not a pass.
+- OCR can omit small or stylized text; inspect the rendered frames independently.
+- Register each reference's relevant media and re-measure when versions or bases differ.

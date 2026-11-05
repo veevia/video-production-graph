@@ -10,7 +10,7 @@ rules:
   - id: MO-SHARE-001
     level: SHOULD
     statement: Frames move about as much as the benchmark does, and no more.
-    rationale: The plant data needs still time to be read.
+    rationale: The card data needs still time to be read.
     source: synthetic benchmark SYN-REF
     enforcement: {type: tool, metric: video.motion_share, gate: GT-MOTION-001}
     examples:
@@ -23,7 +23,7 @@ rules:
     source: R-MOT-002
     enforcement: {type: judge}
     examples:
-      do: ["The trend line carried into the outlook card"]
+      do: ["The trend line carried into the detail panel"]
       dont: ["A spin and a wipe on one seam"]
 ---
 # Motion spec
@@ -35,7 +35,7 @@ Motion points at the signal and then gets out of the way.
 Each claim holds for at least a second after it lands.
 
 ## Transitions
-Cuts between plants, a line carry into the outlook, a fade on the close.
+Cuts between cards, a line carry into the detail panel, a fade on the close.
 
 ## Reduced motion
 Every move resolves to its end frame.

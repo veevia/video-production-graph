@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents (Claude Code, Codex, GitHub Copilot, OpenCode, Gemini CLI, Cursor and others)
+Guidance for coding agents (Claude Code, Codex, OpenCode, Gemini CLI, Cursor and others)
 working with this repository. People should start with [README.md](README.md); to set up an agent tool with
 vpg, see [agent hosts](docs/agent-hosts.md).
 
@@ -58,3 +58,5 @@ detect impersonation. Hold this boundary yourself.
   (a few minutes) and `python -m vpg dry-run`.
 - Add regression tests under `tests/`. Tests must not need a model API or a paid service.
 - Never commit credentials, customer sources, production media, name lists or preference records.
+- Keep repository attribution to `veevia`. Do not add automated-tool authorship, co-author or generation
+  trailers. Preserve third-party license notices.

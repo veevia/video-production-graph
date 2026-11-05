@@ -32,7 +32,7 @@ constraints:
 evaluation:
 - learning
 escalation:
-  when: A lesson needs Wei's classification
-  to: Wei
+  when: A lesson needs the project owner's classification
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: Skill & Agent Smith

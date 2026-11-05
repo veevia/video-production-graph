@@ -100,10 +100,10 @@ def test_persisting_defect_continues_to_end_review_in_provisional_mode(project, 
     monkeypatch.setattr(ve, "autonomy_precondition_problems", lambda config: [])
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
     cfg.update({
-        "humans": ["Wei"],
+        "humans": ["Reviewer"],
         "privacy": {"names": "none", "reason": "synthetic"},
         "loop_budget": {"on_exhaust": "extend_if_converging"},
-        "autonomy": {"mode": "provisional", "principal": "Wei"},
+        "autonomy": {"mode": "provisional", "principal": "Reviewer"},
     })
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     flag(proj, "defect")
@@ -280,7 +280,7 @@ def test_human_gate_requires_named_human(tmp_path):
     for bad in ("agent:critic", "dry-run-auto", ""):
         with pytest.raises(EngineError):
             eng.decide("b_plan", "approved", actor=bad)
-    eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
     assert eng.state.history.approvals[-1].human and eng.state.controls["design"].status == "approved"
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
@@ -310,10 +310,10 @@ def test_rejection_loops_back_within_bound(tmp_path):
     wf = mini_workflow(tmp_path, human_b=True)
     (proj / "vpg.project.yaml").write_text(json.dumps({"id": "h", "workflow": str(wf)}))
     eng = run(proj)
-    eng.decide("b_plan", "rejected", actor="Wei", feedback=["tighter"])
+    eng.decide("b_plan", "rejected", actor="Reviewer", feedback=["tighter"])
     eng.run(max_steps=10)
     assert eng.rt("b_plan").status == S.WAITING_HUMAN and eng.rt("b_plan").executions == 2
-    eng.decide("b_plan", "rejected", actor="Wei")
+    eng.decide("b_plan", "rejected", actor="Reviewer")
     assert eng.rt("b_plan").status == S.BLOCKED           # E16 max_traversals = 1: the second rejection escalates
 
 
@@ -341,7 +341,7 @@ def test_approved_control_needs_change_request(tmp_path):
     wf = mini_workflow(tmp_path, human_b=True, lock_b=("design",))
     (proj / "vpg.project.yaml").write_text(json.dumps({"id": "h", "workflow": str(wf)}))
     eng = run(proj)
-    eng.decide("b_plan", "approved", actor="Wei")
+    eng.decide("b_plan", "approved", actor="Reviewer")
     # an edit outside the workflow is detected and blocks the run
     locked = (proj / "controls/design.md").read_text()
     (proj / "controls/design.md").write_text(locked + "\nhand edit\n")
@@ -370,11 +370,11 @@ def test_change_request_allows_edit(tmp_path):
         return {"b_plan": "b_plan.json"}
     eng = Engine(proj, executor=FnExecutor({"b_plan": b}))
     eng.run(max_steps=20)
-    eng.decide("b_plan", "approved", actor="Wei")
+    eng.decide("b_plan", "approved", actor="Reviewer")
     cr = eng.change_request("design", "add a token", by="agent:visual-design")
     with pytest.raises(EngineError):
         eng.approve_change_request(cr.id, by="agent:visual-design")
-    eng.approve_change_request(cr.id, by="Wei")
+    eng.approve_change_request(cr.id, by="Reviewer")
     eng.run(max_steps=20)
     st = eng.state.controls["design"]
     assert "CR-001 applied" in (proj / "controls/design.md").read_text() and st.version == 2 and st.status == "draft"
@@ -405,7 +405,7 @@ def test_feedback_reopens_gate_after_run_pass(project):
     proj, _ = project
     eng = run(proj)
     assert eng.state.runtime.status.value == "RUN_PASS"
-    eng.add_feedback("the label is too small", actor="Wei")
+    eng.add_feedback("the label is too small", actor="Reviewer")
     assert eng.rt("g_gate").status == S.STALE and eng.state.runtime.status.value == "RUNNING"
     eng.run(max_steps=50)
     assert eng.state.evaluation.feedback[0].status == "interpreted" and eng.rt("g_gate").executions == 2
@@ -440,7 +440,7 @@ def test_rollback_restores_checkpoint(project):
     proj, _ = project
     eng = run(proj)
     first = eng.state.history.checkpoints[0]
-    eng.rollback(first.seq, actor="Wei")
+    eng.rollback(first.seq, actor="Reviewer")
     assert eng.rt("z_done").status != S.STEP_PASS
     assert any(ev["type"] == "rollback" for ev in Ledger(proj / ".vpg/ledger.jsonl").events())
 

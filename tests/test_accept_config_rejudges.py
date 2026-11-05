@@ -1,5 +1,4 @@
-"""accept-config promises that "no earlier verdict survives a change in how work is judged". On the first real run
-(SRA, ledger 851-863) the six reviews it invalidated memo-hit and carried their v1.0 verdicts forward instead."""
+"""Synthetic regression coverage: test accept config rejudges."""
 
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ def test_accept_config_re_runs_every_review_instead_of_carrying_its_verdict(proj
     cfg = proj / "vpg.project.yaml"
     cfg.write_text(cfg.read_text() + "note: a stricter rubric was adopted mid-run\n")
     eng = Engine(proj, executor=FnExecutor())
-    eng.accept_config("Wei", "stricter rubric")
+    eng.accept_config("Reviewer", "stricter rubric")
     eng.run(max_steps=200)
     events = [json.loads(l) for l in (proj / ".vpg/ledger.jsonl").read_text().splitlines()]
     after = events[max(i for i, e in enumerate(events) if e["type"] == "config_accepted"):]

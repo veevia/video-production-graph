@@ -34,7 +34,7 @@ The engine makes no model or network calls. It coordinates three roles across th
 
 | 1. Agents create (via task packets) | 2. Deterministic tools measure (hard `MUST` gates) | 3. Named humans commit (5 gates) |
 |---|---|---|
-| Works with Claude Code, GitHub Copilot, Codex, Cursor, Gemini CLI, OpenCode or human workers | **Technical:** `-16 LUFS ±1`, `≤ -1 dBTP` true peak, H.264/AAC, silence `> 1.5s`<br>**Legibility:** `≥ 22px` critical text, WCAG 4.5:1 contrast, safe areas, dwell time<br>**Captions:** word-locked sync, `≤ 20 chars/s`<br>**Accuracy & privacy:** verified claim IDs, design token match, native-FPS OCR scan | **N03:** Objective & runtime cap (`evaluation.md`)<br>**N04:** Product truth & claims (`product.md`)<br>**N06:** Creative direction (`creative.md`)<br>**N09:** Visual system tokens (`design.md`)<br>**N23:** Final listening & release sign-off |
+| Works with Claude Code, Codex, Cursor, Gemini CLI, OpenCode or human workers | **Technical:** `-16 LUFS ±1`, `≤ -1 dBTP` true peak, H.264/AAC, silence `> 1.5s`<br>**Legibility:** `≥ 22px` critical text, WCAG 4.5:1 contrast, safe areas, dwell time<br>**Captions:** word-locked sync, `≤ 20 chars/s`<br>**Accuracy & privacy:** verified claim IDs, design token match, native-FPS OCR scan | **N03:** Objective & runtime cap (`evaluation.md`)<br>**N04:** Product truth & claims (`product.md`)<br>**N06:** Creative direction (`creative.md`)<br>**N09:** Visual system tokens (`design.md`)<br>**N23:** Final listening & release sign-off |
 
 ## How it works
 
@@ -99,8 +99,12 @@ python -m vpg run <project>
    capture or recording) and brand authority under `sources/`:
 
    ```sh
-   python -m vpg init /absolute/path/to/my-film --name "My product demo"
+   python -m vpg init /absolute/path/to/my-film --name "My product demo" --human "<reviewer>"
    ```
+
+   The project receives blank controls and its own policy file. Fill in your sources and named reviewers;
+   production data, learned rules and preferences stay outside this toolkit checkout. The bundled dry run
+   uses generated geometric fixtures, not a customer use case.
 
 2. **Bind your tools** (`commands:` for renderer, narration and assembly) in `vpg.project.yaml`, following
    the [sample project](examples/sample-demo/vpg.project.yaml) and [extension guide](docs/extension-guide.md).
@@ -177,7 +181,7 @@ and [privacy and local storage](apps/glassbox/README.md#privacy-and-local-storag
 |---|---|
 | [Operator guide](docs/operator-guide.md) | Step-by-step production operation, privacy scanning and local publishing |
 | [Glassbox](apps/glassbox/README.md) | Local review, producer feedback, setup and privacy |
-| [Agent hosts](docs/agent-hosts.md) | Using vpg with Claude Code, Copilot, Codex, OpenCode, Gemini CLI or Cursor |
+| [Agent hosts](docs/agent-hosts.md) | Using vpg with Claude Code, Codex, OpenCode, Gemini CLI or Cursor |
 | [AGENTS.md](AGENTS.md) | Rules coding agents load automatically, including the human-only boundary |
 | [Extension guide](docs/extension-guide.md) | Binding renderers and TTS; adding tools, nodes, agents, rubrics and rules |
 | [Graph specification](docs/graph-spec.md) | Nodes, edges, subgraphs and validation rules, with [graph.svg](docs/graph.svg) |

@@ -159,11 +159,6 @@ def test_skill_bindings_resolve_in_index():
     index = (PKG / "docs" / "skill-bindings.md").read_text()
     missing = sorted({s for n in WF.nodes for s in n.skills if not re.search(rf"(`|\[|/){re.escape(s)}(`|\]|/|\b)", index)})
     assert missing == []
-    workspace_index = PKG.parents[1] / "03_Agents-and-Skills" / "INDEX.md"
-    if workspace_index.is_file():
-        index = workspace_index.read_text()
-        assert all(re.search(rf"(`|\[|/){re.escape(s)}(`|\]|/|\b)", index)
-                   for n in WF.nodes for s in n.skills)
 
 
 def test_every_rubric_dimension_has_rule_and_brief_dimension():

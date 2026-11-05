@@ -3,9 +3,9 @@ spec: {family: vpg-spec/v1, doc: voice, version: 1}
 persona: {adjectives: [calm, precise, warm], reference_read: ""}
 pace_wpm: {min: 150, max: 185}
 pause_budget: {min_share: 0.12}
-emphasis: [own, seven-day, first]
+emphasis: [group, selected, detail]
 lexicon:
-  - {term: Northwind, say: "NORTH-wind", tts: {rate: 1.0}}
+  - {term: Shape Board, say: "Shape Board", tts: {rate: 1.0}}
 rules:
   - id: VO-PACE-001
     level: MUST
@@ -38,10 +38,10 @@ rules:
 # Voice spec
 
 ## Intent
-An operations colleague explaining something useful, unhurried.
+A calm explanation of the generated shapes and labels.
 
 ## Pace and pauses
 Each unit ends with a pause long enough to read its chip.
 
 ## Lexicon
-Northwind is stressed on the first syllable.
+Use literal fixture labels without introducing a persona or product claim.

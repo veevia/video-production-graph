@@ -362,7 +362,8 @@ def gate(state: ProjectState, policies: Policies, version: int, reviewer_nodes: 
             reasons.append(granted)
         reasons.append("blocking defects open: " + ", ".join(f"{d.id} {d.severity} {d.dimension}→{d.traced_node}" for d in blocking))
     else:
-        principal = (((state.runtime.accepted_policy or {}).get("autonomy") or {}).get("principal") or "Wei")
+        from .util import configured_principal
+        principal = configured_principal(state.runtime.accepted_policy or {})
         resolved = {d.id for d in state.evaluation.defects if d.status == "resolved"
                     and (d.severity == "nit" or d.resolved_by == principal)}
         defects = {d.id: d for d in state.evaluation.defects}

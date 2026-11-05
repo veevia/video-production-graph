@@ -58,13 +58,13 @@ nodes:
   kind: agent
   purpose: Find and register every source that can ground the film — brief, product evidence (prototype, demo recording, spec), brand authority, prior versions and feedback — with an evidence tag, without inventing any.
   inputs: ['state:inputs.brief', 'files:sources/**', 'artifact:gaps', 'control:product', 'control:memory', 'defects:open']
-  context: [The production brief and the requester's messages, Project-hub raw intake (00_context_intake) and wiki, 'Earlier rounds, their reviews and the requester''s feedback', 'Meeting recordings are cited by id, never quoted']
+  context: [The production brief and authorized project sources, Project-local source registry and reference documents, Earlier versions and feedback supplied for this project, 'Confidential recordings are cited by id, never quoted']
   state_read: [inputs.brief, inputs.constraints, production.open_questions]
   state_write: [inputs.sources, production.open_questions]
   agent: context-research
   skills: [context-intake, context-pull, workiq-grounding, evidence-tagging, wiki-query]
   tools: [markitdown MCP, WorkIQ MCP (read-only), local file search]
-  instructions: Register each source with id, path, kind (brief|product|prototype|recording|spec|brand|design|feedback|prior-version|transcript|url) and evidence (observed|reported|assumed). List open questions, and mark a question blocking only when the film cannot proceed without the answer. The film needs product evidence (a spec, prototype or recording) and brand authority registered. Register regular files only, each once, with its one kind (a directory, pipe or device is refused). N02 judges coverage by content. Only files stored in the project's own sources/ directory count (a symlinked sources/ counts nothing), and not copies of control documents or templates; a file registered under two kinds (the brief included) counts as neither, and an assumed source never counts; on a loop back from N02, resolve every gap in `artifact:gaps` by registering the missing source. A gap you cannot resolve stays open; never mark a question or a note as resolving it. When the intake loop runs out, N02 escalates to Wei, who supplies the source or waives the gap by name. Never summarise a source in place of registering it, and never quote confidential meeting content.
+  instructions: Register each source with id, path, kind (brief|product|prototype|recording|spec|brand|design|feedback|prior-version|transcript|url) and evidence (observed|reported|assumed). List open questions, and mark a question blocking only when the film cannot proceed without the answer. The film needs product evidence (a spec, prototype or recording) and brand authority registered. Register regular files only, each once, with its one kind (a directory, pipe or device is refused). N02 judges coverage by content. Only files stored in the project's own sources/ directory count (a symlinked sources/ counts nothing), and not copies of control documents or templates; a file registered under two kinds (the brief included) counts as neither, and an assumed source never counts; on a loop back from N02, resolve every gap in `artifact:gaps` by registering the missing source. A gap you cannot resolve stays open; never mark a question or a note as resolving it. When the intake loop runs out, N02 escalates to the project owner, who supplies the source or waives the gap by name. Never summarise a source in place of registering it, and never quote confidential meeting content.
   prompt: prompts/n01_context_intake.md
   outputs:
   - key: sources
@@ -79,7 +79,7 @@ nodes:
   rubric: [intake]
   failure_conditions: [No product evidence registered, A source registered without an evidence tag, A local source path does not exist]
   retry: {max_attempts: 3, behavior: Re-dispatch with the failing registry checks and the gaps from N02 as context}
-  escalation: {after: '3 consecutive failed attempts, or N02 loops back twice', to: Wei, report: 'Sources found, sources missing, and the questions only Wei can answer'}
+  escalation: {after: '3 consecutive failed attempts, or N02 loops back twice', to: the project owner, report: 'Sources found, sources missing, and the questions only the project owner can answer'}
   human_review: {required: false, decision: Not required; N03 is the first human gate}
   provenance: [Source ids and sha256 recorded at N02, Evidence tag per source, 'Ledger: node_dispatched / node_passed']
   controls:
@@ -99,7 +99,7 @@ nodes:
   agent: context-research
   skills: [evidence-tagging]
   tools: ['vpg.tools.sources:validate']
-  instructions: Deterministic. `pass` freezes the inputs (hash recorded). `gaps_resolvable` loops back to intake with the gap list. `gaps_blocking` escalates to Wei with the blocking questions.
+  instructions: Deterministic. `pass` freezes the inputs (hash recorded). `gaps_resolvable` loops back to intake with the gap list. `gaps_blocking` escalates to the project owner with the blocking questions.
   outputs:
   - {key: gaps, kind: json, description: Context gaps with severity blocking|resolvable|note}
   - key: sources_validated
@@ -112,8 +112,8 @@ nodes:
   rubric: [intake]
   failure_conditions: [A registered local source is missing (blocking gap), No brief (blocking), No product or brand evidence (resolvable gap)]
   retry: {max_attempts: 2, behavior: 'Tool errors only; gaps are outcomes, not failures'}
-  escalation: {after: 'gaps_blocking, or the intake loop traversed twice', to: Wei, report: The gap list with what would resolve each gap}
-  human_review: {required: false, decision: Not required; blocking gaps escalate to Wei}
+  escalation: {after: 'gaps_blocking, or the intake loop traversed twice', to: the project owner, report: The gap list with what would resolve each gap}
+  human_review: {required: false, decision: Not required; blocking gaps escalate to the project owner}
   provenance: [inputs_frozen ledger event with the inputs hash, gaps.json kept per attempt]
   run: {tool: 'sources:validate'}
   outcomes: [pass, gaps_resolvable, gaps_blocking]
@@ -124,15 +124,15 @@ nodes:
   phase: Understand
   subgraph: definition
   kind: agent
-  purpose: State the film's objective as an observable target, name the audience and the review lenses, set the runtime cap and success criteria, and agree the quality bar (evaluation.md) with Wei.
+  purpose: State the film's objective as an observable target, name the audience and the review lenses, set the runtime cap and success criteria, and agree the quality bar (evaluation.md) with the project owner.
   inputs: ['state:inputs.sources', 'state:inputs.brief', 'control:evaluation', 'knowledge:rules', 'control:spec-gates', 'control:spec-design']
-  context: ['The runtime cap is a hard constraint: the case study went from 2:00 (R05) to 2:30 (R06) to ≤150 s (R07)', 'Review lenses in the case study: customer executive, domain-operations leader, sustainability leader, engineer, first-time viewer', 'Perspective: how the platform helps the customer''s experts solve business problems']
+  context: [The runtime cap comes from the approved project brief, The project owner defines the intended audiences and review lenses, Explain the source-supported value without inventing business claims]
   state_read: [inputs.sources, inputs.brief]
   state_write: [production.brief_ref, production.objective, production.audience, production.business_context]
   agent: production-orchestrator
   skills: [problem-framing, extreme-clarity, success-metrics, goal-harness]
   tools: []
-  instructions: 'Write brief.json (an objective with a number or observable end state, the audience, ≥3 checkable success criteria, runtime target and cap, constraints). A success criterion is checkable when it contains a number, ≤ or ≥, "must", "never", "always", "within" or "viewer can …"; every criterion must pass that test. Complete evaluation.md (gates, thresholds, human checkpoints). Never write an adjective objective ("make it better"). Quality workflow: also complete spec/GATES.yaml, the approved bar: each gate''s metric and version, its envelope (benchmark or stated), severity, stage and the rule ids it enforces, and the benchmark registry pinned by path and sha256. Wei approves it with the objective.'
+  instructions: 'Write brief.json (an objective with a number or observable end state, the audience, ≥3 checkable success criteria, runtime target and cap, constraints). A success criterion is checkable when it contains a number, ≤ or ≥, "must", "never", "always", "within" or "viewer can …"; every criterion must pass that test. Complete evaluation.md (gates, thresholds, human checkpoints). Never write an adjective objective ("make it better"). Quality workflow: also complete spec/GATES.yaml, the approved bar: each gate''s metric and version, its envelope (benchmark or stated), severity, stage and the rule ids it enforces, and the benchmark registry pinned by path and sha256. the project owner approves it with the objective.'
   prompt: prompts/n03_objective_audience.md
   outputs:
   - key: brief
@@ -154,12 +154,12 @@ nodes:
   - {type: tool, fn: 'qualitygates:check_bar', description: 'GATES.yaml lints clean; the benchmark registry is pinned, unchanged and verifies; every benchmark gate has an envelope; the references show every look role'}
   rubric: [brief]
   failure_conditions: [Objective is an adjective, Fewer than 3 checkable success criteria, Runtime cap missing, 'Benchmark registry missing, unpinned, changed since it was pinned, or failing its own check']
-  retry: {max_attempts: 3, behavior: 'Re-dispatch with the failing checks; if Wei rejects, loop to intake for missing context'}
-  escalation: {after: '3 consecutive failures, or Wei rejects twice', to: Wei, report: 'Draft objective, open questions, and the tension blocking agreement'}
+  retry: {max_attempts: 3, behavior: 'Re-dispatch with the failing checks; if the project owner rejects, loop to intake for missing context'}
+  escalation: {after: '3 consecutive failures, or the project owner rejects twice', to: the project owner, report: 'Draft objective, open questions, and the tension blocking agreement'}
   human_review:
     required: true
     decision: Approve the objective, audience, runtime cap and quality bar
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, rejected]
   provenance: [Approval recorded with actor (human or labelled dry-run), evaluation.md locked on approval (hash + snapshot), GATES.yaml locked on approval with the registry pin (part of the bar)]
   controls:
@@ -175,7 +175,7 @@ nodes:
   kind: agent
   purpose: Establish product truth from the evidence — capabilities, required interactions, demo scenarios, the engineers' terminology, prohibited terms and the only claims the film may make — and lock it.
   inputs: ['state:inputs.sources', 'artifact:brief', 'control:product']
-  context: ['R07 P3: engineer terminology from the demo recording is the source of truth; requested terms with no source are mapped, not invented', 'No invented UI, counters, metrics or architecture edges (video-shotcraft guidance)', 'The deep product walkthrough opens the detail page, never stopping at a list (R07 P4)']
+  context: [Authorized product evidence is the terminology source of truth, 'No invented UI, counters, metrics or architecture edges', Show the interactions required by the approved brief]
   state_read: [inputs.sources, production.objective, production.audience]
   state_write: [production.product_truth_ref, production.product_context, production.product_requirements]
   agent: product-understanding
@@ -202,11 +202,11 @@ nodes:
   rubric: [product-truth]
   failure_conditions: [A claim without a source, Terminology differs from the engineers' words, Missing 'content that must not be invented']
   retry: {max_attempts: 3, behavior: Re-dispatch with the failing sections and unsourced items}
-  escalation: {after: 3 consecutive failures or a rejected review, to: Wei, report: Unsourced claims and terms that need an owner}
+  escalation: {after: 3 consecutive failures or a rejected review, to: the project owner, report: Unsourced claims and terms that need an owner}
   human_review:
     required: true
     decision: Approve product truth (terminology, claims, scenarios)
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, rejected]
   provenance: [product.md locked on approval, Every term and claim cites a source id]
   controls:
@@ -222,7 +222,7 @@ nodes:
   kind: agent
   purpose: Propose at least three distinct concept directions with different anchors, each with a structure, strengths and named risks.
   inputs: ['artifact:brief', 'artifact:product_summary', 'control:product', 'control:memory', 'feedback:open']
-  context: ['Rubric-authoring: diverse anchors defeat overfitting (≥3 directions)', 'Proven arc: challenge → intelligence layer → how it works → architecture → product walkthrough → what''s next', 'Wei''s perspective: Microsoft technology helping the customer''s experts']
+  context: ['Rubric-authoring: diverse anchors defeat overfitting (≥3 directions)', 'Proven arc: challenge → intelligence layer → how it works → architecture → product walkthrough → what''s next', 'the project owner''s perspective: Microsoft technology helping the customer''s experts']
   state_read: [production.objective, production.audience, production.product_context]
   state_write: [production.concepts_ref]
   agent: creative-director
@@ -238,7 +238,7 @@ nodes:
   rubric: [concepts]
   failure_conditions: [Fewer than 3 directions, Directions that differ only in wording]
   retry: {max_attempts: 3, behavior: Re-dispatch with the rejection reasons from N06}
-  escalation: {after: 3 consecutive failures or 2 rejected selections, to: Wei, report: Concepts tried and why each was rejected}
+  escalation: {after: 3 consecutive failures or 2 rejected selections, to: the project owner, report: Concepts tried and why each was rejected}
   human_review: {required: false, decision: Not required; selection happens at N06}
   provenance: [concepts.json per attempt]
   controls:
@@ -250,7 +250,7 @@ nodes:
   phase: Design
   subgraph: definition
   kind: agent
-  purpose: Compare the concepts against the objective and success criteria, recommend one, record why the others were rejected, and complete creative.md for Wei's decision.
+  purpose: Compare the concepts against the objective and success criteria, recommend one, record why the others were rejected, and complete creative.md for the project owner's decision.
   inputs: ['artifact:concepts', 'artifact:brief', 'control:creative', 'control:spec-story']
   context: ['Recovered: start from the strongest earlier direction instead of restarting; keep one brand-derived motion vocabulary']
   state_read: [production.concepts_ref, production.objective]
@@ -279,12 +279,12 @@ nodes:
     description: 'STORY.md lints clean: runtime, beats whose shares add up to 1, terms, rules'
   rubric: [creative-direction]
   failure_conditions: [Selected concept unknown, Alternatives rejected without a reason]
-  retry: {max_attempts: 3, behavior: Re-dispatch with Wei's rejection feedback; a rejection loops back to ideation}
-  escalation: {after: Wei rejects the direction twice, to: Wei, report: Directions tried and the unresolved creative tension}
+  retry: {max_attempts: 3, behavior: Re-dispatch with the project owner's rejection feedback; a rejection loops back to ideation}
+  escalation: {after: the project owner rejects the direction twice, to: the project owner, report: Directions tried and the unresolved creative tension}
   human_review:
     required: true
     decision: Select the creative direction
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, rejected]
   provenance: [Decision record with actor, creative.md locked on approval, STORY.md locked on approval]
   controls:
@@ -300,13 +300,13 @@ nodes:
   kind: agent
   purpose: Write the narration as chapters and units, each unit tagged with the verified claims and product terms it relies on, within the runtime cap.
   inputs: ['artifact:brief', 'artifact:creative_decision', 'artifact:narrative', 'control:product', 'control:creative', 'control:production', 'defects:rework', 'control:spec-story', 'feedback:open']
-  context: ['Engineer terms only; if a term is misheard by ASR in most voice takes, rephrase it (R07: ''versioned'' heard as ''version'' in 8/8 takes)', 'Cut words, never pauses, to fit the cap', 'Perspective: how Microsoft technology helps the customer''s experts solve business problems (R06)']
+  context: [Use sourced terminology and check pronunciation against the script, Shorten wording rather than removing necessary pauses to fit the cap, Keep each claim within the approved product contract]
   state_read: [production.objective, production.creative_decision_ref, production.product_context]
   state_write: [production.script_ref]
   agent: narrative-script
   skills: [extreme-clarity, content-writing, demo-master, video-prototype]
   tools: []
-  instructions: 'Write script.json (chapters → units with id, text, claims[], terms[]). Every claim id must be in product.md verified_claims; every product term must be in the terminology list; never use a prohibited term. Quality workflow: name each chapter after its STORY.md beat (or list it in the beat''s chapters), speak every must-say term and no banned phrase. A rejected animatic returns here with Wei''s feedback.'
+  instructions: 'Write script.json (chapters → units with id, text, claims[], terms[]). Every claim id must be in product.md verified_claims; every product term must be in the terminology list; never use a prohibited term. Quality workflow: name each chapter after its STORY.md beat (or list it in the beat''s chapters), speak every must-say term and no banned phrase. A rejected animatic returns here with the project owner''s feedback.'
   prompt: prompts/n07_script_development.md
   outputs:
   - {key: script, kind: json, schema: script, description: Chapters and narration units, state_path: production.script_ref}
@@ -318,7 +318,7 @@ nodes:
   rubric: [script]
   failure_conditions: [Prohibited term in narration, Unverified claim, Estimated runtime over the cap, 'A must-say term never spoken, or a banned phrase used']
   retry: {max_attempts: 3, behavior: Re-dispatch with the exact failing units and the replacement terms}
-  escalation: {after: 3 consecutive failures or the same defect persisting 3 rework cycles, to: Wei, report: Units that cannot be both accurate and within the cap}
+  escalation: {after: 3 consecutive failures or the same defect persisting 3 rework cycles, to: the project owner, report: Units that cannot be both accurate and within the cap}
   human_review: {required: false, decision: Not required; narration is judged in context at N16/N20 and at release}
   provenance: [script.json per attempt; units cite claim ids]
   controls:
@@ -332,7 +332,7 @@ nodes:
   kind: agent
   purpose: Turn the script into beats with one communication objective each, progressive disclosure, source-locked visuals, and a full specification for every seam, plus a shot list.
   inputs: ['artifact:script', 'artifact:design_system', 'control:creative', 'control:design', 'defects:rework', 'control:spec-story']
-  context: ['Wei R07 P1/P2: one key message per frame; introduce entities progressively (6 steps), never all at once', 'video-shotcraft: specify each seam (outgoing and incoming anchor, direction, match frame, duration, audio bridge); one transition per seam', 'Narration-led films follow measured spoken beats, not a music grid']
+  context: [Introduce one primary idea at a time, 'Specify each seam''s anchors, direction, duration and audio bridge', Narration-led films follow measured spoken beats]
   state_read: [production.script_ref, production.design_system_ref]
   state_write: [production.storyboard_ref, production.shotlist_ref, production.scenes]
   agent: storyboard
@@ -355,8 +355,8 @@ nodes:
   rubric: [storyboard]
   failure_conditions: [A beat with two objectives, A seam without anchors or an audio bridge, A script unit with no beat, A story beat far from its planned share of the runtime]
   retry: {max_attempts: 3, behavior: Re-dispatch with the failing beats and seams}
-  escalation: {after: 3 consecutive failures, to: Wei, report: Beats that cannot meet the one-message rule within the cap}
-  human_review: {required: false, decision: Not required; optional styleframe review with Wei before batching assets}
+  escalation: {after: 3 consecutive failures, to: the project owner, report: Beats that cannot meet the one-message rule within the cap}
+  human_review: {required: false, decision: Not required; optional styleframe review with the project owner before batching assets}
   provenance: [storyboard.json per attempt; beats cite unit ids and source refs]
   controls:
     read: [creative, design, spec-story]
@@ -369,7 +369,7 @@ nodes:
   kind: agent
   purpose: Define the visual language as tokens — palette, approved text pairs, type families and roles, layout and safe areas, motion vocabulary, supplied brand assets, prohibited patterns — plus the technical production spec, and lock both.
   inputs: ['artifact:creative_decision', 'control:design', 'control:production', 'control:creative', 'state:inputs.sources', 'control:spec-voice', 'control:spec-music', 'control:spec-mix', 'control:evaluation']
-  context: ['Wei R07: bold caps type, the customer''s red with white type, minimal and high-contrast bookends', 'Wei R06: typography must be consistent with the opening and closing', 'Logos only from supplied files, never morphed; no imported template skin (amber/paper/serif)']
+  context: ['Use the project''s approved palette, type scale and visual references', Keep typography consistent across scenes and bookends, Use supplied marks and avoid unapproved visual styles]
   state_read: [production.creative_decision_ref, inputs.sources]
   state_write: [production.design_system_ref, production.visual_references]
   agent: visual-design
@@ -402,12 +402,12 @@ nodes:
     description: VOICE.md, MUSIC.md and MIX.md lint clean; MIX.md's loudness matches the approved bar
   rubric: [visual-system]
   failure_conditions: [A text pair below contrast, No prohibited patterns listed, A logo not from a supplied file]
-  retry: {max_attempts: 3, behavior: 'Re-dispatch with failing pairs, sections or assets; Wei''s rejection re-runs this node with the feedback'}
-  escalation: {after: 3 consecutive failures or 2 rejections, to: Wei, report: The brand constraints that cannot be met together}
+  retry: {max_attempts: 3, behavior: 'Re-dispatch with failing pairs, sections or assets; the project owner''s rejection re-runs this node with the feedback'}
+  escalation: {after: 3 consecutive failures or 2 rejections, to: the project owner, report: The brand constraints that cannot be met together}
   human_review:
     required: true
     decision: Approve the visual system direction, the production spec and the voice, music and mix specs (the look itself is approved at N26)
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, rejected]
   provenance: ['production.md, VOICE.md, MUSIC.md and MIX.md locked on approval (hash + snapshot); design.md is locked with the look at N26']
   controls:
@@ -444,7 +444,7 @@ nodes:
   rubric: [asset-plan]
   failure_conditions: [Generated product UI, Generated or modified logo, Generic generated subject, Rights need clearance]
   retry: {max_attempts: 3, behavior: Re-dispatch with the failing assets}
-  escalation: {after: '3 consecutive failures, or an asset needs a rights decision', to: Wei, report: Assets blocked by rights or missing sources}
+  escalation: {after: '3 consecutive failures, or an asset needs a rights decision', to: the project owner, report: Assets blocked by rights or missing sources}
   human_review: {required: false, decision: Not required; rights gaps escalate}
   provenance: [asset-plan.json; each asset records source type and rights]
   controls:
@@ -473,7 +473,7 @@ nodes:
   rubric: [assets]
   failure_conditions: [Missing asset, Wrong dimensions or format]
   retry: {max_attempts: 3, behavior: Re-run only failing items with the defect context}
-  escalation: {after: 3 consecutive failures, to: Wei, report: Assets that cannot be produced at spec}
+  escalation: {after: 3 consecutive failures, to: the project owner, report: Assets that cannot be produced at spec}
   human_review: {required: false, decision: Not required; assets are judged in the rendered film}
   provenance: [One artifact record per item with sha256 and lineage to the asset plan]
   controls:
@@ -490,7 +490,7 @@ nodes:
   kind: agent
   purpose: Produce one continuous, identity-consistent narration stem with measured unit timings, plus the audio specification. Never attenuate speech; human listening remains a separate sign-off.
   inputs: ['artifact:script', 'control:production', 'control:creative', 'defects:rework', 'control:spec-voice']
-  context: ['Wei R06: the voice sounded like a kid → adult tech-professional delivery', 'Wei R07: keep the warm, confident storytelling voice; fix stutters, drops, clipped endings and seams', 'R07 P5: the clipped ''experts'' came from a 32 dB dip inside a word; assembly must never mask speech', 'Identity-locked takes, ASR QC per take, several seeds per unit, human listening never claimed']
+  context: [Follow the approved voice direction and pronunciation guide, 'Check for stutters, missing words, clipped endings and abrupt seams', Do not mask speech defects with gain changes, Use measured word timings; listening approval remains human]
   state_read: [production.script_ref, production.audio_spec]
   state_write: [production.voice_ref, production.timings_ref, production.audio_spec]
   agent: voice-audio
@@ -513,7 +513,7 @@ nodes:
   rubric: [voice-audio]
   failure_conditions: [A unit missing from the stem, Clipping, Near-silent frames inside speech, Voice direction not adult/professional]
   retry: {max_attempts: 3, behavior: 'Re-render only the units named in the defect, with new seeds; rephrase a term misheard in most takes'}
-  escalation: {after: '3 consecutive failures, or voice identity cannot be held', to: Wei, report: 'Units that fail, the takes tried, and a listening request'}
+  escalation: {after: '3 consecutive failures, or voice identity cannot be held', to: the project owner, report: 'Units that fail, the takes tried, and a listening request'}
   human_review: {required: false, decision: Human listening is requested at release; the agent never claims it}
   provenance: ['Engine, voice and seed recorded in voice-direction.json; stem hash', Timings measured from the rendered audio]
   controls:
@@ -529,7 +529,7 @@ nodes:
   kind: agent
   purpose: Build each beat as a scene cued to the measured narration — progressive disclosure, one message per frame, purposeful motion — and export the text-layer manifest that the audits read.
   inputs: ['artifact:storyboard', 'artifact:assets', 'artifact:timings', 'artifact:design_system', 'control:design', 'defects:rework', 'control:spec-design', 'control:spec-motion']
-  context: ['Wei R06/R07: turn illustrations into explanatory animation; infographics must be legible, with fewer competing elements', Rings on measured boxes ≥ 1 s; camera crops land in gutters; no mid-slide rests (r07-v13/v14), 'No ghost text: step down to a solid grey, never partial opacity']
+  context: ['Animate to explain the approved narrative, without competing focal points', Keep measured highlights and camera crops within the project's legibility constraints, Text transitions must preserve readable contrast]
   state_read: [production.storyboard_ref, production.asset_registry, production.timings_ref, production.design_system_ref]
   state_write: [production.scenes_ref, production.text_layers_ref]
   agent: motion-design
@@ -550,7 +550,7 @@ nodes:
   rubric: [motion]
   failure_conditions: [A beat without a scene, No text-layer manifest, Timing gaps]
   retry: {max_attempts: 3, behavior: Re-render only the scenes named in the defect}
-  escalation: {after: 3 consecutive failures, to: Wei, report: Scenes that cannot meet legibility and design rules together}
+  escalation: {after: 3 consecutive failures, to: the project owner, report: Scenes that cannot meet legibility and design rules together}
   human_review: {required: false, decision: Not required; judged in the rendered master}
   provenance: [Scene frames hashed; the manifest exported from the same render]
   controls:
@@ -566,7 +566,7 @@ nodes:
   kind: agent
   purpose: Assemble the master (scenes, voice, music bed with look-ahead ducking, captions, loudness normalisation) and the stems, silent master and caption sidecar.
   inputs: ['artifact:scenes', 'artifact:scene_frames', 'artifact:voice', 'artifact:timings', 'artifact:text_layers', 'control:production', 'defects:rework', 'control:spec-mix', 'control:spec-music']
-  context: ['Two-pass loudness normalisation to −16 LUFS, true peak ≤ −1 dBTP', 'Captions are speech-locked: never after the voice (r07-v15 rule)', 'Music supports the voice: ducking, no competing phrases under speech']
+  context: [Measure loudness against the approved delivery target, Lock captions to measured speech, Keep the mix intelligible and preserve the approved voice direction]
   state_read: [production.scenes_ref, production.voice_ref, production.timings_ref]
   state_write: [production.master_ref, production.captions_ref, production.refs]
   agent: composition
@@ -586,7 +586,7 @@ nodes:
   rubric: [assembly]
   failure_conditions: [Master missing a stream, Captions unparseable]
   retry: {max_attempts: 3, behavior: Re-assemble with the defect context; upstream assets and voice are reused unchanged}
-  escalation: {after: 3 consecutive failures, to: Wei, report: Assembly errors with the command log}
+  escalation: {after: 3 consecutive failures, to: the project owner, report: Assembly errors with the command log}
   human_review: {required: false, decision: Not required; reviewed at N15–N20 and release}
   provenance: [Master hash starts a new version (history.versions), command.log kept per attempt]
   controls:
@@ -602,7 +602,7 @@ nodes:
   kind: review
   purpose: Measure the master itself — format, sync, duration, loudness, silence, black frames, captions — against production.md and the defaults.
   inputs: ['artifact:master', 'artifact:captions', 'artifact:timings', 'control:production', 'control:evaluation', 'artifact:voice_stem', 'artifact:music_stem', 'artifact:text_layers', 'artifact:script', 'control:spec-gates']
-  context: [A technical pass is not a visual or human pass (R01 quality contract)]
+  context: ['A technical pass is evidence, not visual or human approval']
   state_read: [production.master_ref, production.captions_ref]
   state_write: [evaluation.reviews, evaluation.defects]
   agent: technical-qa
@@ -618,7 +618,7 @@ nodes:
   rubric: [technical, quality-gates]
   failure_conditions: [ffprobe or ffmpeg cannot read the master]
   retry: {max_attempts: 2, behavior: Tool errors only}
-  escalation: {after: 2 tool failures, to: Wei, report: The unreadable file and the probe error}
+  escalation: {after: 2 tool failures, to: the project owner, report: The unreadable file and the probe error}
   human_review: {required: false, decision: Not required}
   provenance: [technical-qa.json with the measured values, 'quality-gates.json with every gate, the ratchet rows and the measurements']
   controls:
@@ -631,7 +631,7 @@ nodes:
   phase: Build
   subgraph: review
   kind: review
-  purpose: An independent critic judges the rendered film through Wei's five lenses and the craft rubric — hook, clarity, one message per frame, motion purpose, transitions, emotional arc, polish.
+  purpose: An independent critic judges the rendered film through the project's configured review lenses and craft rubric.
   inputs: ['artifact:master', 'artifact:scenes', 'artifact:inventory', 'control:creative', 'control:evaluation']
   context: ['Score what the viewer sees: keyframes and the review cut, never source code', 'Five lenses: executive, operations leader, sustainability leader, engineer, first-time viewer']
   state_read: [production.master_ref, production.scenes_ref]
@@ -649,8 +649,8 @@ nodes:
   rubric: [creative]
   failure_conditions: [Dimensions left unscored, A failed dimension without a defect]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the unscored dimensions}
-  escalation: {after: 3 incomplete reviews, to: Wei, report: Dimensions the critic could not judge}
-  human_review: {required: false, decision: Not required; Wei's own feedback enters through N21}
+  escalation: {after: 3 incomplete reviews, to: the project owner, report: Dimensions the critic could not judge}
+  human_review: {required: false, decision: Not required; the project owner's own feedback enters through N21}
   provenance: [Review record with per-dimension evidence]
   controls:
     read: [creative, evaluation]
@@ -664,7 +664,7 @@ nodes:
   kind: review
   purpose: Trace everything drawn to design.md — palette tokens, approved text pairs, type families, logo integrity, prohibited patterns — and judge cross-scene consistency.
   inputs: ['artifact:text_layers', 'artifact:assets', 'artifact:inventory', 'control:design']
-  context: ['Wei R06: typography inconsistent with the bookends is a defect', 'Logos are supplied files, scaled uniformly, never regenerated']
+  context: [Typography follows the approved design contract throughout, Supplied marks retain their proportions and source identity]
   state_read: [production.text_layers_ref, production.design_system_ref]
   state_write: [evaluation.reviews, evaluation.defects]
   agent: design-system-reviewer
@@ -680,7 +680,7 @@ nodes:
   rubric: [design-compliance]
   failure_conditions: [Dimensions left unscored]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the unscored dimensions}
-  escalation: {after: 3 incomplete reviews, to: Wei, report: Tokens that cannot be traced}
+  escalation: {after: 3 incomplete reviews, to: the project owner, report: Tokens that cannot be traced}
   human_review: {required: false, decision: Not required}
   provenance: [design-report.json]
   controls:
@@ -695,7 +695,7 @@ nodes:
   kind: review
   purpose: Verify that every text is large enough, has enough contrast, is on screen long enough, sits inside the safe areas and never ghosts; that captions are speech-locked; and that nothing flashes.
   inputs: ['artifact:text_layers', 'artifact:captions', 'artifact:timings', 'artifact:script', 'artifact:master', 'artifact:layout_audit', 'control:evaluation', 'control:design']
-  context: ['Wei R07 §6: strong contrast, large readable text, sufficient reading time, safe margins, no fast flashing, colour never the only cue', Validate at presentation and laptop sizes]
+  context: ['Check contrast, text size, reading time, safe margins and flashing against project requirements', Colour must not be the only cue; validate at the intended viewing sizes]
   state_read: [production.text_layers_ref, production.captions_ref, production.timings_ref]
   state_write: [evaluation.reviews, evaluation.defects]
   agent: accessibility-reviewer
@@ -711,7 +711,7 @@ nodes:
   rubric: [accessibility]
   failure_conditions: [Dimensions left unscored]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the unscored dimensions}
-  escalation: {after: 3 incomplete reviews, to: Wei, report: Checks that could not run}
+  escalation: {after: 3 incomplete reviews, to: the project owner, report: Checks that could not run}
   human_review: {required: false, decision: Not required}
   provenance: [accessibility-report.json with per-cue caption timings]
   controls:
@@ -726,7 +726,7 @@ nodes:
   kind: review
   purpose: Check narration and on-screen text against product truth — terminology, prohibited terms, verified claims — and confirm no product UI was invented and the walkthrough goes deep enough.
   inputs: ['artifact:script', 'artifact:text_layers', 'artifact:asset_plan', 'control:product']
-  context: ['R07 P3: engineer terminology is the source of truth', 'R07 P4: open the actual detail pages and show the real workflow, not only the list']
+  context: [Authorized product evidence is the source of truth, Verify every interaction and claim required by the approved brief]
   state_read: [production.script_ref, production.text_layers_ref, production.asset_plan]
   state_write: [evaluation.reviews, evaluation.defects]
   agent: product-accuracy-reviewer
@@ -741,7 +741,7 @@ nodes:
   rubric: [product-accuracy]
   failure_conditions: [Dimensions left unscored]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the unscored dimensions}
-  escalation: {after: 3 incomplete reviews, to: Wei, report: Claims that need a source owner}
+  escalation: {after: 3 incomplete reviews, to: the project owner, report: Claims that need a source owner}
   human_review: {required: false, decision: Not required; product truth itself was approved at N04}
   provenance: [accuracy-report.json]
   controls:
@@ -756,7 +756,7 @@ nodes:
   kind: review
   purpose: Measure speaking rate, runtime against the cap and reading time per beat, and judge narrative clarity, audience relevance and scene-to-scene connection.
   inputs: ['artifact:script', 'artifact:timings', 'artifact:storyboard', 'artifact:brief', 'control:creative']
-  context: [Every scene connects to the one before and after; nothing is introduced before the viewer is ready (R07 §5)]
+  context: [Every scene connects to adjacent scenes and introduces information at a readable pace]
   state_read: [production.script_ref, production.timings_ref, production.storyboard_ref]
   state_write: [evaluation.reviews, evaluation.defects]
   agent: creative-critic
@@ -771,7 +771,7 @@ nodes:
   rubric: [narrative-pacing]
   failure_conditions: [Dimensions left unscored]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the unscored dimensions}
-  escalation: {after: 3 incomplete reviews, to: Wei, report: Narrative questions for Wei}
+  escalation: {after: 3 incomplete reviews, to: the project owner, report: Narrative questions for the project owner}
   human_review: {required: false, decision: Not required}
   provenance: [pacing-report.json]
   controls:
@@ -805,7 +805,7 @@ nodes:
   rubric: [gate]
   failure_conditions: [Feedback left uninterpreted, A defect traced to an unknown node]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the uninterpreted feedback}
-  escalation: {after: 'Gate outcome blocked: a defect persisted 3 cycles, the rework budget is spent, or a defect needs a human decision', to: Wei, report: 'Open defects, what was tried, and the decision needed'}
+  escalation: {after: 'Gate outcome blocked: a defect persisted 3 cycles, the rework budget is spent, or a defect needs a human decision', to: the project owner, report: 'Open defects, what was tried, and the decision needed'}
   human_review: {required: false, decision: Not required; blocked gates escalate}
   provenance: [Gate result per version, 'Comparison per reworked defect (before/after, resolved)']
   controls:
@@ -835,7 +835,7 @@ nodes:
   rubric: [regeneration]
   failure_conditions: [No routable target for a blocking defect]
   retry: {max_attempts: 2, behavior: Tool errors only}
-  escalation: {after: A loop edge exceeds its traversal bound, to: Wei, report: 'The defect, its target and the cycles spent'}
+  escalation: {after: A loop edge exceeds its traversal bound, to: the project owner, report: 'The defect, its target and the cycles spent'}
   human_review: {required: false, decision: Not required}
   provenance: [regeneration_plan ledger event with targets and preserved nodes]
   run: {tool: 'regen:plan'}
@@ -846,18 +846,18 @@ nodes:
   phase: Learn
   subgraph: delivery
   kind: tool
-  purpose: Recompute the release conditions from disk (gate, defects, reviewed master hash, deliverables, ledger), prepare the release summary, and ask Wei for the release decision.
+  purpose: Recompute the release conditions from disk (gate, defects, reviewed master hash, deliverables, ledger), prepare the release summary, and ask the project owner for the release decision.
   inputs: ['reviews:current', 'defects:open', 'artifact:master', 'control:production']
-  context: [Machine QA is not human release approval (R01 quality contract; every R07 report)]
+  context: [Machine QA and agent reviews do not constitute human release approval]
   state_read: [evaluation.gate_results, evaluation.defects, history.approvals]
   state_write: [history.decisions]
   agent: final-approval
   skills: [shipping-and-launch, traffic-light-decisions]
   tools: ['vpg.tools.verify:final']
-  instructions: Deterministic verification. Then the engine waits for Wei's decision (approved | changes_requested). Changes loop back to feedback interpretation.
+  instructions: Deterministic verification. Then the engine waits for the project owner's decision (approved | changes_requested). Changes loop back to feedback interpretation.
   outputs:
   - {key: verification, kind: json, description: Recomputed release checks}
-  - {key: release_summary, kind: markdown, description: What Wei is asked to release}
+  - {key: release_summary, kind: markdown, description: What the project owner is asked to release}
   - {key: decision_digest, kind: markdown, description: Numbered human-facing end-review digest}
   - {key: review_packet, kind: markdown, description: Blind-then-reveal end-review packet}
   - {key: decision_template, kind: json, description: Decision template for the single end-review answer}
@@ -867,11 +867,11 @@ nodes:
   rubric: [release]
   failure_conditions: [No passing gate for the current version, The master changed after review, A deliverable missing]
   retry: {max_attempts: 2, behavior: Re-verify after the cause is fixed}
-  escalation: {after: 2 failed verifications, to: Wei, report: The release condition that fails}
+  escalation: {after: 2 failed verifications, to: the project owner, report: The release condition that fails}
   human_review:
     required: true
     decision: Release the version, or request changes with feedback
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, changes_requested]
   provenance: [Release decision recorded with actor; dry-run approvals labelled not human]
   controls:
@@ -887,7 +887,7 @@ nodes:
   kind: tool
   purpose: Package every deliverable with its evidence, hash every file into a manifest, zip it and verify the zip against the manifest.
   inputs: ['artifact:master', 'artifact:release_summary', 'control:production']
-  context: ['R07 package: 12 deliverables, one manifest, zero mismatches']
+  context: [Package only the configured deliverables and verify every manifest hash]
   state_read: [production.master_ref, deliverables]
   state_write: [deliverables]
   agent: final-approval
@@ -902,7 +902,7 @@ nodes:
   rubric: [delivery]
   failure_conditions: [A manifest mismatch, A deliverable missing]
   retry: {max_attempts: 2, behavior: Rebuild the package}
-  escalation: {after: 2 failed builds, to: Wei, report: The mismatching files}
+  escalation: {after: 2 failed builds, to: the project owner, report: The mismatching files}
   human_review: {required: false, decision: Not required; release was decided at N23}
   provenance: [manifest.json with every file's sha256]
   controls:
@@ -935,7 +935,7 @@ nodes:
   rubric: [learning]
   failure_conditions: [A lesson without evidence, A lesson targeting a protected scope]
   retry: {max_attempts: 3, behavior: Re-dispatch listing the unclassified lessons}
-  escalation: {after: 3 consecutive failures, to: Wei, report: Lessons that need Wei's classification}
+  escalation: {after: 3 consecutive failures, to: the project owner, report: Lessons that need the project owner's classification}
   human_review: {required: false, decision: Not required for the run; applying the proposal to the rule base needs a named human (`vpg memory apply`)}
   provenance: [learning-proposal.json and lessons.json; rule-base changes only through the audited changelog]
   controls:
@@ -968,11 +968,11 @@ nodes:
   rubric: [look]
   failure_conditions: [A style frame outside its role's benchmark envelope, Frames rendered from an older spec, 'A look gate that cannot be judged (registry missing, unpinned or without the role)', A motion test that flashes more than 3 times in a second]
   retry: {max_attempts: 3, behavior: 'Re-dispatch with the failing gates, roles, values and envelopes; fix the spec, then re-render'}
-  escalation: {after: 3 consecutive failures or 2 rejections, to: Wei, report: 'The gates the look cannot meet, the values tried, and the spec changes that did not move them'}
+  escalation: {after: 3 consecutive failures or 2 rejections, to: the project owner, report: 'The gates the look cannot meet, the values tried, and the spec changes that did not move them'}
   human_review:
     required: true
     decision: Approve the look (style frames and motion test) before any asset is built
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, rejected]
   provenance: ['look-frames.json and look-report.json per attempt (spec hash, measurements, gates)', 'design.md, DESIGN.md, its tokens and MOTION.md locked on approval']
   controls:
@@ -996,7 +996,7 @@ nodes:
   agent: storyboard
   skills: [storyboard, video-prototype, video-shotcraft]
   tools: [local TTS (scratch read), ffmpeg, vpg spec hash]
-  instructions: Time each storyboard beat to a scratch read of the current script (start and end per beat), add the music sketch when MUSIC.md asks for one and the times its hit points land, and write animatic.json with the spec hash from `vpg spec hash spec/`. Render the timed boards as a video for Wei's review.
+  instructions: Time each storyboard beat to a scratch read of the current script (start and end per beat), add the music sketch when MUSIC.md asks for one and the times its hit points land, and write animatic.json with the spec hash from `vpg spec hash spec/`. Render the timed boards as a video for the project owner's review.
   prompt: prompts/n27_animatic.md
   outputs:
   - {key: animatic, kind: json, schema: animatic, description: 'Timed beats, scratch read and music sketch', state_path: production.refs.animatic}
@@ -1007,11 +1007,11 @@ nodes:
   rubric: [animatic]
   failure_conditions: [Runtime over the STORY.md cap, A beat far from its share, Pace or pauses outside their gate, A must-say term never spoken, A music hit point missed]
   retry: {max_attempts: 3, behavior: 'Re-dispatch with the failing beats, gates, terms and hit points'}
-  escalation: {after: 3 consecutive failures or 2 rejections, to: Wei, report: The timing the script and boards cannot meet together}
+  escalation: {after: 3 consecutive failures or 2 rejections, to: the project owner, report: The timing the script and boards cannot meet together}
   human_review:
     required: true
     decision: Approve the animatic before voice, assets and scenes are built
-    approver: Wei
+    approver: the project owner
     outcomes: [approved, rejected]
   provenance: ['animatic.json and animatic-report.json per attempt (spec hash, measurements, beat shares, hit points)']
   controls:
@@ -1060,7 +1060,7 @@ edges:
   transfers: [gaps.json]
   threshold: resolvable gaps only
   branching: gaps_resolvable → back to intake with the gap list
-  on_fail: after 2 traversals escalate to Wei
+  on_fail: after 2 traversals escalate to the project owner
   max_traversals: 2
 - id: E05
   from: n02_source_validation
@@ -1070,8 +1070,8 @@ edges:
   when: gaps_blocking
   transfers: [gaps.json]
   threshold: any blocking gap
-  branching: gaps_blocking → stop and ask Wei
-  on_fail: run BLOCKED until Wei answers and unblocks
+  branching: gaps_blocking → stop and ask the project owner
+  on_fail: run BLOCKED until the project owner answers and unblocks
 - id: E06
   from: n03_objective_audience
   to: n04_product_understanding
@@ -1079,7 +1079,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [brief.json, locked evaluation.md]
-  threshold: Wei approves the objective and the quality bar
+  threshold: the project owner approves the objective and the quality bar
   branching: approved → product
   on_fail: see E07
 - id: E07
@@ -1088,8 +1088,8 @@ edges:
   kind: loop
   transition: conditional
   when: rejected
-  transfers: [Wei's reasons]
-  threshold: Wei rejects the objective
+  transfers: [the project owner's reasons]
+  threshold: the project owner rejects the objective
   branching: rejected → gather missing context
   on_fail: after 2 rejections escalate
   max_traversals: 2
@@ -1100,7 +1100,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [product-summary.json, locked product.md]
-  threshold: Wei approves product truth
+  threshold: the project owner approves product truth
   branching: approved → ideation
   on_fail: see E09
 - id: E09
@@ -1109,7 +1109,7 @@ edges:
   kind: loop
   transition: conditional
   when: rejected
-  transfers: [Wei's corrections]
+  transfers: [the project owner's corrections]
   threshold: product truth rejected
   branching: rejected → rewrite product truth with the corrections
   on_fail: after 2 rejections escalate
@@ -1131,7 +1131,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [creative-decision.json, narrative.md, locked creative.md]
-  threshold: Wei selects a direction
+  threshold: the project owner selects a direction
   branching: 'approved → fan-out: script ∥ visual system'
   on_fail: see E13
 - id: E12
@@ -1141,7 +1141,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [creative-decision.json, locked creative.md]
-  threshold: Wei selects a direction
+  threshold: the project owner selects a direction
   branching: 'approved → fan-out: visual system ∥ script'
   on_fail: see E13
 - id: E13
@@ -1151,7 +1151,7 @@ edges:
   transition: conditional
   when: rejected
   transfers: [rejection reasons]
-  threshold: Wei rejects every direction
+  threshold: the project owner rejects every direction
   branching: rejected → new concepts
   on_fail: after 2 rejections escalate
   max_traversals: 2
@@ -1171,7 +1171,7 @@ edges:
   kind: loop
   transition: conditional
   when: rejected
-  transfers: [Wei's feedback]
+  transfers: [the project owner's feedback]
   threshold: visual system rejected
   branching: rejected → redefine with feedback
   on_fail: after 2 rejections escalate
@@ -1364,8 +1364,8 @@ edges:
   when: blocked
   transfers: [gate reasons, defects]
   threshold: same defect failed 3 cycles, budget spent, or a human decision is needed
-  branching: blocked → stop and report to Wei
-  on_fail: run BLOCKED until Wei unblocks
+  branching: blocked → stop and report to the project owner
+  on_fail: run BLOCKED until the project owner unblocks
 - id: E38
   from: n22_targeted_regeneration
   to: n07_script_development
@@ -1450,7 +1450,7 @@ edges:
   transition: conditional
   when: target:n09_visual_system
   transfers: [defects in tokens or the production spec]
-  threshold: a blocking defect traces here and Wei approved a change request
+  threshold: a blocking defect traces here and the project owner approved a change request
   branching: redefine the locked system through a change request
   on_fail: bounded, then escalate
   max_traversals: 2
@@ -1461,7 +1461,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [verification.json, release-summary.md]
-  threshold: Wei releases the version
+  threshold: the project owner releases the version
   branching: approved → package
   on_fail: see E47
 - id: E47
@@ -1470,8 +1470,8 @@ edges:
   kind: loop
   transition: conditional
   when: changes_requested
-  transfers: [Wei's feedback]
-  threshold: Wei requests changes
+  transfers: [the project owner's feedback]
+  threshold: the project owner requests changes
   branching: changes_requested → interpret feedback → gate
   on_fail: bounded, then escalate
   max_traversals: 4
@@ -1502,7 +1502,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [design-system.json, design.md, locked production.md and sound specs]
-  threshold: Wei approves the visual system direction and the sound specs
+  threshold: the project owner approves the visual system direction and the sound specs
   branching: approved → look development
   on_fail: see E16
 - id: Q02
@@ -1512,7 +1512,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [look-frames.json, locked design.md and visual spec]
-  threshold: every look gate passes and Wei approves the look
+  threshold: every look gate passes and the project owner approves the look
   branching: fan-in with E14
   on_fail: see Q03
 - id: Q03
@@ -1521,7 +1521,7 @@ edges:
   kind: loop
   transition: conditional
   when: rejected
-  transfers: [Wei's feedback]
+  transfers: [the project owner's feedback]
   threshold: look rejected
   branching: rejected → revise the spec and re-render
   on_fail: after 2 rejections escalate
@@ -1543,7 +1543,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [animatic.json]
-  threshold: the animatic checks pass and Wei approves the timing
+  threshold: the animatic checks pass and the project owner approves the timing
   branching: 'approved → fan-out: asset planning ∥ voice'
   on_fail: see Q07
 - id: Q06
@@ -1553,7 +1553,7 @@ edges:
   transition: conditional
   when: approved
   transfers: [animatic.json, script.json]
-  threshold: the animatic checks pass and Wei approves the timing
+  threshold: the animatic checks pass and the project owner approves the timing
   branching: 'approved → fan-out: voice ∥ asset planning'
   on_fail: see Q07
 - id: Q07
@@ -1562,7 +1562,7 @@ edges:
   kind: loop
   transition: conditional
   when: rejected
-  transfers: [Wei's feedback]
+  transfers: [the project owner's feedback]
   threshold: animatic rejected
   branching: rejected → rewrite the script with the feedback; the storyboard and animatic follow
   on_fail: after 2 rejections escalate
@@ -1574,7 +1574,7 @@ edges:
   transition: conditional
   when: target:n26_look_development
   transfers: [defects traced to the look]
-  threshold: a blocking defect traces here and Wei approved a change request
+  threshold: a blocking defect traces here and the project owner approved a change request
   branching: re-develop the look through a change request
   on_fail: bounded, then escalate
   max_traversals: 2

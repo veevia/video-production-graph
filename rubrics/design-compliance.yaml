@@ -1,8 +1,8 @@
-# Design-system compliance — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Design-system compliance — reusable rubric; see knowledge/rules.json for default policy.
 id: design-compliance
 name: Design-system compliance
 reviewer: design-system-reviewer
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: DES-TOKENS
   name: Palette tokens and text pairs
@@ -139,12 +139,12 @@ dimensions:
     type: review
     scale: 1–5
   threshold: 4
-  target: minimal, high-contrast bold-caps bookends with the supplied logos
+  target: readable bookends following the project's approved visual hierarchy and required marks
   rule: R-DES-001
   cases:
     never:
     - Busy or decorated bookends
     - Small bookend text
-    - Missing partner logos
+    - Missing marks required by the approved brief
     always:
-    - One title, one line, one lockup
+    - Use the approved title treatment and supplied marks

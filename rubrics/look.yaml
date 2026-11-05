@@ -25,7 +25,7 @@ dimensions:
   check:
     type: human
   threshold: null
-  target: Wei approves the style frames and the motion test at N26 before any asset is built
+  target: the project owner approves the style frames and the motion test at N26 before any asset is built
   rule: R-PRO-002
   cases:
     never:

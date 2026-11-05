@@ -76,7 +76,19 @@ def read_text(path: str | os.PathLike) -> str:
 def is_human_name(actor: str | None, dry_run_actor: str = "dry-run-auto") -> bool:
     """A named human: not empty, not an agent (`agent:…` in any case) and not a dry-run actor."""
     a = (actor or "").strip().lower()
-    return bool(a) and not a.startswith("agent") and not a.startswith("dry-run") and a != dry_run_actor.strip().lower()
+    return (bool(a) and "<" not in a and ">" not in a and not a.startswith("agent")
+            and not a.startswith("dry-run") and a != dry_run_actor.strip().lower())
+
+
+def configured_principal(config: dict) -> str | None:
+    autonomy = config.get("autonomy")
+    principal = autonomy.get("principal") if isinstance(autonomy, dict) else None
+    if isinstance(principal, str) and principal.strip():
+        return principal.strip()
+    humans = config.get("humans")
+    if isinstance(humans, list) and humans and isinstance(humans[0], str) and humans[0].strip():
+        return humans[0].strip()
+    return None
 
 
 def sha256_file(path: str | os.PathLike) -> str:

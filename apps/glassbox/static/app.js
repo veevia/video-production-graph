@@ -5460,7 +5460,7 @@ function openHelp() {
     h('h3', { text: 'Watch and note' }),
     h('p', { text: 'Open any frame in Films to watch it. Press N to note the current moment; a note, agree, disagree, flag or preference can be undone for ten seconds.' }),
     h('h3', { text: 'How notes reach the producer' }),
-    h('p', { text: 'Your notes and decisions wait in Glass Box until the film\u2019s producer reads them; nothing is sent anywhere. A producer, such as the Copilot chat that builds the film, runs inbox.py in the Glass Box folder: it lists your waiting notes word for word with links, then records when it picks one up, with its plan, and which version addresses it. Both appear under your note, and Reopen sends a note back when the fix did not land. Once a note has waited 15 minutes, Copy for the producer on the Inbox gives the same list as Markdown for its chat.' }),
+    h('p', { text: 'Your notes and decisions wait in Glass Box until the film\u2019s producer reads them; nothing is sent anywhere. The agent or person building the film runs inbox.py in the Glass Box folder: it lists your waiting notes word for word with links, then records when it picks one up, with its plan, and which version addresses it. Both appear under your note, and Reopen sends a note back when the fix did not land. Once a note has waited 15 minutes, Copy for the producer on the Inbox gives the same list as Markdown for its chat.' }),
     h('pre', { class: 'cli', text: [
       `python3 inbox.py --project <job folder>`,
       `python3 inbox.py --project <job folder> --ack <id> --reply "<plan>" --producer "<name>"`,

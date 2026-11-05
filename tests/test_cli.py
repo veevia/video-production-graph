@@ -113,7 +113,7 @@ def test_agent_errors_are_clean(project):
     _, out = _open_packet(proj)
     r = _vpg("submit", proj, "a_intake", "--token", "wrong", "--actor", "agent:test", "--output", f"a_intake={out}")
     assert r.returncode == 4 and "Traceback" not in r.stderr
-    r = _vpg("unblock", proj, "no_such_node", "--actor", "Wei")
+    r = _vpg("unblock", proj, "no_such_node", "--actor", "Reviewer")
     assert r.returncode == 4 and "nothing to unblock called 'no_such_node'" in r.stderr and "Traceback" not in r.stderr
 
 

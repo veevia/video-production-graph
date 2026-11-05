@@ -1,7 +1,3 @@
-# Brief — Northwind Water Monitor teaser (fictional example)
+# Brief - synthetic card animation
 
-> Fictional product and synthetic data, used only to exercise the workflow end to end.
-
-Make a 15–20 second teaser for plant managers and the operations director. It should show that Northwind Water Monitor
-flags unusual water use at each plant against that plant's own expected range, and gives a seven-day outlook so the plant team can act
-before water is wasted. Keep it calm and precise. End on the product name.
+Create a 15-20 second test animation: show three geometric cards, select Card B, then show its detail panel. The audience is a first-time viewer. All labels and images are invented test fixtures, not a product or customer example.

@@ -10,7 +10,7 @@ import html
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, TypeAdapter
@@ -128,7 +128,7 @@ def agent_catalog() -> str:
 
 
 def mermaid(wf: Workflow) -> str:
-    lines = ["flowchart LR", "  START((START))", "  END((END))", "  ESC{{\"@escalate → Wei\"}}"]
+    lines = ["flowchart LR", "  START((START))", "  END((END))", "  ESC{{\"@escalate → the project owner\"}}"]
     for s in wf.subgraphs:
         lines.append(f"  subgraph {s.id}[\"{s.name}\"]")
         for nid in s.nodes:
@@ -209,7 +209,7 @@ def svg(wf: Workflow) -> str:
                      f'<text x="{x + 30}" y="{y + H / 2 + 5}" font-size="13" fill="#FFF" text-anchor="middle" font-weight="700">{nid}</text>')
     x, y = pos["@escalate"]
     parts.append(f'<rect x="{x}" y="{y}" width="140" height="{H}" rx="8" fill="#FFF" stroke="#5A6572" stroke-dasharray="2 3"/>'
-                 f'<text x="{x + 70}" y="{y + H / 2 + 5}" font-size="13" text-anchor="middle" fill="#1A1F26">@escalate → Wei</text>')
+                 f'<text x="{x + 70}" y="{y + H / 2 + 5}" font-size="13" text-anchor="middle" fill="#1A1F26">@escalate → the project owner</text>')
     for n in wf.nodes:
         x, y = pos[n.id]
         stroke, sw = ("#C4151C", 3) if n.human_review.required else ("#5A6572", 1.2)
@@ -223,29 +223,6 @@ def svg(wf: Workflow) -> str:
     return "\n".join(parts) + "\n"
 
 
-# Wei's own words behind the rules (de-identified: the customer is "the customer"). Source ids: wei:M<n>[.<item>].
-WEI_WORDS = {
-    "R-PRO-001": "“You should not stop when you just finish one round of production; continue to optimize … until [we] meet the quality and project goal.” (M5.7)",
-    "R-VOI-001": "“The voices sound very funny, as a kid, not a professional; explore new tones [that] sound like a tech professional, adult!” (M5.1)",
-    "R-VOI-002": "“Stuttering, repeated syllables, … missing words, … clipped sentence endings” must all be fixed; “re-render affected voice segments … rather than masking defects.” (M6 §1) · “The narration drops part of the word ‘experts’.” (M7 P5)",
-    "R-DES-001": "“Modern, bold CAP-style typography · [brand] red background · white typography · minimal, confident, high-contrast composition.” (M6 §2) · “Introduce [partner] logos on the opening and closing.” (M5.2)",
-    "R-DES-002": "“The typographic [is] inconsistent with the opening and closing.” (M5.4)",
-    "R-DEN-001": "“Too many entities appear simultaneously … Focus on storytelling before completeness.” · “Apply a ‘one key message per frame’ rule.” (M7 P1/P2)",
-    "R-ACC-001": "“Use engineer terminology as the source of truth. Do not invent platform terminology.” (M7 P3)",
-    "R-ACC-003": "“Do not stop on the case list. Open the actual case detail page.” (M7 P4) · “You missed the home page …; re-record new prototype clips to demo the best AI-powered features.” (M5.5)",
-    "R-NAR-001": "“Refine the perspective as how Microsoft technology helps [the customer's] business SMEs problem solving.” (M5.2)",
-    "R-MOT-001": "“Turn the illustration to animation to clarify the problem statements.” (M5.3) · “You picked a good illustration but the animation looks poor quality.” (M5.6)",
-    "R-MOT-002": "“Transitions must advance the story. Avoid transitions that are decorative, repetitive, chaotic, or disconnected.” (M6 §3)",
-    "R-AUD-002": "“The selected music should support the voice rather than compete with it … Avoid abrupt music cuts, repetitive loops, overly dramatic scoring.” (M6 §4)",
-    "R-NAR-002": "“Treat the video as one connected story, not a collection of independent clips.” (M6 §5)",
-    "R-UI-003": "“Highlight the animated UI cards to help focus.” (M5.5)",
-    "R-DES-004": "“Do not import [the template's] amber/paper/serif appearance, invented demo counters/UI, unapproved architecture edges or logo deformation.” (M3)",
-    "R-LEG-001": "“Keep critical text large and readable … Validate readability at presentation and laptop viewing sizes.” (M6 §6)",
-    "R-AST-001": "“Convert ‘the assets are too generic’ into criteria for subject specificity, contextual grounding, composition, and visual-detail validation.” (M9 §2)",
-    "R-DES-005": "“Convert ‘the style does not follow design.md’ into a traceable design-compliance check.” (M9 §2)",
-    "R-PRO-006": "“Target total clips within 2 mins” (M2) · “the total length could be 2:30 mins” (M4).",
-    "R-PRO-004": "“The recommended next proof is a 10–15 s actual-asset continuity/voice test, not a restart of the full production.” (M3)",
-}
 CATEGORY_TITLES = {
     "design_principles": "Design principles", "creative_narrative_preferences": "Creative and narrative preferences",
     "craft_quality": "Craft-quality expectations", "legibility_accessibility": "Legibility and accessibility",
@@ -255,87 +232,34 @@ CATEGORY_TITLES = {
     "project_specific_decisions": "Decisions that must remain project-specific",
 }
 
-
-CASE_DIR = PKG_ROOT / "knowledge" / "case-studies" / "platform-film-2026-09"
-
-
-def deidentifier() -> Callable[[str], str]:
-    """Neutralise customer identifiers in text quoted from the case study. The identifiers live only in the case
-    study's own _TENANT mapping, so no reusable file ever has to name the customer."""
-    path = CASE_DIR / "deidentify_TENANT.json"
-    pairs = json.loads(path.read_text())["replacements"] if path.exists() else []
-    rx = [(re.compile(re.escape(a), re.I), b) for a, b in pairs]
-
-    def clean(text: str) -> str:
-        for pattern, neutral in rx:
-            text = pattern.sub(neutral, text)
-        return text
-    return clean
-
-
 def principles() -> str:
     from .memory import RuleBase, enforcement
     rb = RuleBase()
-    hist_path = CASE_DIR / "production-history_TENANT.json"
-    hist = json.loads(hist_path.read_text()) if hist_path.exists() else {"iterations": [], "recurring_issues": [], "failed_approaches": []}
-    neutral = deidentifier()
-    public = not hist_path.is_file()
-    out = [GEN.replace("graph/workflow.yaml", "knowledge/rules.json and the case study"), "# Design principles and craft-feedback library", "",
-           "> **TL;DR:** Wei's quality bar, as he stated it, turned into rules that a tool or a reviewer can check. Each rule cites its evidence "
-           "(case-study iterations and Wei's messages) and its lifecycle state. Enforced rules block the gate; advisory ones are reported "
-           "and wait for Wei's approval.", "",
-           f"Rule base v{rb.data['version']}: {len(rb.rules)} rules — "
-           + ", ".join(f"{k} {v}" for k, v in sorted(__import__('collections').Counter(r['lifecycle']['state'] for r in rb.rules).items())) + ".",
-           "Evidence ids resolve to `knowledge/case-studies/platform-film-2026-09/production-history_TENANT.json`. `wei:Mn` is Wei's message n in the "
-           "production session, and `task:` marks evidence from building this workflow. Calibration of every numeric threshold against Wei's own "
-           "judgment is still pending (see docs/gaps-and-limitations.md).", ""]
-    if public:
-        out = [GEN.replace("graph/workflow.yaml", "knowledge/rules.json"), "# Design principles and craft-feedback library", "",
-               "> **TL;DR:** Reusable rules and their enforcement states. Historical evidence identifiers are retained for "
-               "traceability, but the private production history and customer sources are not distributed.", "",
-               f"Rule base v{rb.data['version']}: {len(rb.rules)} rules. Numeric thresholds remain uncalibrated; "
-               "see docs/gaps-and-limitations.md.", ""]
-    for cat, title in CATEGORY_TITLES.items():
-        rules = [r for r in rb.rules if r["category"] == cat]
+    out = [GEN.replace("graph/workflow.yaml", "knowledge/rules.json"), "# Workflow policy templates", "",
+           "Reusable defaults for new projects, not a record of production observations or human approvals.",
+           "A built-in policy states its default enforcement explicitly. Private projects may copy and govern "
+           "their own rules; no project history is included here.", "",
+           f"Policy pack v{rb.data['version']}: {len(rb.rules)} reusable rules.", ""]
+    for category, title in CATEGORY_TITLES.items():
+        rules = [r for r in rb.rules if r["category"] == category]
         if not rules:
             continue
         out += [f"## {title}", ""]
-        for r in rules:
-            chk = r["check"]
-            how = f"tool `{chk['fn']}`" if chk.get("type") == "tool" else ("a named human decides" if chk.get("type") == "human" else "reviewer cases")
-            cases = "".join(f"<br>**Never:** {esc(x)}" for x in chk.get("never", [])) + "".join(f"<br>**Always:** {esc(x)}" for x in chk.get("always", []))
-            out += [f"### {r['id']} — {esc(r['statement'])}", "",
-                    f"- **Testable form:** {how}" + (f"; threshold {esc(str(r['threshold']))}" if r.get("threshold") else "")
-                    + (f"; rubric dimensions {', '.join(r['rubric_dimensions'])}" if r.get("rubric_dimensions") else "") + (cases.replace("<br>", "\n  - ") if cases else ""),
-                    f"- **Evidence:** {', '.join(r['evidence'])}" + (f" — {esc(r['origin'])}" if r.get("origin") else ""),
-                    f"- **Lifecycle:** {r['lifecycle']['state']} ({enforcement(r)})" + (f" — {r['calibration']}" if r.get("calibration") else "")]
-            if not public and r["id"] in WEI_WORDS:
-                out.append(f"- **In Wei's words:** {WEI_WORDS[r['id']]}")
+        for rule in rules:
+            check = rule["check"]
+            method = (f"tool `{check['fn']}`" if check.get("type") == "tool"
+                      else "a named human decides" if check.get("type") == "human" else "reviewer cases")
+            out += [f"### {rule['id']} — {esc(rule['statement'])}", "",
+                    f"- **Check:** {method}; rubric dimensions: {', '.join(rule.get('rubric_dimensions', [])) or 'none'}",
+                    f"- **Default:** {enforcement(rule)}"]
+            if rule.get("threshold"):
+                out.append(f"- **Threshold:** {esc(str(rule['threshold']))}")
+            for kind in ("never", "always"):
+                out += [f"  - **{kind.title()}:** {esc(case)}" for case in check.get(kind, [])]
+            if check.get("test"):
+                out.append(f"- **Synthetic regression:** `{check['test']}`")
             out.append("")
-    if public:
-        out += ["## Historical evidence", "", "The original case study is private. Evidence identifiers are historical "
-                "references, not public verification claims. Establish your own calibration and human approvals "
-                "before adopting these defaults.", ""]
-        return "\n".join(out)
-    out += ["## Feedback → rule map (every recovered piece of Wei's feedback)", "", "| Iteration | Feedback (recovered) | Rules |", "|---|---|---|"]
-    for it in hist["iterations"]:
-        for f in it.get("feedback", []):
-            rid = [r["id"] for r in rb.rules if it["id"] in r["evidence"]]
-            out.append(f"| {it['id']} | {esc(neutral(f['text'])[:220])} | {', '.join(rid) or '—'} |")
-    out += ["", "## Recurring failure patterns (inferred across iterations)", "", "| Pattern | Iterations | Effective corrections |", "|---|---|---|"]
-    for r in hist.get("recurring_issues", []):
-        out.append(f"| {esc(neutral(r['issue']))} | {', '.join(r['occurrences'])} | {esc(neutral('; '.join(r.get('effective_corrections', []))))} |")
-    out += ["", "## Failed approaches and why", "", "| Approach | Why it failed |", "|---|---|"]
-    for r in hist.get("failed_approaches", []):
-        out.append(f"| {esc(neutral(r['approach']))} | {esc(neutral(r['why_failed']))} |")
-    out += ["", "## What stays project-specific (never a default)", "",
-            "- **Brand:** the brand colour and field, the logo files and the partner lockups (design.md).",
-            "- **Terminology:** the product's terminology, prohibited terms and verified claims (product.md), taken from that project's engineers.",
-            "- **Review lenses:** the names and number of review lenses (evaluation.md).",
-            "- **Runtime:** the runtime target and cap (brief.json). The case study moved from 2:00 to 2:30 to ≤150 s.",
-            "- **Voice and music:** the voice identity, the pronunciation list and the music direction (production.md, voice-direction.json).",
-            "- **Local decisions:** phrases removed or kept for one film (for example R-PS-001).", ""]
-    return "\n".join(out)
+    return "\n".join(out).rstrip() + "\n"
 
 
 NODES_START, NODES_END = "<!-- NODES:START -->", "<!-- NODES:END -->"

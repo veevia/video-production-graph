@@ -1,14 +1,14 @@
 {
- "product_context": "Northwind Water Monitor flags unusual water use against each plant's expected range and shows a seven-day outlook.",
+ "product_context": "Shape Board is a generated test image with three geometric cards and a detail panel.",
  "product_requirements": [
-  "tag synthetic data",
-  "show the outlook card on the real screen"
+  "label synthetic data",
+  "show the generated detail panel"
  ],
  "capabilities": [
-  "water-use signal",
-  "seven-day outlook"
+  "selection marker",
+  "detail panel"
  ],
  "demo_scenarios": [
-  "Coastal plant leaves its expected range; the team reads the outlook"
+  "Card B has a selection marker; the detail panel repeats its label."
  ]
 }

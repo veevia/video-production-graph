@@ -1,57 +1,53 @@
-# Self-improvement and memory
+# Private learning and reusable policy
 
-> **TL;DR:** Each production ends with a learning proposal (N25). A named human applies it with `vpg memory apply`.
-> Rules move through an evidence-gated lifecycle and are versioned with an append-only changelog. Protected scopes
-> (objective, product truth, brand constraints, approved design principles) can never be changed by learning.
+The public policy pack contains generic defaults, not observations from earlier
+productions. Each rule has a stable ID, an executable check or review cases, and
+an explicit `default_enforcement`: enforced, advisory or inactive.
 
-## Where memory lives
+## Built-in policy is not approval history
 
-| Store | Scope | Changes by |
-|---|---|---|
-| `knowledge/rules.json` (+ `rules-changelog.jsonl`, `history/rules-v*.json`) | Cross-project rules | `vpg memory apply` / `vpg memory promote`, by a human |
-| `knowledge/design-principles.md` | Human-readable library, generated from the rules and the case study | `python -m vpg docs` |
-| `knowledge/case-studies/<case>/` (`*_TENANT`) | The evidence base for the rules | Curated reconstructions |
-| `controls/memory.md` (per project) | Project-specific lessons | N25 (the only node allowed to write it) |
+Shipped rules use `lifecycle.state: builtin`, with empty evidence and history.
+They establish the toolkit's initial behavior; they do not claim that a person
+approved a real film or that a threshold was calibrated on private footage.
+Project-specific rules and personal preference records are not bundled.
 
-## Lifecycle (vpg/memory.py)
+The engine preserves enforcement when loading built-in defaults. It never makes
+an advisory check blocking merely because private provenance was removed.
 
+## Project storage
+
+`python -m vpg init <project>` copies the generic pack to `.vpg/rules.json` inside
+that private project and sets the project's `rules:` path. The file is independent
+of the shipped copy. Preference models and decisions live under
+`.vpg/preferences/<principal>/`, also inside the private project.
+
+Use `--human "<name>"` when initializing, or configure `humans:` before scoring
+alternatives and recording preferences. No personal identity is assumed.
+The standalone scorer requires an explicit `--data` directory outside the
+toolkit checkout.
+
+## Governed changes
+
+N25 produces a learning proposal; it never applies it automatically. A named
+human can move a copied built-in rule into `candidate`, or revise or retire it.
+Candidate rules then follow the ordinary lifecycle:
+
+```text
+candidate -> observed_again -> validated -> approved -> adopted -> monitored
 ```
-candidate → observed_again → validated → approved → adopted → monitored → revised | retired
+
+Revising or retiring an enforced policy is a human decision. Evidence references,
+observations and approval history created by these transitions remain private.
+
+```sh
+python -m vpg memory status --rules /path/to/private-film/.vpg/rules.json
+# Human-only actions, after reviewing the evidence:
+python -m vpg memory promote --rules /path/to/private-film/.vpg/rules.json \
+  --rule R-EXAMPLE --to candidate --by "<name>" --human --evidence "<project evidence>"
+python -m vpg memory apply --rules /path/to/private-film/.vpg/rules.json \
+  --proposal /path/to/private-film/learning-proposal.json --approved-by "<name>"
 ```
 
-| Step | Gate |
-|---|---|
-| observed_again | ≥ 2 distinct evidence refs (iterations or productions) |
-| validated | an executable check or concrete never/always cases, plus validation evidence (a test id or a run) |
-| approved | a named human (`--human`; agent and dry-run actors are refused) |
-| adopted | already approved, plus the rubric or config path the rule now lives in |
-| monitored | ≥ 1 production observation after adoption |
-| revised | a reason and evidence; for an approved or enforced rule, a named human. The prior version is kept in `previous_versions`, and the rule goes back through validation. |
-| retired | a reason and evidence; for an approved or enforced rule, a named human |
-
-**Enforcement follows the lifecycle.** An adopted or monitored rule is enforced: its rubric dimensions block at their declared level. An approved or validated rule is advisory: its dimensions are downgraded to SHOULD and its findings to nits, reported but never blocking. Earlier states are inactive. This is how an unreviewed lesson is prevented from corrupting stable production rules.
-
-## The learning loop after each production
-
-1. N25's tool builds a proposal from the run's defects and comparisons. It holds:
-   - observations of existing rules (whether the rule fired, and whether it helped);
-   - candidates for new failure patterns;
-   - project-specific items, kept apart from reusable ones.
-2. The Learning and Memory agent writes `lessons.json`, each lesson classed reusable or project-specific with evidence, and updates `controls/memory.md`.
-3. Wei reviews the proposal and applies it: `python -m vpg memory apply --proposal …/learning-proposal.json --approved-by Wei`.
-4. Wei promotes a rule once its evidence is sufficient: `python -m vpg memory promote --rule R-… --to approved --by Wei --human --evidence "…"`.
-5. Every write bumps the rule-base version, archives the previous file and appends to the changelog.
-
-## Spec proposals, baselines and judge calibration (v1.9)
-
-- In the quality workflow, N21 may propose a change to a spec rule when feedback shows the spec is wrong rather than the
-  build. A proposal is listed by `vpg status`; a person files it as a change request, and nothing changes the spec
-  without one. See [quality workflow](quality-workflow.md#spec-proposals).
-- The accepted baseline the ratchet compares against (`previous_best` in a benchmark registry) is set only by a named
-  human with a reason, and a registry pinned in GATES.yaml changes only through a change request.
-- A judge's verdicts gate nothing until its agreement with a named human's labels is measured
-  ([judging](judging.md#calibration)).
-
-## Seed state (v1.0)
-
-46 rules from the case study: 38 adopted, 3 approved (project-specific, deliberately never defaults), 4 validated (critic-derived, advisory until Wei approves), 1 candidate (found by this workflow's own dry run). Every adopted rule's approval cites the message in which Wei stated the requirement. The numeric thresholds are marked "calibration pending".
+The shipped rule file is read-only to memory commands. Never use a private
+production as a source of public test records. A reusable improvement is authored
+as a new generic change with synthetic tests and reviewed before publication.

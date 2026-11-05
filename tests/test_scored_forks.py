@@ -89,7 +89,7 @@ def test_old_and_scored_concepts_validate():
 def test_n06_records_scores_and_selects_top_concept(project, tmp_path):
     proj, _wf = project
     eng = Engine(proj)
-    eng.state.runtime.accepted_policy = {"humans": ["Wei"], "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    eng.state.runtime.accepted_policy = {"humans": ["Reviewer"], "autonomy": {"mode": "provisional", "principal": "Reviewer"}}
     workdir = proj / "work/n06_creative_direction/a1"
     workdir.mkdir(parents=True)
     concepts_path = workdir / "concepts.json"
@@ -191,10 +191,10 @@ def test_default_workflow_end_review_records_choice_and_release(tmp_path, monkey
     for doc in ("product", "creative", "design", "production", "evaluation", "memory"):
         shutil.copy2(PKG / "examples/sample-demo/controls" / f"{doc}.md", proj / "controls" / f"{doc}.md")
     (proj / "vpg.project.yaml").write_text(json.dumps({"id": "review", "name": "review", "workflow": "default",
-                                                        "humans": ["Wei"]}))
+                                                        "humans": ["Reviewer"]}))
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None: tmp_path / "prefs")
-    eng.state.runtime.accepted_policy = {"humans": ["Wei"], "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    eng.state.runtime.accepted_policy = {"humans": ["Reviewer"], "autonomy": {"mode": "provisional", "principal": "Reviewer"}}
 
     n05_dir = proj / "work/n05_narrative_ideation/a1"
     n05_dir.mkdir(parents=True)
@@ -258,7 +258,7 @@ def test_default_workflow_end_review_records_choice_and_release(tmp_path, monkey
     decision_path = proj / "decision.json"
     decision_path.write_text(json.dumps(decision))
 
-    eng.record_review(decision_path, actor="Wei")
+    eng.record_review(decision_path, actor="Reviewer")
 
     assert eng.rt("n23_final_verification").status == S.STEP_PASS
     pref_row = json.loads((tmp_path / "prefs/decisions.jsonl").read_text().splitlines()[0])
@@ -279,12 +279,12 @@ def test_review_record_refuses_standing_provisional_without_confirm(tmp_path, mo
     (proj / "controls").mkdir(parents=True)
     for doc in ("product", "creative", "design", "production", "evaluation", "memory"):
         shutil.copy2(PKG / "examples/sample-demo/controls" / f"{doc}.md", proj / "controls" / f"{doc}.md")
-    (proj / "vpg.project.yaml").write_text(json.dumps({"id": "standing", "name": "standing", "workflow": "default", "humans": ["Wei"]}))
+    (proj / "vpg.project.yaml").write_text(json.dumps({"id": "standing", "name": "standing", "workflow": "default", "humans": ["Reviewer"]}))
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None: tmp_path / "prefs")
-    eng.state.runtime.accepted_policy = {"humans": ["Wei"], "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    eng.state.runtime.accepted_policy = {"humans": ["Reviewer"], "autonomy": {"mode": "provisional", "principal": "Reviewer"}}
     eng.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
     master = proj / "renders/master.mp4"; master.parent.mkdir(); master.write_bytes(b"x")
     eng.state.runtime.current_version = 1
     eng.state.artifacts["master"] = ArtifactRecord(id="master", key="master", path="renders/master.mp4", sha256=sha256_file(master),
@@ -304,7 +304,7 @@ def test_review_record_refuses_standing_provisional_without_confirm(tmp_path, mo
     d["release"] = "approve"; d["ack_warnings"] = "all"; d["confirm_provisional"] = None
     dp = proj / "decision.json"; dp.write_text(json.dumps(d))
     with pytest.raises(Exception, match="standing provisional"):
-        eng.record_review(dp, actor="Wei")
+        eng.record_review(dp, actor="Reviewer")
     assert not (tmp_path / "prefs/decisions.jsonl").exists()
 
 

@@ -1,8 +1,8 @@
-# Accessibility and legibility — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Accessibility and legibility — reusable rubric; see knowledge/rules.json for default policy.
 id: accessibility
 name: Accessibility and legibility
 reviewer: accessibility-reviewer
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: LEG-SIZE
   name: Readable text size

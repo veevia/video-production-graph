@@ -17,7 +17,7 @@
 | Decision authority | Scores accessibility dimensions; tool findings are binding. |
 | Constraints | Cannot waive a legibility finding<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: accessibility |
-| Escalation | A check can't run → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | A check can't run → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | FDE Design Reviewer |
 
 ## Asset Generation Agent (`asset-generation`)
@@ -33,7 +33,7 @@
 | Decision authority | Chooses generation prompts and capture paths within the plan. |
 | Constraints | Product UI captured, never generated<br>Rights recorded per asset<br>Single-flight on the image API and the capture browser<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: asset-plan, assets |
-| Escalation | Rights need clearance, or a source is missing → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Rights need clearance, or a source is missing → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | impeccable-asset-producer |
 
 ## Remotion or Composition Agent (`composition`)
@@ -49,7 +49,7 @@
 | Decision authority | Chooses assembly parameters; never re-renders upstream work. |
 | Constraints | Remotion only after company-licence clearance<br>Reuse upstream outputs unchanged<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: assembly |
-| Escalation | The assembly command fails 3 times → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | The assembly command fails 3 times → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Prototype Runner &amp; QA |
 
 ## Context Research Agent (`context-research`)
@@ -62,10 +62,10 @@
 | Inputs and allowable context | control:memory<br>control:product<br>defects:open<br>state:inputs.brief<br>state:inputs.sources<br>state:production.open_questions<br>Controls read: memory, product; write: — |
 | Skills and tools | Skills: context-intake, context-pull, evidence-tagging, wiki-query, workiq-grounding<br>Tools: WorkIQ MCP (read-only), local file search, markitdown MCP, vpg.tools.sources:validate |
 | Outputs | gaps, intake_notes, sources, sources_validated |
-| Decision authority | Decides which sources are registered and how each is tagged. Cannot decide that a gap is acceptable (blocking gaps go to Wei). |
+| Decision authority | Decides which sources are registered and how each is tagged. Cannot decide that a gap is acceptable (blocking gaps go to the project owner). |
 | Constraints | Read-only on raw intake<br>Never quotes confidential meeting content or names<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: intake |
-| Escalation | Blocking gap, or 2 intake loops without closing the gaps → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Blocking gap, or 2 intake loops without closing the gaps → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Meeting Harvester |
 
 ## Creative Critic Agent (`creative-critic`)
@@ -81,7 +81,7 @@
 | Decision authority | Scores rubric dimensions and raises defects; cannot approve a release. |
 | Constraints | Judges rendered frames, not source<br>Never scores human-listening dimensions<br>Never reviews work it produced<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: creative, narrative-pacing |
-| Escalation | Cannot judge a dimension from the evidence available → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Cannot judge a dimension from the evidence available → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | FDE Design Reviewer |
 
 ## Creative Director Agent (`creative-director`)
@@ -94,10 +94,10 @@
 | Inputs and allowable context | artifact:brief<br>artifact:concepts<br>artifact:product_summary<br>control:creative<br>control:memory<br>control:product<br>feedback:open<br>Controls read: creative, evaluation, memory, product; write: creative |
 | Skills and tools | Skills: concept-creator, design-criteria, design-principles, traffic-light-decisions, video-prototype, video-shotcraft<br>Tools: — |
 | Outputs | concepts, creative_decision, narrative |
-| Decision authority | Recommends the direction; Wei selects it. |
+| Decision authority | Recommends the direction; the project owner selects it. |
 | Constraints | ≥3 distinct anchors<br>Records a rejection reason for every alternative<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: concepts, creative-direction |
-| Escalation | Wei rejects every direction twice → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | the project owner rejects every direction twice → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Design Synthesist |
 
 ## Design-System Reviewer (`design-system-reviewer`)
@@ -113,7 +113,7 @@
 | Decision authority | Scores design dimensions; tool findings are binding. |
 | Constraints | Cannot pass a tool-failed dimension<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: design-compliance |
-| Escalation | Tokens can't be traced → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Tokens can't be traced → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | FDE Design Reviewer |
 
 ## Final Approval Agent (`final-approval`)
@@ -126,10 +126,10 @@
 | Inputs and allowable context | artifact:master<br>artifact:release_summary<br>control:production<br>defects:open<br>reviews:current<br>Controls read: evaluation, production; write: — |
 | Skills and tools | Skills: shipping-and-launch, traffic-light-decisions<br>Tools: vpg.tools.package:build, vpg.tools.verify:final |
 | Outputs | manifest, package, release_summary, verification |
-| Decision authority | Prepares the decision; only Wei releases. |
+| Decision authority | Prepares the decision; only the project owner releases. |
 | Constraints | Never claims human approval; dry-run approvals are labelled<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: delivery, release |
-| Escalation | A release condition fails twice → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | A release condition fails twice → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Repo Steward |
 
 ## Learning and Memory Agent (`learning-memory`)
@@ -145,7 +145,7 @@
 | Decision authority | Proposes only; a named human applies rule changes. |
 | Constraints | Evidence before promotion<br>Protected scopes are untouchable<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: learning |
-| Escalation | A lesson needs Wei's classification → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | A lesson needs the project owner's classification → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Skill &amp; Agent Smith |
 
 ## Motion Design Agent (`motion-design`)
@@ -161,7 +161,7 @@
 | Decision authority | Decides motion within the storyboard and design tokens. |
 | Constraints | One message per frame<br>Rings ≥1 s on measured boxes<br>No ghost text<br>Single-flight on the renderer<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: motion |
-| Escalation | Legibility and design rules conflict in a scene → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Legibility and design rules conflict in a scene → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Prototype Runner &amp; QA |
 
 ## Narrative and Script Agent (`narrative-script`)
@@ -177,7 +177,7 @@
 | Decision authority | Chooses wording within product truth and the creative direction. |
 | Constraints | Only verified claims and source terms<br>Cut words, not evidence<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: script |
-| Escalation | Accuracy and the runtime cap cannot both be met → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Accuracy and the runtime cap cannot both be met → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Demo &amp; Deck Producer |
 
 ## Product Accuracy Reviewer (`product-accuracy-reviewer`)
@@ -190,10 +190,10 @@
 | Inputs and allowable context | artifact:asset_plan<br>artifact:script<br>artifact:text_layers<br>control:product<br>Controls read: product; write: — |
 | Skills and tools | Skills: evidence-tagging, grounding-critic-designer<br>Tools: vpg.tools.accuracy:check_film |
 | Outputs | accuracy_report |
-| Decision authority | Scores accuracy dimensions; product truth itself is changed only by Wei through a change request. |
+| Decision authority | Scores accuracy dimensions; product truth itself is changed only by the project owner through a change request. |
 | Constraints | Engineer terminology is the source of truth<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: product-accuracy |
-| Escalation | A claim needs a source owner → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | A claim needs a source owner → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | FDE Code Reviewer |
 
 ## Product Understanding Agent (`product-understanding`)
@@ -206,15 +206,15 @@
 | Inputs and allowable context | artifact:brief<br>control:product<br>state:inputs.sources<br>Controls read: evaluation, product; write: product |
 | Skills and tools | Skills: evidence-tagging, grounding-critic-designer, jobs-to-be-done, webapp-testing<br>Tools: Playwright (read-only prototype walk), transcript search |
 | Outputs | product_summary |
-| Decision authority | Drafts product truth. Wei approves it, and after approval it is locked. |
+| Decision authority | Drafts product truth. the project owner approves it, and after approval it is locked. |
 | Constraints | Every term and claim cites a source<br>Read-only prototype walks (no submits)<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: product-truth |
-| Escalation | An unsourced claim is needed for the story → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | An unsourced claim is needed for the story → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Prototype Runner &amp; QA |
 
 ## Production Orchestrator (`production-orchestrator`)
 
-**Responsibility:** Run the graph: define the brief with Wei, dispatch agents, interpret feedback, gate versions, plan targeted rework, keep lineage.
+**Responsibility:** Run the graph: define the brief with the project owner, dispatch agents, interpret feedback, gate versions, plan targeted rework, keep lineage.
 
 | Field | Definition |
 |---|---|
@@ -225,7 +225,7 @@
 | Decision authority | Gates versions against explicit rules. Cannot approve objectives, product truth, direction, design or release. |
 | Constraints | Parallel only where write sets and resources are disjoint<br>Bounded loops only<br>Tool &gt; agent for MUST checks<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: brief, gate, regeneration |
-| Escalation | Gate blocked, a loop bound is exceeded, or an integrity violation → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Gate blocked, a loop bound is exceeded, or an integrity violation → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | none (this engine: vpg) |
 
 ## Storyboard Agent (`storyboard`)
@@ -241,7 +241,7 @@
 | Decision authority | Decides beat structure and seams within the script and the design system. |
 | Constraints | One objective per beat<br>Every seam specified (video-shotcraft)<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: storyboard |
-| Escalation | The one-message rule cannot fit the cap → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | The one-message rule cannot fit the cap → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | Demo &amp; Deck Producer |
 
 ## Technical QA Agent (`technical-qa`)
@@ -257,7 +257,7 @@
 | Decision authority | Reports measured defects; can't waive a finding. |
 | Constraints | Measurements only; no taste<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: technical |
-| Escalation | Media can't be probed → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Media can't be probed → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | FDE Test Engineer |
 
 ## Visual Design Agent (`visual-design`)
@@ -270,10 +270,10 @@
 | Inputs and allowable context | artifact:creative_decision<br>control:creative<br>control:design<br>control:production<br>state:inputs.sources<br>Controls read: creative, design, production; write: design, production |
 | Skills and tools | Skills: brand-guidelines, design-system-as-infrastructure, design-system-author, frontend-design, impeccable<br>Tools: WCAG contrast calculator (vpg.tools._common:contrast) |
 | Outputs | design_system |
-| Decision authority | Proposes tokens; Wei approves them and they are locked. |
+| Decision authority | Proposes tokens; the project owner approves them and they are locked. |
 | Constraints | Supplied logos only<br>WCAG-passing text pairs<br>No imported template skin<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: visual-system |
-| Escalation | Brand constraints conflict → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Brand constraints conflict → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | FDE Design Reviewer |
 
 ## Voice and Audio Agent (`voice-audio`)
@@ -289,5 +289,5 @@
 | Decision authority | Chooses the takes that pass QC; never decides that the voice 'sounds right'. |
 | Constraints | Never attenuate inside speech<br>Human listening stays pending<br>Single-flight on the TTS model<br>Works only from its task packet's allowed inputs; writes only its declared outputs |
 | Evaluation criteria | rubrics: voice-audio |
-| Escalation | Voice identity cannot be held, or a unit fails 3 renders → Wei (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
+| Escalation | Voice identity cannot be held, or a unit fails 3 renders → the project owner (The engine sets the node BLOCKED and writes .vpg/escalations/&lt;node&gt;-&lt;n&gt;.md) |
 | Runtime binding | none (local TTS pipeline) |

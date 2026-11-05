@@ -45,7 +45,7 @@ class Ctx:
 
 
 def layer(**kw):
-    base = {"id": "L1", "scene": "B1", "kind": "text", "text": "Expected range", "font": "Mona Sans", "font_px": 38, "bold": False,
+    base = {"id": "L1", "scene": "B1", "kind": "text", "text": "Card group", "font": "Mona Sans", "font_px": 38, "bold": False,
             "color": "#1A1F26", "bg": "#FFFFFF", "bbox": [200, 300, 400, 50], "start": 0.0, "end": 5.0, "opacity": 1.0, "essential": True}
     base.update(kw)
     return base
@@ -58,19 +58,19 @@ def dims(result):
 # ------------------------------------------------------------------------------------------------------ captions
 def test_caption_sync_detects_lag_and_early_clear():
     rules = {"max_lag_s": 0.0, "max_chain_lead_s": 0.2, "max_first_lead_s": 0.45, "max_early_clear_s": 0.1, "max_cps": 20, "min_duration_s": 0.8}
-    spans = [{"unit": "u1", "text": "Every plant reports water use.", "start": 1.0, "end": 3.0}]
-    good = captions.sync([{"start": 0.8, "end": 3.2, "text": "Every plant reports water use."}], spans, rules)
+    spans = [{"unit": "u1", "text": "Every card displays its label.", "start": 1.0, "end": 3.0}]
+    good = captions.sync([{"start": 0.8, "end": 3.2, "text": "Every card displays its label."}], spans, rules)
     assert good["lags"] == 0 and not good["findings"]
-    late = captions.sync([{"start": 1.3, "end": 3.2, "text": "Every plant reports water use."}], spans, rules)
+    late = captions.sync([{"start": 1.3, "end": 3.2, "text": "Every card displays its label."}], spans, rules)
     assert late["lags"] == 1 and any(f.check == "captions:lag" for f in late["findings"])
-    early = captions.sync([{"start": 0.8, "end": 2.5, "text": "Every plant reports water use."}], spans, rules)
+    early = captions.sync([{"start": 0.8, "end": 2.5, "text": "Every card displays its label."}], spans, rules)
     assert any(f.check == "captions:early-clear" for f in early["findings"])
-    fast = captions.sync([{"start": 0.9, "end": 1.2, "text": "Every plant reports water use."}], [{**spans[0], "end": 1.2}], rules)
+    fast = captions.sync([{"start": 0.9, "end": 1.2, "text": "Every card displays its label."}], [{**spans[0], "end": 1.2}], rules)
     assert any(f.check == "captions:rate" for f in fast["findings"])
 
 
 def test_srt_roundtrip():
-    cues = captions.parse_srt("1\n00:00:00,400 --> 00:00:04,992\nEvery plant\n\n2\n00:00:05,052 --> 00:00:10,609\nNext line\n")
+    cues = captions.parse_srt("1\n00:00:00,400 --> 00:00:04,992\nEvery card\n\n2\n00:00:05,052 --> 00:00:10,609\nNext line\n")
     assert [c["start"] for c in cues] == [0.4, 5.052] and cues[1]["text"] == "Next line"
 
 
@@ -122,11 +122,11 @@ def test_contrast_matches_wcag_reference():
 # ------------------------------------------------------------------------------------------------------- design
 def test_design_compliance_flags_font_logo_palette(tmp_path):
     ok = design.compliance(Ctx(tmp_path, loads={"text_layers": {"layers": [layer(), {
-        "id": "logo", "scene": "B1", "kind": "logo", "asset": "assets/brand/northwind-mark.png", "bbox": [120, 120, 128, 128], "start": 0, "end": 5}]}}))
+        "id": "logo", "scene": "B1", "kind": "logo", "asset": "assets/brand/shape-mark.png", "bbox": [120, 120, 128, 128], "start": 0, "end": 5}]}}))
     assert not ok.findings
     bad = design.compliance(Ctx(tmp_path, loads={"text_layers": {"layers": [
         layer(id="font", font="Inter"), layer(id="color", color="#FFBF00"),
-        {"id": "squash", "scene": "B1", "kind": "logo", "asset": "assets/brand/northwind-mark.png", "bbox": [120, 120, 200, 100], "start": 0, "end": 5},
+        {"id": "squash", "scene": "B1", "kind": "logo", "asset": "assets/brand/shape-mark.png", "bbox": [120, 120, 200, 100], "start": 0, "end": 5},
         {"id": "fake", "scene": "B1", "kind": "logo", "asset": "assets/brand/redrawn.png", "bbox": [0, 0, 10, 10], "start": 0, "end": 5}]}}))
     assert {"DES-TYPE", "DES-TOKENS", "DES-PROHIBITED", "DES-LOGO"} <= set(dims(bad))
     assert sum(f.dimension == "DES-LOGO" for f in bad.findings) == 2   # deformation + unapproved asset
@@ -141,7 +141,7 @@ def test_palette_check_rejects_low_contrast_pair(tmp_path):
 # ------------------------------------------------------------------------------------------------------- assets
 def test_asset_plan_rules(tmp_path):
     good = {"id": "A1", "beats": ["B1"], "role": "diagram", "source_type": "generated", "rights": "generated-internal",
-            "spec": {"w": 10, "h": 10, "format": "png"}, "subject": "one plant's water-use line leaving its expected band"}
+            "spec": {"w": 10, "h": 10, "format": "png"}, "subject": "three geometric cards with an outline on the middle circle"}
     board = {"beats": [{"id": "B1"}]}
     assert assets.check_plan(Ctx(tmp_path, loads={"asset_plan": {"assets": [good]}, "storyboard": board})).ok
     bad = [dict(good, id="ui", role="product-ui", source_type="generated"),
@@ -159,14 +159,14 @@ def _script(text, claims=(), terms=()):
 
 
 def test_accuracy_flags_prohibited_and_unverified(tmp_path):
-    assert accuracy.check_script(Ctx(tmp_path, loads={"script": _script("A seven-day outlook helps.", ["C02"], ["seven-day outlook"])})).ok
+    assert accuracy.check_script(Ctx(tmp_path, loads={"script": _script("The detail panel shows Card B.", ["C02"], ["detail panel"])})).ok
     res = accuracy.check_script(Ctx(tmp_path, loads={"script": _script("It predicts demand.", ["C99"], ["magic score"])}))
     text = " ".join(res.messages)
     assert "prohibited term 'predicts'" in text and "C99" in text and "magic score" in text
 
 
 def test_accuracy_flags_generated_ui(tmp_path):
-    ctx = Ctx(tmp_path, loads={"script": _script("A seven-day outlook helps.", ["C02"]), "text_layers": {"layers": [layer(text="It predicts water use")]}},
+    ctx = Ctx(tmp_path, loads={"script": _script("The detail panel shows Card B.", ["C02"]), "text_layers": {"layers": [layer(text="It predicts a selection")]}},
               asset_plan=[{"id": "A3", "role": "product-ui", "source_type": "generated"}])
     res = accuracy.check_film(ctx)
     assert {"ACC-UI", "ACC-TERMS"} <= set(dims(res))
@@ -175,7 +175,7 @@ def test_accuracy_flags_generated_ui(tmp_path):
 
 # ------------------------------------------------------------------------------------------------------- pacing
 def test_runtime_estimate_blocks_over_cap(tmp_path):
-    short = pacing.estimate_script(Ctx(tmp_path, loads={"script": _script("Every plant reports its water use."), "brief": {"runtime_max_s": 20}}))
+    short = pacing.estimate_script(Ctx(tmp_path, loads={"script": _script("Three cards share a board."), "brief": {"runtime_max_s": 20}}))
     assert short.ok
     long = pacing.estimate_script(Ctx(tmp_path, loads={"script": _script(" ".join(["word"] * 80)), "brief": {"runtime_max_s": 20}}))
     assert not long.ok and "exceeds" in long.messages[0]
@@ -199,7 +199,7 @@ def _voice_ctx(tmp, wav, spans, direction):
     return Ctx(tmp, loads={"timings": {"units": spans}, "script": _script("one two three"), "voice_direction": direction}, paths={"voice": wav})
 
 
-def test_voice_direction_requires_adult(tmp_path):
+def test_voice_direction_matches_the_project_profile(tmp_path):
     wav = tmp_path / "v.wav"
     _wav(wav, 3)
     spans = [{"unit": "u1", "text": "one two three", "start": 0.2, "end": 2.8}]
@@ -209,6 +209,11 @@ def test_voice_direction_requires_adult(tmp_path):
     assert not kid.ok and "adult" in kid.messages[0]
     claimed = audio.check_voice(_voice_ctx(tmp_path, wav, spans, {"age": "adult", "delivery": "warm, confident professional"}))
     assert not claimed.ok and "listening" in " ".join(claimed.messages)
+    configured = _voice_ctx(tmp_path, wav, spans, {"age": "character", "delivery": "clear fictional character", "human_listening": "pending"})
+    configured._fm = {"production": {"voice_age": "character"}}
+    assert audio.check_voice(configured).ok
+    configured._fm = {"production": {"voice_age": "<fill>"}}
+    assert any("must be configured" in m for m in audio.check_voice(configured).messages)
 
 
 def test_voice_check_catches_dropped_unit(tmp_path):

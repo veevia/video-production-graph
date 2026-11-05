@@ -63,7 +63,7 @@ def dry_run(out: str | None = None, keep: bool = False) -> dict:
         if not injected["done"] and e.state.runtime.current_version == 1 and all(
                 e.rt(n).status == NodeStatus.STEP_PASS for n in REVIEWERS):
             e.add_feedback("The captions appear after the words are spoken, right from the first line.",
-                           actor="simulated reviewer (dry run, not Wei)", at="00:00–00:05", severity="P2")
+                           actor="simulated reviewer (dry run, not the project owner)", at="00:00–00:05", severity="P2")
             injected["done"] = True
 
     eng.on_step = hook

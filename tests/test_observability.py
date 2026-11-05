@@ -32,7 +32,7 @@ def _run_to_end(proj, human_b=False):
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=300)
     if human_b:
-        eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+        eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
         eng.run(max_steps=300)
     return eng
 
@@ -69,7 +69,7 @@ def test_opted_in_runs_write_evaluation_events_and_the_ledger_verifies(tmp_path)
     assert tel["coverage"]["ok"], tel["coverage"]
     assert tel["coverage"]["orphan_events"] == []      # every engine-written event links to a derived span
     decision = next(d for d in evals if d["name"] == "vpg.human_decision")
-    assert decision["evidence_tag"] == "observed" and decision["evaluator"] == "Wei"
+    assert decision["evidence_tag"] == "observed" and decision["evaluator"] == "Reviewer"
 
 
 def test_default_runs_write_no_new_events_but_still_derive_full_coverage(tmp_path):
@@ -153,7 +153,7 @@ def test_direct_runs_are_recorded_never_registered(tmp_path, capsys):
     tel = telemetry.derive(proj)
     assert any(s["name"] == "vpg.direct_run d_build" for s in tel["spans"])
     assert any(e["name"] == "vpg.direct_run" and e["gen_ai.evaluation.score.label"] == "ungoverned" for e in tel["evaluations"])
-    eng.decide("b_plan", "approved", actor="Wei", reason="go on")   # the governed path still works afterwards
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="go on")   # the governed path still works afterwards
     eng.run(max_steps=300)
     assert eng.state.runtime.status.value == "RUN_PASS"
 
@@ -166,7 +166,7 @@ def test_a_rollback_keeps_direct_runs_and_numbers_never_repeat(tmp_path):
     cmd = [sys.executable, "-c", "print('first build')"]
     eng.record_direct_run("d_build", "agent:builder", "the gate waited", command=cmd)
     log1 = (proj / ".vpg/direct-runs/DR-001.log").read_text()
-    eng.rollback(first, actor="Wei")
+    eng.rollback(first, actor="Reviewer")
     assert [d.id for d in eng.state.history.direct_runs] == ["DR-001"]      # a build outside the graph stays on record
     assert any("direct run" in w for w in eng.status()["warnings"])
     eng.record_direct_run("d_build", "agent:builder", "again", command=[sys.executable, "-c", "print('second build')"])
@@ -208,14 +208,14 @@ def test_direct_run_refusals(tmp_path, kwargs, match):
 def _provisional_project(tmp_path, monkeypatch, expiry_h=None):
     import vpg.engine as ve
     proj = make_project(tmp_path, human_b=True, lock_b=("design",))
-    autonomy = {"mode": "provisional", "principal": "Wei", **({"provisional_expiry_h": expiry_h} if expiry_h else {})}
-    _cfg(proj, humans=["Wei"], privacy={"names": "none", "reason": "synthetic"},
+    autonomy = {"mode": "provisional", "principal": "Reviewer", **({"provisional_expiry_h": expiry_h} if expiry_h else {})}
+    _cfg(proj, humans=["Reviewer"], privacy={"names": "none", "reason": "synthetic"},
          reviews={"binding": "require", "independence": "require"},
          loop_budget={"on_exhaust": "extend_if_converging"}, autonomy=autonomy)
     monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go ahead while I am away",
+    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Reviewer", instruction="go ahead while I am away",
                reason="provisional", provisional=True)
     return proj, eng
 

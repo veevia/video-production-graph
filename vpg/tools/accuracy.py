@@ -2,7 +2,7 @@
 
 product.md front-matter is the machine contract:
   terminology:      [{term, source}]            words the film may use for the product (engineers' terms)
-  prohibited:       [{term, use_instead, source}] words it must not use (e.g. "predicts" when the product shows an outlook)
+  prohibited:       [{term, use_instead, source}] terms that would imply unsupported behavior
   verified_claims:  [{id, text, source}]        the only claims a script unit may make
 """
 

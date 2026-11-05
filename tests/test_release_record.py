@@ -1,7 +1,4 @@
-"""N23's release summary must show the approver what the engine cannot verify: who acted under a human name, how fast,
-and why (first real run, finding #26: it printed "Dry-run auto-approvals: none" for a run whose 20 human decisions were
-all recorded by an agent), plus drifted inputs, declared redactions and batch-submitted reviews. It must never print a
-listed name. All names below are fictional placeholders."""
+"""Synthetic regression coverage: test release record."""
 
 from __future__ import annotations
 
@@ -24,26 +21,26 @@ def _ev(clock: str, type_: str, **data) -> dict:
 
 def test_human_record_pairs_each_answer_with_its_own_prompt_and_flags_it():
     events = [
-        _ev("00:00", "awaiting_human", node="n03", approver="Wei"),
-        _ev("29:00", "decision", node="n03", decision="approved", actor="Wei", human=True, reason="no stop until v1"),
-        _ev("30:00", "awaiting_human", node="n04", approver="Wei"),
-        _ev("30:08", "decision", node="n04", decision="approved", actor="WEI", human=True, reason="No stop until  v1"),
+        _ev("00:00", "awaiting_human", node="n03", approver="Reviewer"),
+        _ev("29:00", "decision", node="n03", decision="approved", actor="Reviewer", human=True, reason="no stop until v1"),
+        _ev("30:00", "awaiting_human", node="n04", approver="Reviewer"),
+        _ev("30:08", "decision", node="n04", decision="approved", actor="REVIEWER", human=True, reason="No stop until  v1"),
         _ev("31:00", "escalated", node="integrity", reason="integrity"),
-        _ev("31:01", "config_accepted", actor="Wei", reason=""),
+        _ev("31:01", "config_accepted", actor="Reviewer", reason=""),
         _ev("32:00", "change_request", id="CR-001", doc="product", by="agent:feedback-interpreter", reason="closes D018"),
-        _ev("32:07", "change_request_approved", id="CR-001", doc="product", by="Wei"),
+        _ev("32:07", "change_request_approved", id="CR-001", doc="product", by="Reviewer"),
         _ev("33:00", "escalated", node="n21", reason="E37"),
         _ev("38:00", "escalated", node="n10", reason="rights"),                  # a later escalation elsewhere
-        _ev("38:10", "unblocked", node="n21", actor="Wei", note="Delegated under Wei's standing instruction"),
-        _ev("39:00", "control_restored", doc="creative", actor="Wei", kept="x"),  # 31:00 was already answered at 31:01
-        _ev("40:00", "feedback", id="F001", actor="Wei", at="", version=1),
+        _ev("38:10", "unblocked", node="n21", actor="Reviewer", note="Delegated under Reviewer's standing instruction"),
+        _ev("39:00", "control_restored", doc="creative", actor="Reviewer", kept="x"),  # 31:00 was already answered at 31:01
+        _ev("40:00", "feedback", id="F001", actor="Reviewer", at="", version=1),
         _ev("40:01", "feedback", id="F002", actor="agent:critic", at="", version=1),
-        _ev("41:00", "defect_resolved", id="D018", actor="Wei", evidence="CR-001 added the verified claim", was="open", version=8),
+        _ev("41:00", "defect_resolved", id="D018", actor="Reviewer", evidence="CR-001 added the verified claim", was="open", version=8),
         _ev("42:00", "invalidated", targets=["n07"], reason="more words (requested by agent:script-writer)"),
         _ev("42:10", "invalidated", targets=["n01"], reason="late source (requested by cli)"),
         _ev("43:00", "decision", node="n09", decision="approved", actor="dry-run-auto", human=False, reason="dry run"),
         {"ts": "2026-09-27T00:44:00+00:00", "type": "decision", "data": ["not", "a", "dict"]},
-        _ev("45:00", "decision", node="n06", decision="approved", actor="Wei", human=True, reason=None),
+        _ev("45:00", "decision", node="n06", decision="approved", actor="Reviewer", human=True, reason=None),
     ]
     rows = {(r["action"], r["subject"]): r for r in human_record(events)}
     assert set(rows) == {("decision", "n03 → approved"), ("decision", "n04 → approved"), ("config_accepted", "configuration change"),
@@ -68,35 +65,35 @@ def test_human_record_pairs_each_answer_with_its_own_prompt_and_flags_it():
 
 def test_human_record_includes_structured_relays_as_agent_acts():
     rows = human_record([
-        _ev("00:00", "awaiting_human", node="n04", approver="Wei"),
+        _ev("00:00", "awaiting_human", node="n04", approver="Reviewer"),
         _ev("00:05", "decision", node="n04", decision="approved", actor="agent:runner", human=True, reason="proceed",
-            relayed=True, principal="Wei", instruction="approve this and keep going", instruction_at="2026-09-30T12:00:00Z"),
+            relayed=True, principal="Reviewer", instruction="approve this and keep going", instruction_at="2026-09-30T12:00:00Z"),
     ])
     assert len(rows) == 1
     row = rows[0]
-    assert row["actor"] == "agent:runner" and row["principal"] == "Wei" and row["instruction"].startswith("approve")
+    assert row["actor"] == "agent:runner" and row["principal"] == "Reviewer" and row["instruction"].startswith("approve")
     assert "relayed" in row["codes"] and "delegation" not in row["codes"]
     assert FAST_S == 60
 
 
 def test_an_answered_escalation_is_not_reused_and_the_workflow_dry_run_actor_is_left_out():
     events = [_ev("00:00", "escalated", node="n21", reason="E37"),
-              _ev("05:00", "unblocked", node="n21", actor="Wei", note="checked the take"),
-              _ev("09:00", "unblocked", node="n21", actor="Wei", note="checked it again"),     # no new escalation
+              _ev("05:00", "unblocked", node="n21", actor="Reviewer", note="checked the take"),
+              _ev("09:00", "unblocked", node="n21", actor="Reviewer", note="checked it again"),     # no new escalation
               _ev("10:00", "feedback", id="F009", actor="sim-bot", at="", version=1)]        # this workflow's dry-run actor
     rows = human_record(events, dry_run_actor="sim-bot")
     assert [(r["action"], r["latency_s"]) for r in rows] == [("unblocked", 300), ("unblocked", None)]
 
 
 def test_a_malformed_released_holds_value_never_crashes_or_splits_into_letters():
-    events = [_ev("00:00", "unblocked", node="n21", actor="Wei", note="a", released_holds=7),
-              _ev("01:00", "unblocked", node="n22", actor="Wei", note="b", released_holds="F001")]
+    events = [_ev("00:00", "unblocked", node="n21", actor="Reviewer", note="a", released_holds=7),
+              _ev("01:00", "unblocked", node="n22", actor="Reviewer", note="b", released_holds="F001")]
     assert [r["subject"] for r in human_record(events)] == ["n21", "n22"]
 
 
 def test_listed_names_in_free_text_are_masked():
     events = [_ev("00:00", "awaiting_human", node="n04"),
-              _ev("09:00", "decision", node="n04", decision="approved", actor="Wei", human=True,
+              _ev("09:00", "decision", node="n04", decision="approved", actor="Reviewer", human=True,
                   reason="blur jane placeholder in the header; Placeholder asked for it")]
     row = human_record(events, mask=masker(["Jane Placeholder"]))[0]
     assert "jane" not in row["reason"].lower() and row["reason"].count("[list entry #1]") == 2
@@ -130,12 +127,12 @@ def test_release_summary_lays_out_the_human_record_and_warnings(tmp_path):
     proj = _human_gated_project(tmp_path)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei", reason="Delegated under a standing instruction")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="Delegated under a standing instruction")
     text = "make the opening match the approved film"
-    eng.add_feedback(text, actor="Wei")
-    eng.run(max_steps=200)                             # the test interpreter closes it with no action: held for Wei (v1.2)
+    eng.add_feedback(text, actor="Reviewer")
+    eng.run(max_steps=200)                             # the test interpreter closes it with no action: held for Reviewer (v1.2)
     assert eng.state.runtime.status.value == "BLOCKED" and eng.state.evaluation.feedback[0].hold
-    eng.unblock("g_gate", actor="Wei", note="the opening stays as it is")
+    eng.unblock("g_gate", actor="Reviewer", note="the opening stays as it is")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
     (proj / "names.json").write_text(json.dumps({"names": ["Jane Placeholder", "Al"]}))
@@ -146,7 +143,7 @@ def test_release_summary_lays_out_the_human_record_and_warnings(tmp_path):
     report = json.loads((ctx.workdir / "verification.json").read_text())
     assert "## Human record" in summary and "## Warnings" in summary
     decision = next(r for r in report["human_record"] if r["action"] == "decision")
-    assert decision["actor"] == "Wei" and {"delegation", "fast"} <= set(decision["codes"])
+    assert decision["actor"] == "Reviewer" and {"delegation", "fast"} <= set(decision["codes"])
     feedback = next(r for r in report["human_record"] if r["action"] == "feedback")
     assert feedback["subject"] == "F001" and "make the opening" not in summary                # listed by id, never its text
     assert "held" in feedback["codes"]                                                          # the interpreter dismissed it
@@ -164,7 +161,7 @@ def test_release_writes_blind_review_packet_template_and_html(tmp_path):
     proj = _human_gated_project(tmp_path)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
     eng.run(max_steps=200)
     fork_dir = proj / "work/forks"
     fork_dir.mkdir(parents=True)
@@ -205,7 +202,7 @@ def test_release_warnings_report_drift_redaction_counts_and_a_batch_of_three_rev
     proj = _human_gated_project(tmp_path)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
     eng.run(max_steps=200)
     src = proj / "sources/spec.md"
     src.parent.mkdir(exist_ok=True)

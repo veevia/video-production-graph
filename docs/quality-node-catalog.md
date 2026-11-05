@@ -11,18 +11,18 @@
 | 1. Node ID and name | `n01_context_intake` — N01 Context discovery and intake · kind `agent` · phase Understand · subgraph `discovery` |
 | 2. Purpose | Find and register every source that can ground the film — brief, product evidence (prototype, demo recording, spec), brand authority, prior versions and feedback — with an evidence tag, without inventing any. |
 | 3. Required inputs | state:inputs.brief<br>files:sources/**<br>artifact:gaps<br>control:product<br>control:memory<br>defects:open |
-| 4. Relevant context | The production brief and the requester's messages<br>Project-hub raw intake (00_context_intake) and wiki<br>Earlier rounds, their reviews and the requester's feedback<br>Meeting recordings are cited by id, never quoted |
+| 4. Relevant context | The production brief and authorized project sources<br>Project-local source registry and reference documents<br>Earlier versions and feedback supplied for this project<br>Confidential recordings are cited by id, never quoted |
 | 5. State read | inputs.brief<br>inputs.constraints<br>production.open_questions |
 | 6. State written | inputs.sources<br>production.open_questions |
 | 7. Responsible agent | `context-research` (agents/context-research.yaml) |
 | 8. Skills and tools | Skills: context-intake, context-pull, workiq-grounding, evidence-tagging, wiki-query<br>Tools: markitdown MCP, WorkIQ MCP (read-only), local file search |
-| 9. Execution instructions | Register each source with id, path, kind (brief\|product\|prototype\|recording\|spec\|brand\|design\|feedback\|prior-version\|transcript\|url) and evidence (observed\|reported\|assumed). List open questions, and mark a question blocking only when the film cannot proceed without the answer. The film needs product evidence (a spec, prototype or recording) and brand authority registered. Register regular files only, each once, with its one kind (a directory, pipe or device is refused). N02 judges coverage by content. Only files stored in the project's own sources/ directory count (a symlinked sources/ counts nothing), and not copies of control documents or templates; a file registered under two kinds (the brief included) counts as neither, and an assumed source never counts; on a loop back from N02, resolve every gap in `artifact:gaps` by registering the missing source. A gap you cannot resolve stays open; never mark a question or a note as resolving it. When the intake loop runs out, N02 escalates to Wei, who supplies the source or waives the gap by name. Never summarise a source in place of registering it, and never quote confidential meeting content.<br>Prompt: `prompts/n01_context_intake.md` |
+| 9. Execution instructions | Register each source with id, path, kind (brief\|product\|prototype\|recording\|spec\|brand\|design\|feedback\|prior-version\|transcript\|url) and evidence (observed\|reported\|assumed). List open questions, and mark a question blocking only when the film cannot proceed without the answer. The film needs product evidence (a spec, prototype or recording) and brand authority registered. Register regular files only, each once, with its one kind (a directory, pipe or device is refused). N02 judges coverage by content. Only files stored in the project's own sources/ directory count (a symlinked sources/ counts nothing), and not copies of control documents or templates; a file registered under two kinds (the brief included) counts as neither, and an assumed source never counts; on a loop back from N02, resolve every gap in `artifact:gaps` by registering the missing source. A gap you cannot resolve stays open; never mark a question or a note as resolving it. When the intake loop runs out, N02 escalates to the project owner, who supplies the source or waives the gap by name. Never summarise a source in place of registering it, and never quote confidential meeting content.<br>Prompt: `prompts/n01_context_intake.md` |
 | 10. Expected outputs and artifacts | sources (json, sources) → inputs.sources, production.open_questions<br>intake_notes (markdown, optional) → artifact only |
 | 11. Completion criteria | [artifact] Source registry validates against the sources schema<br>[tool: sources:check_registry] Every source exists locally or is a cited remote reference, with a valid evidence tag |
 | 12. Evaluation rubric | intake<br>INT-REGISTRY (tool)<br>INT-COVERAGE (tool) |
 | 13. Failure conditions | No product evidence registered<br>A source registered without an evidence tag<br>A local source path does not exist |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing registry checks and the gaps from N02 as context |
-| 15. Maximum retry or escalation policy | 3 consecutive failed attempts, or N02 loops back twice → Wei: Sources found, sources missing, and the questions only Wei can answer |
+| 15. Maximum retry or escalation policy | 3 consecutive failed attempts, or N02 loops back twice → the project owner: Sources found, sources missing, and the questions only the project owner can answer |
 | 16. Human-review requirements | Not required — Not required; N03 is the first human gate |
 | 17. Upstream dependencies | START (flow, when `*`)<br>n02_source_validation (loop, when `gaps_resolvable`)<br>n03_objective_audience (loop, when `rejected`) |
 | 18. Downstream transitions | E02: → n02_source_validation (flow, when `pass`) |
@@ -42,14 +42,14 @@
 | 6. State written | inputs.sources |
 | 7. Responsible agent | `context-research` (agents/context-research.yaml) |
 | 8. Skills and tools | Skills: evidence-tagging<br>Tools: vpg.tools.sources:validate<br>Run: `sources:validate` |
-| 9. Execution instructions | Deterministic. `pass` freezes the inputs (hash recorded). `gaps_resolvable` loops back to intake with the gap list. `gaps_blocking` escalates to Wei with the blocking questions. |
+| 9. Execution instructions | Deterministic. `pass` freezes the inputs (hash recorded). `gaps_resolvable` loops back to intake with the gap list. `gaps_blocking` escalates to the project owner with the blocking questions. |
 | 10. Expected outputs and artifacts | gaps (json) → artifact only<br>sources_validated (json) → inputs.sources |
 | 11. Completion criteria | [artifact] Gap report exists<br>[artifact] Hashed source list exists |
 | 12. Evaluation rubric | intake<br>INT-REGISTRY (tool)<br>INT-COVERAGE (tool) |
 | 13. Failure conditions | A registered local source is missing (blocking gap)<br>No brief (blocking)<br>No product or brand evidence (resolvable gap) |
 | 14. Retry behavior | max 2 consecutive attempts — Tool errors only; gaps are outcomes, not failures |
-| 15. Maximum retry or escalation policy | gaps_blocking, or the intake loop traversed twice → Wei: The gap list with what would resolve each gap |
-| 16. Human-review requirements | Not required — Not required; blocking gaps escalate to Wei |
+| 15. Maximum retry or escalation policy | gaps_blocking, or the intake loop traversed twice → the project owner: The gap list with what would resolve each gap |
+| 16. Human-review requirements | Not required — Not required; blocking gaps escalate to the project owner |
 | 17. Upstream dependencies | n01_context_intake (flow, when `pass`) |
 | 18. Downstream transitions | E03: → n03_objective_audience (flow, when `pass`)<br>E04: → n01_context_intake (loop, when `gaps_resolvable`)<br>E05: → @escalate (escalate, when `gaps_blocking`) |
 | 19. Provenance and logging | inputs_frozen ledger event with the inputs hash<br>gaps.json kept per attempt<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -61,21 +61,21 @@
 | Field | Definition |
 |---|---|
 | 1. Node ID and name | `n03_objective_audience` — N03 Objective and audience definition · kind `agent` · phase Understand · subgraph `definition` |
-| 2. Purpose | State the film's objective as an observable target, name the audience and the review lenses, set the runtime cap and success criteria, and agree the quality bar (evaluation.md) with Wei. |
+| 2. Purpose | State the film's objective as an observable target, name the audience and the review lenses, set the runtime cap and success criteria, and agree the quality bar (evaluation.md) with the project owner. |
 | 3. Required inputs | state:inputs.sources<br>state:inputs.brief<br>control:evaluation<br>knowledge:rules<br>control:spec-gates<br>control:spec-design |
-| 4. Relevant context | The runtime cap is a hard constraint: the case study went from 2:00 (R05) to 2:30 (R06) to ≤150 s (R07)<br>Review lenses in the case study: customer executive, domain-operations leader, sustainability leader, engineer, first-time viewer<br>Perspective: how the platform helps the customer's experts solve business problems |
+| 4. Relevant context | The runtime cap comes from the approved project brief<br>The project owner defines the intended audiences and review lenses<br>Explain the source-supported value without inventing business claims |
 | 5. State read | inputs.sources<br>inputs.brief |
 | 6. State written | production.brief_ref<br>production.objective<br>production.audience<br>production.business_context |
 | 7. Responsible agent | `production-orchestrator` (agents/production-orchestrator.yaml) |
 | 8. Skills and tools | Skills: problem-framing, extreme-clarity, success-metrics, goal-harness<br>Tools: — |
-| 9. Execution instructions | Write brief.json (an objective with a number or observable end state, the audience, ≥3 checkable success criteria, runtime target and cap, constraints). A success criterion is checkable when it contains a number, ≤ or ≥, "must", "never", "always", "within" or "viewer can …"; every criterion must pass that test. Complete evaluation.md (gates, thresholds, human checkpoints). Never write an adjective objective ("make it better"). Quality workflow: also complete spec/GATES.yaml, the approved bar: each gate's metric and version, its envelope (benchmark or stated), severity, stage and the rule ids it enforces, and the benchmark registry pinned by path and sha256. Wei approves it with the objective.<br>Prompt: `prompts/n03_objective_audience.md` |
+| 9. Execution instructions | Write brief.json (an objective with a number or observable end state, the audience, ≥3 checkable success criteria, runtime target and cap, constraints). A success criterion is checkable when it contains a number, ≤ or ≥, "must", "never", "always", "within" or "viewer can …"; every criterion must pass that test. Complete evaluation.md (gates, thresholds, human checkpoints). Never write an adjective objective ("make it better"). Quality workflow: also complete spec/GATES.yaml, the approved bar: each gate's metric and version, its envelope (benchmark or stated), severity, stage and the rule ids it enforces, and the benchmark registry pinned by path and sha256. the project owner approves it with the objective.<br>Prompt: `prompts/n03_objective_audience.md` |
 | 10. Expected outputs and artifacts | brief (json, brief) → production.brief_ref |
 | 11. Completion criteria | [artifact] Brief validates against the brief schema<br>[tool: briefs:check_brief] Objective is observable, ≥3 checkable success criteria, runtime target ≤ cap<br>[tool: briefs:doc_complete] evaluation.md is complete<br>[tool: qualitygates:check_bar] GATES.yaml lints clean; the benchmark registry is pinned, unchanged and verifies; every benchmark gate has an envelope; the references show every look role |
 | 12. Evaluation rubric | brief<br>BRF-OBSERVABLE (tool)<br>BRF-LENSES (human) |
 | 13. Failure conditions | Objective is an adjective<br>Fewer than 3 checkable success criteria<br>Runtime cap missing<br>Benchmark registry missing, unpinned, changed since it was pinned, or failing its own check |
-| 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing checks; if Wei rejects, loop to intake for missing context |
-| 15. Maximum retry or escalation policy | 3 consecutive failures, or Wei rejects twice → Wei: Draft objective, open questions, and the tension blocking agreement |
-| 16. Human-review requirements | **Required** — Approve the objective, audience, runtime cap and quality bar (Wei; outcomes approved, rejected) |
+| 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing checks; if the project owner rejects, loop to intake for missing context |
+| 15. Maximum retry or escalation policy | 3 consecutive failures, or the project owner rejects twice → the project owner: Draft objective, open questions, and the tension blocking agreement |
+| 16. Human-review requirements | **Required** — Approve the objective, audience, runtime cap and quality bar (the project owner; outcomes approved, rejected) |
 | 17. Upstream dependencies | n02_source_validation (flow, when `pass`) |
 | 18. Downstream transitions | E06: → n04_product_understanding (flow, when `approved`)<br>E07: → n01_context_intake (loop, when `rejected`) |
 | 19. Provenance and logging | Approval recorded with actor (human or labelled dry-run)<br>evaluation.md locked on approval (hash + snapshot)<br>GATES.yaml locked on approval with the registry pin (part of the bar)<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -89,7 +89,7 @@
 | 1. Node ID and name | `n04_product_understanding` — N04 Product and experience understanding · kind `agent` · phase Understand · subgraph `definition` |
 | 2. Purpose | Establish product truth from the evidence — capabilities, required interactions, demo scenarios, the engineers' terminology, prohibited terms and the only claims the film may make — and lock it. |
 | 3. Required inputs | state:inputs.sources<br>artifact:brief<br>control:product |
-| 4. Relevant context | R07 P3: engineer terminology from the demo recording is the source of truth; requested terms with no source are mapped, not invented<br>No invented UI, counters, metrics or architecture edges (video-shotcraft guidance)<br>The deep product walkthrough opens the detail page, never stopping at a list (R07 P4) |
+| 4. Relevant context | Authorized product evidence is the terminology source of truth<br>No invented UI, counters, metrics or architecture edges<br>Show the interactions required by the approved brief |
 | 5. State read | inputs.sources<br>production.objective<br>production.audience |
 | 6. State written | production.product_truth_ref<br>production.product_context<br>production.product_requirements |
 | 7. Responsible agent | `product-understanding` (agents/product-understanding.yaml) |
@@ -100,8 +100,8 @@
 | 12. Evaluation rubric | product-truth<br>PT-CONTRACT (tool)<br>PT-NOT-INVENTED (human) |
 | 13. Failure conditions | A claim without a source<br>Terminology differs from the engineers' words<br>Missing 'content that must not be invented' |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing sections and unsourced items |
-| 15. Maximum retry or escalation policy | 3 consecutive failures or a rejected review → Wei: Unsourced claims and terms that need an owner |
-| 16. Human-review requirements | **Required** — Approve product truth (terminology, claims, scenarios) (Wei; outcomes approved, rejected) |
+| 15. Maximum retry or escalation policy | 3 consecutive failures or a rejected review → the project owner: Unsourced claims and terms that need an owner |
+| 16. Human-review requirements | **Required** — Approve product truth (terminology, claims, scenarios) (the project owner; outcomes approved, rejected) |
 | 17. Upstream dependencies | n03_objective_audience (flow, when `approved`)<br>n04_product_understanding (loop, when `rejected`) |
 | 18. Downstream transitions | E08: → n05_narrative_ideation (flow, when `approved`)<br>E09: → n04_product_understanding (loop, when `rejected`) |
 | 19. Provenance and logging | product.md locked on approval<br>Every term and claim cites a source id<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -115,7 +115,7 @@
 | 1. Node ID and name | `n05_narrative_ideation` — N05 Narrative and concept ideation · kind `agent` · phase Design · subgraph `definition` |
 | 2. Purpose | Propose at least three distinct concept directions with different anchors, each with a structure, strengths and named risks. |
 | 3. Required inputs | artifact:brief<br>artifact:product_summary<br>control:product<br>control:memory<br>feedback:open |
-| 4. Relevant context | Rubric-authoring: diverse anchors defeat overfitting (≥3 directions)<br>Proven arc: challenge → intelligence layer → how it works → architecture → product walkthrough → what's next<br>Wei's perspective: Microsoft technology helping the customer's experts |
+| 4. Relevant context | Rubric-authoring: diverse anchors defeat overfitting (≥3 directions)<br>Proven arc: challenge → intelligence layer → how it works → architecture → product walkthrough → what's next<br>the project owner's perspective: Microsoft technology helping the customer's experts |
 | 5. State read | production.objective<br>production.audience<br>production.product_context |
 | 6. State written | production.concepts_ref |
 | 7. Responsible agent | `creative-director` (agents/creative-director.yaml) |
@@ -126,7 +126,7 @@
 | 12. Evaluation rubric | concepts<br>CON-DIVERSE (tool) |
 | 13. Failure conditions | Fewer than 3 directions<br>Directions that differ only in wording |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the rejection reasons from N06 |
-| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejected selections → Wei: Concepts tried and why each was rejected |
+| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejected selections → the project owner: Concepts tried and why each was rejected |
 | 16. Human-review requirements | Not required — Not required; selection happens at N06 |
 | 17. Upstream dependencies | n04_product_understanding (flow, when `approved`)<br>n06_creative_direction (loop, when `rejected`) |
 | 18. Downstream transitions | E10: → n06_creative_direction (flow, when `pass`) |
@@ -139,7 +139,7 @@
 | Field | Definition |
 |---|---|
 | 1. Node ID and name | `n06_creative_direction` — N06 Creative-direction selection · kind `agent` · phase Design · subgraph `definition` |
-| 2. Purpose | Compare the concepts against the objective and success criteria, recommend one, record why the others were rejected, and complete creative.md for Wei's decision. |
+| 2. Purpose | Compare the concepts against the objective and success criteria, recommend one, record why the others were rejected, and complete creative.md for the project owner's decision. |
 | 3. Required inputs | artifact:concepts<br>artifact:brief<br>control:creative<br>control:spec-story |
 | 4. Relevant context | Recovered: start from the strongest earlier direction instead of restarting; keep one brand-derived motion vocabulary |
 | 5. State read | production.concepts_ref<br>production.objective |
@@ -151,9 +151,9 @@
 | 11. Completion criteria | [artifact] Decision validates<br>[tool: briefs:check_decision] Selection is a known concept and every alternative has a rejection reason<br>[tool: briefs:doc_complete] creative.md is complete<br>[tool: qualitygates:check_spec] STORY.md lints clean: runtime, beats whose shares add up to 1, terms, rules |
 | 12. Evaluation rubric | creative-direction<br>DIR-DECISION (tool)<br>DIR-BOUNDARIES (human)<br>CON-FIT (human) |
 | 13. Failure conditions | Selected concept unknown<br>Alternatives rejected without a reason |
-| 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with Wei's rejection feedback; a rejection loops back to ideation |
-| 15. Maximum retry or escalation policy | Wei rejects the direction twice → Wei: Directions tried and the unresolved creative tension |
-| 16. Human-review requirements | **Required** — Select the creative direction (Wei; outcomes approved, rejected) |
+| 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the project owner's rejection feedback; a rejection loops back to ideation |
+| 15. Maximum retry or escalation policy | the project owner rejects the direction twice → the project owner: Directions tried and the unresolved creative tension |
+| 16. Human-review requirements | **Required** — Select the creative direction (the project owner; outcomes approved, rejected) |
 | 17. Upstream dependencies | n05_narrative_ideation (flow, when `pass`) |
 | 18. Downstream transitions | E11: → n07_script_development (flow, when `approved`)<br>E12: → n09_visual_system (flow, when `approved`)<br>E13: → n05_narrative_ideation (loop, when `rejected`) |
 | 19. Provenance and logging | Decision record with actor<br>creative.md locked on approval<br>STORY.md locked on approval<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -167,18 +167,18 @@
 | 1. Node ID and name | `n07_script_development` — N07 Script development · kind `agent` · phase Design · subgraph `planning` |
 | 2. Purpose | Write the narration as chapters and units, each unit tagged with the verified claims and product terms it relies on, within the runtime cap. |
 | 3. Required inputs | artifact:brief<br>artifact:creative_decision<br>artifact:narrative<br>control:product<br>control:creative<br>control:production<br>defects:rework<br>control:spec-story<br>feedback:open |
-| 4. Relevant context | Engineer terms only; if a term is misheard by ASR in most voice takes, rephrase it (R07: 'versioned' heard as 'version' in 8/8 takes)<br>Cut words, never pauses, to fit the cap<br>Perspective: how Microsoft technology helps the customer's experts solve business problems (R06) |
+| 4. Relevant context | Use sourced terminology and check pronunciation against the script<br>Shorten wording rather than removing necessary pauses to fit the cap<br>Keep each claim within the approved product contract |
 | 5. State read | production.objective<br>production.creative_decision_ref<br>production.product_context |
 | 6. State written | production.script_ref |
 | 7. Responsible agent | `narrative-script` (agents/narrative-script.yaml) |
 | 8. Skills and tools | Skills: extreme-clarity, content-writing, demo-master, video-prototype<br>Tools: — |
-| 9. Execution instructions | Write script.json (chapters → units with id, text, claims[], terms[]). Every claim id must be in product.md verified_claims; every product term must be in the terminology list; never use a prohibited term. Quality workflow: name each chapter after its STORY.md beat (or list it in the beat's chapters), speak every must-say term and no banned phrase. A rejected animatic returns here with Wei's feedback.<br>Prompt: `prompts/n07_script_development.md` |
+| 9. Execution instructions | Write script.json (chapters → units with id, text, claims[], terms[]). Every claim id must be in product.md verified_claims; every product term must be in the terminology list; never use a prohibited term. Quality workflow: name each chapter after its STORY.md beat (or list it in the beat's chapters), speak every must-say term and no banned phrase. A rejected animatic returns here with the project owner's feedback.<br>Prompt: `prompts/n07_script_development.md` |
 | 10. Expected outputs and artifacts | script (json, script) → production.script_ref |
 | 11. Completion criteria | [artifact] Script validates<br>[tool: accuracy:check_script] No prohibited terms, only verified claims, only known terms<br>[tool: pacing:estimate_script] Estimated runtime fits the cap<br>[tool: specchecks:story_terms] Every STORY.md must-say term is spoken; no banned phrase is spoken or shown |
 | 12. Evaluation rubric | script<br>SCR-ACCURACY (tool)<br>SCR-RUNTIME (tool)<br>SCR-PERSPECTIVE (review) |
 | 13. Failure conditions | Prohibited term in narration<br>Unverified claim<br>Estimated runtime over the cap<br>A must-say term never spoken, or a banned phrase used |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the exact failing units and the replacement terms |
-| 15. Maximum retry or escalation policy | 3 consecutive failures or the same defect persisting 3 rework cycles → Wei: Units that cannot be both accurate and within the cap |
+| 15. Maximum retry or escalation policy | 3 consecutive failures or the same defect persisting 3 rework cycles → the project owner: Units that cannot be both accurate and within the cap |
 | 16. Human-review requirements | Not required — Not required; narration is judged in context at N16/N20 and at release |
 | 17. Upstream dependencies | n06_creative_direction (flow, when `approved`)<br>n22_targeted_regeneration (loop, when `target:n07_script_development`)<br>n27_animatic (loop, when `rejected`) |
 | 18. Downstream transitions | E14: → n08_storyboard_shots (flow, when `pass`) |
@@ -193,7 +193,7 @@
 | 1. Node ID and name | `n08_storyboard_shots` — N08 Storyboard and shot planning · kind `agent` · phase Design · subgraph `planning` |
 | 2. Purpose | Turn the script into beats with one communication objective each, progressive disclosure, source-locked visuals, and a full specification for every seam, plus a shot list. |
 | 3. Required inputs | artifact:script<br>artifact:design_system<br>control:creative<br>control:design<br>defects:rework<br>control:spec-story |
-| 4. Relevant context | Wei R07 P1/P2: one key message per frame; introduce entities progressively (6 steps), never all at once<br>video-shotcraft: specify each seam (outgoing and incoming anchor, direction, match frame, duration, audio bridge); one transition per seam<br>Narration-led films follow measured spoken beats, not a music grid |
+| 4. Relevant context | Introduce one primary idea at a time<br>Specify each seam's anchors, direction, duration and audio bridge<br>Narration-led films follow measured spoken beats |
 | 5. State read | production.script_ref<br>production.design_system_ref |
 | 6. State written | production.storyboard_ref<br>production.shotlist_ref<br>production.scenes |
 | 7. Responsible agent | `storyboard` (agents/storyboard.yaml) |
@@ -204,8 +204,8 @@
 | 12. Evaluation rubric | storyboard<br>SB-STRUCTURE (tool)<br>SB-DISCLOSURE (review) |
 | 13. Failure conditions | A beat with two objectives<br>A seam without anchors or an audio bridge<br>A script unit with no beat<br>A story beat far from its planned share of the runtime |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing beats and seams |
-| 15. Maximum retry or escalation policy | 3 consecutive failures → Wei: Beats that cannot meet the one-message rule within the cap |
-| 16. Human-review requirements | Not required — Not required; optional styleframe review with Wei before batching assets |
+| 15. Maximum retry or escalation policy | 3 consecutive failures → the project owner: Beats that cannot meet the one-message rule within the cap |
+| 16. Human-review requirements | Not required — Not required; optional styleframe review with the project owner before batching assets |
 | 17. Upstream dependencies | n07_script_development (flow, when `pass`)<br>n22_targeted_regeneration (loop, when `target:n08_storyboard_shots`)<br>n26_look_development (flow, when `approved`) |
 | 18. Downstream transitions | Q04: → n27_animatic (flow, when `pass`) |
 | 19. Provenance and logging | storyboard.json per attempt; beats cite unit ids and source refs<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -219,7 +219,7 @@
 | 1. Node ID and name | `n09_visual_system` — N09 Visual-system definition · kind `agent` · phase Design · subgraph `planning` |
 | 2. Purpose | Define the visual language as tokens — palette, approved text pairs, type families and roles, layout and safe areas, motion vocabulary, supplied brand assets, prohibited patterns — plus the technical production spec, and lock both. |
 | 3. Required inputs | artifact:creative_decision<br>control:design<br>control:production<br>control:creative<br>state:inputs.sources<br>control:spec-voice<br>control:spec-music<br>control:spec-mix<br>control:evaluation |
-| 4. Relevant context | Wei R07: bold caps type, the customer's red with white type, minimal and high-contrast bookends<br>Wei R06: typography must be consistent with the opening and closing<br>Logos only from supplied files, never morphed; no imported template skin (amber/paper/serif) |
+| 4. Relevant context | Use the project's approved palette, type scale and visual references<br>Keep typography consistent across scenes and bookends<br>Use supplied marks and avoid unapproved visual styles |
 | 5. State read | production.creative_decision_ref<br>inputs.sources |
 | 6. State written | production.design_system_ref<br>production.visual_references |
 | 7. Responsible agent | `visual-design` (agents/visual-design.yaml) |
@@ -229,9 +229,9 @@
 | 11. Completion criteria | [artifact] Token export validates<br>[tool: briefs:doc_complete] design.md and production.md are complete with machine contracts<br>[tool: design:check_palette] Every approved text pair meets WCAG contrast; approved assets match their hashes<br>[tool: qualitygates:check_spec] VOICE.md, MUSIC.md and MIX.md lint clean; MIX.md's loudness matches the approved bar |
 | 12. Evaluation rubric | visual-system<br>VS-CONTRAST (tool)<br>VS-BOOKENDS (human) |
 | 13. Failure conditions | A text pair below contrast<br>No prohibited patterns listed<br>A logo not from a supplied file |
-| 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with failing pairs, sections or assets; Wei's rejection re-runs this node with the feedback |
-| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejections → Wei: The brand constraints that cannot be met together |
-| 16. Human-review requirements | **Required** — Approve the visual system direction, the production spec and the voice, music and mix specs (the look itself is approved at N26) (Wei; outcomes approved, rejected) |
+| 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with failing pairs, sections or assets; the project owner's rejection re-runs this node with the feedback |
+| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejections → the project owner: The brand constraints that cannot be met together |
+| 16. Human-review requirements | **Required** — Approve the visual system direction, the production spec and the voice, music and mix specs (the look itself is approved at N26) (the project owner; outcomes approved, rejected) |
 | 17. Upstream dependencies | n06_creative_direction (flow, when `approved`)<br>n09_visual_system (loop, when `rejected`)<br>n22_targeted_regeneration (loop, when `target:n09_visual_system`) |
 | 18. Downstream transitions | E16: → n09_visual_system (loop, when `rejected`)<br>Q01: → n26_look_development (flow, when `approved`) |
 | 19. Provenance and logging | production.md, VOICE.md, MUSIC.md and MIX.md locked on approval (hash + snapshot); design.md is locked with the look at N26<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -256,7 +256,7 @@
 | 12. Evaluation rubric | asset-plan<br>AP-RULES (tool) |
 | 13. Failure conditions | Generated product UI<br>Generated or modified logo<br>Generic generated subject<br>Rights need clearance |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing assets |
-| 15. Maximum retry or escalation policy | 3 consecutive failures, or an asset needs a rights decision → Wei: Assets blocked by rights or missing sources |
+| 15. Maximum retry or escalation policy | 3 consecutive failures, or an asset needs a rights decision → the project owner: Assets blocked by rights or missing sources |
 | 16. Human-review requirements | Not required — Not required; rights gaps escalate |
 | 17. Upstream dependencies | n22_targeted_regeneration (loop, when `target:n10_asset_planning`)<br>n27_animatic (flow, when `approved`) |
 | 18. Downstream transitions | E19: → n11_asset_generation (flow, when `pass`) |
@@ -282,7 +282,7 @@
 | 12. Evaluation rubric | assets<br>AS-SPEC (tool) |
 | 13. Failure conditions | Missing asset<br>Wrong dimensions or format |
 | 14. Retry behavior | max 3 consecutive attempts — Re-run only failing items with the defect context |
-| 15. Maximum retry or escalation policy | 3 consecutive failures → Wei: Assets that cannot be produced at spec |
+| 15. Maximum retry or escalation policy | 3 consecutive failures → the project owner: Assets that cannot be produced at spec |
 | 16. Human-review requirements | Not required — Not required; assets are judged in the rendered film |
 | 17. Upstream dependencies | n10_asset_planning (flow, when `pass`)<br>n22_targeted_regeneration (loop, when `target:n11_asset_generation`) |
 | 18. Downstream transitions | E20: → n13_motion_scenes (flow, when `pass`) |
@@ -299,7 +299,7 @@
 | 1. Node ID and name | `n12_voice_audio` — N12 Voice and audio production · kind `agent` · phase Build · subgraph `production` |
 | 2. Purpose | Produce one continuous, identity-consistent narration stem with measured unit timings, plus the audio specification. Never attenuate speech; human listening remains a separate sign-off. |
 | 3. Required inputs | artifact:script<br>control:production<br>control:creative<br>defects:rework<br>control:spec-voice |
-| 4. Relevant context | Wei R06: the voice sounded like a kid → adult tech-professional delivery<br>Wei R07: keep the warm, confident storytelling voice; fix stutters, drops, clipped endings and seams<br>R07 P5: the clipped 'experts' came from a 32 dB dip inside a word; assembly must never mask speech<br>Identity-locked takes, ASR QC per take, several seeds per unit, human listening never claimed |
+| 4. Relevant context | Follow the approved voice direction and pronunciation guide<br>Check for stutters, missing words, clipped endings and abrupt seams<br>Do not mask speech defects with gain changes<br>Use measured word timings; listening approval remains human |
 | 5. State read | production.script_ref<br>production.audio_spec |
 | 6. State written | production.voice_ref<br>production.timings_ref<br>production.audio_spec |
 | 7. Responsible agent | `voice-audio` (agents/voice-audio.yaml) |
@@ -310,7 +310,7 @@
 | 12. Evaluation rubric | voice-audio<br>VOI-COMPLETE (tool)<br>VOI-SEAMS (tool) |
 | 13. Failure conditions | A unit missing from the stem<br>Clipping<br>Near-silent frames inside speech<br>Voice direction not adult/professional |
 | 14. Retry behavior | max 3 consecutive attempts — Re-render only the units named in the defect, with new seeds; rephrase a term misheard in most takes |
-| 15. Maximum retry or escalation policy | 3 consecutive failures, or voice identity cannot be held → Wei: Units that fail, the takes tried, and a listening request |
+| 15. Maximum retry or escalation policy | 3 consecutive failures, or voice identity cannot be held → the project owner: Units that fail, the takes tried, and a listening request |
 | 16. Human-review requirements | Not required — Human listening is requested at release; the agent never claims it |
 | 17. Upstream dependencies | n22_targeted_regeneration (loop, when `target:n12_voice_audio`)<br>n27_animatic (flow, when `approved`) |
 | 18. Downstream transitions | E21: → n13_motion_scenes (flow, when `pass`) |
@@ -326,7 +326,7 @@
 | 1. Node ID and name | `n13_motion_scenes` — N13 Motion and scene production · kind `agent` · phase Build · subgraph `production` |
 | 2. Purpose | Build each beat as a scene cued to the measured narration — progressive disclosure, one message per frame, purposeful motion — and export the text-layer manifest that the audits read. |
 | 3. Required inputs | artifact:storyboard<br>artifact:assets<br>artifact:timings<br>artifact:design_system<br>control:design<br>defects:rework<br>control:spec-design<br>control:spec-motion |
-| 4. Relevant context | Wei R06/R07: turn illustrations into explanatory animation; infographics must be legible, with fewer competing elements<br>Rings on measured boxes ≥ 1 s; camera crops land in gutters; no mid-slide rests (r07-v13/v14)<br>No ghost text: step down to a solid grey, never partial opacity |
+| 4. Relevant context | Animate to explain the approved narrative, without competing focal points<br>Keep measured highlights and camera crops within the project's legibility constraints<br>Text transitions must preserve readable contrast |
 | 5. State read | production.storyboard_ref<br>production.asset_registry<br>production.timings_ref<br>production.design_system_ref |
 | 6. State written | production.scenes_ref<br>production.text_layers_ref |
 | 7. Responsible agent | `motion-design` (agents/motion-design.yaml) |
@@ -337,7 +337,7 @@
 | 12. Evaluation rubric | motion<br>MO-MANIFEST (tool)<br>MO-EXPLAIN (review) |
 | 13. Failure conditions | A beat without a scene<br>No text-layer manifest<br>Timing gaps |
 | 14. Retry behavior | max 3 consecutive attempts — Re-render only the scenes named in the defect |
-| 15. Maximum retry or escalation policy | 3 consecutive failures → Wei: Scenes that cannot meet legibility and design rules together |
+| 15. Maximum retry or escalation policy | 3 consecutive failures → the project owner: Scenes that cannot meet legibility and design rules together |
 | 16. Human-review requirements | Not required — Not required; judged in the rendered master |
 | 17. Upstream dependencies | n11_asset_generation (flow, when `pass`)<br>n12_voice_audio (flow, when `pass`)<br>n22_targeted_regeneration (loop, when `target:n13_motion_scenes`) |
 | 18. Downstream transitions | E22: → n14_video_assembly (flow, when `pass`) |
@@ -353,7 +353,7 @@
 | 1. Node ID and name | `n14_video_assembly` — N14 Video assembly · kind `agent` · phase Build · subgraph `production` |
 | 2. Purpose | Assemble the master (scenes, voice, music bed with look-ahead ducking, captions, loudness normalisation) and the stems, silent master and caption sidecar. |
 | 3. Required inputs | artifact:scenes<br>artifact:scene_frames<br>artifact:voice<br>artifact:timings<br>artifact:text_layers<br>control:production<br>defects:rework<br>control:spec-mix<br>control:spec-music |
-| 4. Relevant context | Two-pass loudness normalisation to −16 LUFS, true peak ≤ −1 dBTP<br>Captions are speech-locked: never after the voice (r07-v15 rule)<br>Music supports the voice: ducking, no competing phrases under speech |
+| 4. Relevant context | Measure loudness against the approved delivery target<br>Lock captions to measured speech<br>Keep the mix intelligible and preserve the approved voice direction |
 | 5. State read | production.scenes_ref<br>production.voice_ref<br>production.timings_ref |
 | 6. State written | production.master_ref<br>production.captions_ref<br>production.refs |
 | 7. Responsible agent | `composition` (agents/composition.yaml) |
@@ -364,7 +364,7 @@
 | 12. Evaluation rubric | assembly<br>ASM-OUTPUTS (tool) |
 | 13. Failure conditions | Master missing a stream<br>Captions unparseable |
 | 14. Retry behavior | max 3 consecutive attempts — Re-assemble with the defect context; upstream assets and voice are reused unchanged |
-| 15. Maximum retry or escalation policy | 3 consecutive failures → Wei: Assembly errors with the command log |
+| 15. Maximum retry or escalation policy | 3 consecutive failures → the project owner: Assembly errors with the command log |
 | 16. Human-review requirements | Not required — Not required; reviewed at N15–N20 and release |
 | 17. Upstream dependencies | n13_motion_scenes (flow, when `pass`)<br>n22_targeted_regeneration (loop, when `target:n14_video_assembly`) |
 | 18. Downstream transitions | E23: → n15_technical_qa (flow, when `pass`)<br>E24: → n16_creative_critique (flow, when `pass`)<br>E25: → n17_design_compliance (flow, when `pass`)<br>E26: → n18_accessibility_legibility (flow, when `pass`)<br>E27: → n19_product_accuracy (flow, when `pass`)<br>E28: → n20_narrative_pacing (flow, when `pass`) |
@@ -380,7 +380,7 @@
 | 1. Node ID and name | `n15_technical_qa` — N15 Technical QA · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Measure the master itself — format, sync, duration, loudness, silence, black frames, captions — against production.md and the defaults. |
 | 3. Required inputs | artifact:master<br>artifact:captions<br>artifact:timings<br>control:production<br>control:evaluation<br>artifact:voice_stem<br>artifact:music_stem<br>artifact:text_layers<br>artifact:script<br>control:spec-gates |
-| 4. Relevant context | A technical pass is not a visual or human pass (R01 quality contract) |
+| 4. Relevant context | A technical pass is evidence, not visual or human approval |
 | 5. State read | production.master_ref<br>production.captions_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `technical-qa` (agents/technical-qa.yaml) |
@@ -391,7 +391,7 @@
 | 12. Evaluation rubric | technical, quality-gates<br>TEC-FORMAT (tool)<br>TEC-SYNC (tool)<br>TEC-DURATION (tool)<br>TEC-LOUDNESS (tool)<br>TEC-SILENCE (tool)<br>TEC-BLACK (tool)<br>TEC-CAPTIONS (tool)<br>GAT-SPEC (tool)<br>GAT-RATCHET (tool) |
 | 13. Failure conditions | ffprobe or ffmpeg cannot read the master |
 | 14. Retry behavior | max 2 consecutive attempts — Tool errors only |
-| 15. Maximum retry or escalation policy | 2 tool failures → Wei: The unreadable file and the probe error |
+| 15. Maximum retry or escalation policy | 2 tool failures → the project owner: The unreadable file and the probe error |
 | 16. Human-review requirements | Not required — Not required |
 | 17. Upstream dependencies | n14_video_assembly (flow, when `pass`) |
 | 18. Downstream transitions | E29: → n21_feedback_interpretation (flow, when `pass`) |
@@ -404,7 +404,7 @@
 | Field | Definition |
 |---|---|
 | 1. Node ID and name | `n16_creative_critique` — N16 Creative critique · kind `review` · phase Build · subgraph `review` |
-| 2. Purpose | An independent critic judges the rendered film through Wei's five lenses and the craft rubric — hook, clarity, one message per frame, motion purpose, transitions, emotional arc, polish. |
+| 2. Purpose | An independent critic judges the rendered film through the project's configured review lenses and craft rubric. |
 | 3. Required inputs | artifact:master<br>artifact:scenes<br>artifact:inventory<br>control:creative<br>control:evaluation |
 | 4. Relevant context | Score what the viewer sees: keyframes and the review cut, never source code<br>Five lenses: executive, operations leader, sustainability leader, engineer, first-time viewer |
 | 5. State read | production.master_ref<br>production.scenes_ref |
@@ -417,8 +417,8 @@
 | 12. Evaluation rubric | creative<br>CRE-HOOK (review)<br>CRE-ONE-MESSAGE (review)<br>CRE-MOTION (review)<br>CRE-TRANSITIONS (review)<br>CRE-FOCUS (review)<br>CRE-LENSES (review)<br>CRE-POLISH (review)<br>CRE-ARC (review)<br>REG-VERDICT (review)<br>VOI-PRONUNCIATION (review)<br>VOI-ADULT (human)<br>CRE-MUSIC (human) |
 | 13. Failure conditions | Dimensions left unscored<br>A failed dimension without a defect |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
-| 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Dimensions the critic could not judge |
-| 16. Human-review requirements | Not required — Not required; Wei's own feedback enters through N21 |
+| 15. Maximum retry or escalation policy | 3 incomplete reviews → the project owner: Dimensions the critic could not judge |
+| 16. Human-review requirements | Not required — Not required; the project owner's own feedback enters through N21 |
 | 17. Upstream dependencies | n14_video_assembly (flow, when `pass`) |
 | 18. Downstream transitions | E30: → n21_feedback_interpretation (flow, when `pass`) |
 | 19. Provenance and logging | Review record with per-dimension evidence<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -432,7 +432,7 @@
 | 1. Node ID and name | `n17_design_compliance` — N17 Design-system compliance · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Trace everything drawn to design.md — palette tokens, approved text pairs, type families, logo integrity, prohibited patterns — and judge cross-scene consistency. |
 | 3. Required inputs | artifact:text_layers<br>artifact:assets<br>artifact:inventory<br>control:design |
-| 4. Relevant context | Wei R06: typography inconsistent with the bookends is a defect<br>Logos are supplied files, scaled uniformly, never regenerated |
+| 4. Relevant context | Typography follows the approved design contract throughout<br>Supplied marks retain their proportions and source identity |
 | 5. State read | production.text_layers_ref<br>production.design_system_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `design-system-reviewer` (agents/design-system-reviewer.yaml) |
@@ -443,7 +443,7 @@
 | 12. Evaluation rubric | design-compliance<br>DES-TOKENS (tool)<br>DES-TYPE (tool)<br>DES-LOGO (tool)<br>DES-PROHIBITED (tool)<br>REG-BASELINE (tool)<br>DES-COHERENCE (review)<br>DES-CONSISTENCY (review)<br>DES-COMPOSITION (review)<br>DES-SPECIFICITY (review)<br>DES-BOOKENDS (review) |
 | 13. Failure conditions | Dimensions left unscored |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
-| 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Tokens that cannot be traced |
+| 15. Maximum retry or escalation policy | 3 incomplete reviews → the project owner: Tokens that cannot be traced |
 | 16. Human-review requirements | Not required — Not required |
 | 17. Upstream dependencies | n14_video_assembly (flow, when `pass`) |
 | 18. Downstream transitions | E31: → n21_feedback_interpretation (flow, when `pass`) |
@@ -458,7 +458,7 @@
 | 1. Node ID and name | `n18_accessibility_legibility` — N18 Accessibility and legibility validation · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Verify that every text is large enough, has enough contrast, is on screen long enough, sits inside the safe areas and never ghosts; that captions are speech-locked; and that nothing flashes. |
 | 3. Required inputs | artifact:text_layers<br>artifact:captions<br>artifact:timings<br>artifact:script<br>artifact:master<br>artifact:layout_audit<br>control:evaluation<br>control:design |
-| 4. Relevant context | Wei R07 §6: strong contrast, large readable text, sufficient reading time, safe margins, no fast flashing, colour never the only cue<br>Validate at presentation and laptop sizes |
+| 4. Relevant context | Check contrast, text size, reading time, safe margins and flashing against project requirements<br>Colour must not be the only cue; validate at the intended viewing sizes |
 | 5. State read | production.text_layers_ref<br>production.captions_ref<br>production.timings_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `accessibility-reviewer` (agents/accessibility-reviewer.yaml) |
@@ -469,7 +469,7 @@
 | 12. Evaluation rubric | accessibility<br>LEG-SIZE (tool)<br>LEG-CONTRAST (tool)<br>LEG-DWELL (tool)<br>LEG-SAFE (tool)<br>LEG-GHOST (tool)<br>LEG-DENSITY (tool)<br>LEG-OVERLAP (tool)<br>LEG-CLIP (tool)<br>LEG-OFFSTAGE (tool)<br>LEG-EMPTY (tool)<br>LEG-RING (tool)<br>LEG-FLASH (tool)<br>ACC-CAPTIONS (tool)<br>CAP-SCRIPT (tool)<br>LEG-COLOR-CUE (review)<br>LEG-LAPTOP (review) |
 | 13. Failure conditions | Dimensions left unscored |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
-| 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Checks that could not run |
+| 15. Maximum retry or escalation policy | 3 incomplete reviews → the project owner: Checks that could not run |
 | 16. Human-review requirements | Not required — Not required |
 | 17. Upstream dependencies | n14_video_assembly (flow, when `pass`) |
 | 18. Downstream transitions | E32: → n21_feedback_interpretation (flow, when `pass`) |
@@ -484,7 +484,7 @@
 | 1. Node ID and name | `n19_product_accuracy` — N19 Product-accuracy validation · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Check narration and on-screen text against product truth — terminology, prohibited terms, verified claims — and confirm no product UI was invented and the walkthrough goes deep enough. |
 | 3. Required inputs | artifact:script<br>artifact:text_layers<br>artifact:asset_plan<br>control:product |
-| 4. Relevant context | R07 P3: engineer terminology is the source of truth<br>R07 P4: open the actual detail pages and show the real workflow, not only the list |
+| 4. Relevant context | Authorized product evidence is the source of truth<br>Verify every interaction and claim required by the approved brief |
 | 5. State read | production.script_ref<br>production.text_layers_ref<br>production.asset_plan |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `product-accuracy-reviewer` (agents/product-accuracy-reviewer.yaml) |
@@ -495,7 +495,7 @@
 | 12. Evaluation rubric | product-accuracy<br>ACC-TERMS (tool)<br>ACC-CLAIMS (tool)<br>ACC-UI (tool)<br>ACC-DEPTH (review)<br>ACC-BOUNDARIES (review)<br>ACC-UNTAGGED (review) |
 | 13. Failure conditions | Dimensions left unscored |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
-| 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Claims that need a source owner |
+| 15. Maximum retry or escalation policy | 3 incomplete reviews → the project owner: Claims that need a source owner |
 | 16. Human-review requirements | Not required — Not required; product truth itself was approved at N04 |
 | 17. Upstream dependencies | n14_video_assembly (flow, when `pass`) |
 | 18. Downstream transitions | E33: → n21_feedback_interpretation (flow, when `pass`) |
@@ -510,7 +510,7 @@
 | 1. Node ID and name | `n20_narrative_pacing` — N20 Narrative and pacing evaluation · kind `review` · phase Build · subgraph `review` |
 | 2. Purpose | Measure speaking rate, runtime against the cap and reading time per beat, and judge narrative clarity, audience relevance and scene-to-scene connection. |
 | 3. Required inputs | artifact:script<br>artifact:timings<br>artifact:storyboard<br>artifact:brief<br>control:creative |
-| 4. Relevant context | Every scene connects to the one before and after; nothing is introduced before the viewer is ready (R07 §5) |
+| 4. Relevant context | Every scene connects to adjacent scenes and introduces information at a readable pace |
 | 5. State read | production.script_ref<br>production.timings_ref<br>production.storyboard_ref |
 | 6. State written | evaluation.reviews<br>evaluation.defects |
 | 7. Responsible agent | `creative-critic` (agents/creative-critic.yaml) |
@@ -521,7 +521,7 @@
 | 12. Evaluation rubric | narrative-pacing<br>PAC-RATE (tool)<br>PAC-RUNTIME (tool)<br>PAC-READ (tool)<br>NAR-CLARITY (review)<br>NAR-RELEVANCE (review)<br>NAR-CONNECTION (review)<br>NAR-PERSPECTIVE (review)<br>VOI-PRONUNCIATION (review) |
 | 13. Failure conditions | Dimensions left unscored |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unscored dimensions |
-| 15. Maximum retry or escalation policy | 3 incomplete reviews → Wei: Narrative questions for Wei |
+| 15. Maximum retry or escalation policy | 3 incomplete reviews → the project owner: Narrative questions for the project owner |
 | 16. Human-review requirements | Not required — Not required |
 | 17. Upstream dependencies | n14_video_assembly (flow, when `pass`) |
 | 18. Downstream transitions | E34: → n21_feedback_interpretation (flow, when `pass`) |
@@ -547,7 +547,7 @@
 | 12. Evaluation rubric | gate<br>GAT-TRACE (tool) |
 | 13. Failure conditions | Feedback left uninterpreted<br>A defect traced to an unknown node |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the uninterpreted feedback |
-| 15. Maximum retry or escalation policy | Gate outcome blocked: a defect persisted 3 cycles, the rework budget is spent, or a defect needs a human decision → Wei: Open defects, what was tried, and the decision needed |
+| 15. Maximum retry or escalation policy | Gate outcome blocked: a defect persisted 3 cycles, the rework budget is spent, or a defect needs a human decision → the project owner: Open defects, what was tried, and the decision needed |
 | 16. Human-review requirements | Not required — Not required; blocked gates escalate |
 | 17. Upstream dependencies | n15_technical_qa (flow, when `pass`)<br>n16_creative_critique (flow, when `pass`)<br>n17_design_compliance (flow, when `pass`)<br>n18_accessibility_legibility (flow, when `pass`)<br>n19_product_accuracy (flow, when `pass`)<br>n20_narrative_pacing (flow, when `pass`)<br>n23_final_verification (loop, when `changes_requested`) |
 | 18. Downstream transitions | E35: → n23_final_verification (flow, when `pass`)<br>E36: → n22_targeted_regeneration (flow, when `rework`)<br>E37: → @escalate (escalate, when `blocked`) |
@@ -574,7 +574,7 @@
 | 12. Evaluation rubric | regeneration<br>REG-TARGETED (tool) |
 | 13. Failure conditions | No routable target for a blocking defect |
 | 14. Retry behavior | max 2 consecutive attempts — Tool errors only |
-| 15. Maximum retry or escalation policy | A loop edge exceeds its traversal bound → Wei: The defect, its target and the cycles spent |
+| 15. Maximum retry or escalation policy | A loop edge exceeds its traversal bound → the project owner: The defect, its target and the cycles spent |
 | 16. Human-review requirements | Not required — Not required |
 | 17. Upstream dependencies | n21_feedback_interpretation (flow, when `rework`) |
 | 18. Downstream transitions | E38: → n07_script_development (loop, when `target:n07_script_development`)<br>E39: → n08_storyboard_shots (loop, when `target:n08_storyboard_shots`)<br>E40: → n10_asset_planning (loop, when `target:n10_asset_planning`)<br>E41: → n11_asset_generation (loop, when `target:n11_asset_generation`)<br>E42: → n12_voice_audio (loop, when `target:n12_voice_audio`)<br>E43: → n13_motion_scenes (loop, when `target:n13_motion_scenes`)<br>E44: → n14_video_assembly (loop, when `target:n14_video_assembly`)<br>E45: → n09_visual_system (loop, when `target:n09_visual_system`)<br>Q08: → n26_look_development (loop, when `target:n26_look_development`)<br>Q09: → n27_animatic (loop, when `target:n27_animatic`) |
@@ -587,21 +587,21 @@
 | Field | Definition |
 |---|---|
 | 1. Node ID and name | `n23_final_verification` — N23 Final verification · kind `tool` · phase Learn · subgraph `delivery` |
-| 2. Purpose | Recompute the release conditions from disk (gate, defects, reviewed master hash, deliverables, ledger), prepare the release summary, and ask Wei for the release decision. |
+| 2. Purpose | Recompute the release conditions from disk (gate, defects, reviewed master hash, deliverables, ledger), prepare the release summary, and ask the project owner for the release decision. |
 | 3. Required inputs | reviews:current<br>defects:open<br>artifact:master<br>control:production |
-| 4. Relevant context | Machine QA is not human release approval (R01 quality contract; every R07 report) |
+| 4. Relevant context | Machine QA and agent reviews do not constitute human release approval |
 | 5. State read | evaluation.gate_results<br>evaluation.defects<br>history.approvals |
 | 6. State written | history.decisions |
 | 7. Responsible agent | `final-approval` (agents/final-approval.yaml) |
 | 8. Skills and tools | Skills: shipping-and-launch, traffic-light-decisions<br>Tools: vpg.tools.verify:final<br>Run: `verify:final` |
-| 9. Execution instructions | Deterministic verification. Then the engine waits for Wei's decision (approved \| changes_requested). Changes loop back to feedback interpretation. |
+| 9. Execution instructions | Deterministic verification. Then the engine waits for the project owner's decision (approved \| changes_requested). Changes loop back to feedback interpretation. |
 | 10. Expected outputs and artifacts | verification (json) → artifact only<br>release_summary (markdown) → artifact only<br>decision_digest (markdown) → artifact only<br>review_packet (markdown) → artifact only<br>decision_template (json) → artifact only<br>review_html (html, optional) → artifact only |
 | 11. Completion criteria | [tool: verify:check_final] Every release condition recomputes true |
 | 12. Evaluation rubric | release<br>REL-RECOMPUTED (tool) |
 | 13. Failure conditions | No passing gate for the current version<br>The master changed after review<br>A deliverable missing |
 | 14. Retry behavior | max 2 consecutive attempts — Re-verify after the cause is fixed |
-| 15. Maximum retry or escalation policy | 2 failed verifications → Wei: The release condition that fails |
-| 16. Human-review requirements | **Required** — Release the version, or request changes with feedback (Wei; outcomes approved, changes_requested) |
+| 15. Maximum retry or escalation policy | 2 failed verifications → the project owner: The release condition that fails |
+| 16. Human-review requirements | **Required** — Release the version, or request changes with feedback (the project owner; outcomes approved, changes_requested) |
 | 17. Upstream dependencies | n21_feedback_interpretation (flow, when `pass`) |
 | 18. Downstream transitions | E46: → n24_packaging_delivery (flow, when `approved`)<br>E47: → n21_feedback_interpretation (loop, when `changes_requested`) |
 | 19. Provenance and logging | Release decision recorded with actor; dry-run approvals labelled not human<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -615,7 +615,7 @@
 | 1. Node ID and name | `n24_packaging_delivery` — N24 Packaging and delivery · kind `tool` · phase Learn · subgraph `delivery` |
 | 2. Purpose | Package every deliverable with its evidence, hash every file into a manifest, zip it and verify the zip against the manifest. |
 | 3. Required inputs | artifact:master<br>artifact:release_summary<br>control:production |
-| 4. Relevant context | R07 package: 12 deliverables, one manifest, zero mismatches |
+| 4. Relevant context | Package only the configured deliverables and verify every manifest hash |
 | 5. State read | production.master_ref<br>deliverables |
 | 6. State written | deliverables |
 | 7. Responsible agent | `final-approval` (agents/final-approval.yaml) |
@@ -626,7 +626,7 @@
 | 12. Evaluation rubric | delivery<br>DEL-MANIFEST (tool)<br>DEL-DELIVERABLES (tool) |
 | 13. Failure conditions | A manifest mismatch<br>A deliverable missing |
 | 14. Retry behavior | max 2 consecutive attempts — Rebuild the package |
-| 15. Maximum retry or escalation policy | 2 failed builds → Wei: The mismatching files |
+| 15. Maximum retry or escalation policy | 2 failed builds → the project owner: The mismatching files |
 | 16. Human-review requirements | Not required — Not required; release was decided at N23 |
 | 17. Upstream dependencies | n23_final_verification (flow, when `approved`) |
 | 18. Downstream transitions | E48: → n25_learning_memory (flow, when `pass`) |
@@ -653,7 +653,7 @@
 | 12. Evaluation rubric | learning<br>LRN-GOVERNED (tool) |
 | 13. Failure conditions | A lesson without evidence<br>A lesson targeting a protected scope |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch listing the unclassified lessons |
-| 15. Maximum retry or escalation policy | 3 consecutive failures → Wei: Lessons that need Wei's classification |
+| 15. Maximum retry or escalation policy | 3 consecutive failures → the project owner: Lessons that need the project owner's classification |
 | 16. Human-review requirements | Not required — Not required for the run; applying the proposal to the rule base needs a named human (`vpg memory apply`) |
 | 17. Upstream dependencies | n24_packaging_delivery (flow, when `pass`) |
 | 18. Downstream transitions | E49: → END (flow, when `pass`) |
@@ -679,8 +679,8 @@
 | 12. Evaluation rubric | look<br>LOOK-GATES (tool)<br>LOOK-APPROVED (human) |
 | 13. Failure conditions | A style frame outside its role's benchmark envelope<br>Frames rendered from an older spec<br>A look gate that cannot be judged (registry missing, unpinned or without the role)<br>A motion test that flashes more than 3 times in a second |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing gates, roles, values and envelopes; fix the spec, then re-render |
-| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejections → Wei: The gates the look cannot meet, the values tried, and the spec changes that did not move them |
-| 16. Human-review requirements | **Required** — Approve the look (style frames and motion test) before any asset is built (Wei; outcomes approved, rejected) |
+| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejections → the project owner: The gates the look cannot meet, the values tried, and the spec changes that did not move them |
+| 16. Human-review requirements | **Required** — Approve the look (style frames and motion test) before any asset is built (the project owner; outcomes approved, rejected) |
 | 17. Upstream dependencies | n09_visual_system (flow, when `approved`)<br>n26_look_development (loop, when `rejected`)<br>n22_targeted_regeneration (loop, when `target:n26_look_development`) |
 | 18. Downstream transitions | Q02: → n08_storyboard_shots (flow, when `approved`)<br>Q03: → n26_look_development (loop, when `rejected`) |
 | 19. Provenance and logging | look-frames.json and look-report.json per attempt (spec hash, measurements, gates)<br>design.md, DESIGN.md, its tokens and MOTION.md locked on approval<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |
@@ -700,14 +700,14 @@
 | 6. State written | production.refs |
 | 7. Responsible agent | `storyboard` (agents/storyboard.yaml) |
 | 8. Skills and tools | Skills: storyboard, video-prototype, video-shotcraft<br>Tools: local TTS (scratch read), ffmpeg, vpg spec hash · project command hook |
-| 9. Execution instructions | Time each storyboard beat to a scratch read of the current script (start and end per beat), add the music sketch when MUSIC.md asks for one and the times its hit points land, and write animatic.json with the spec hash from `vpg spec hash spec/`. Render the timed boards as a video for Wei's review.<br>Prompt: `prompts/n27_animatic.md` |
+| 9. Execution instructions | Time each storyboard beat to a scratch read of the current script (start and end per beat), add the music sketch when MUSIC.md asks for one and the times its hit points land, and write animatic.json with the spec hash from `vpg spec hash spec/`. Render the timed boards as a video for the project owner's review.<br>Prompt: `prompts/n27_animatic.md` |
 | 10. Expected outputs and artifacts | animatic (json, animatic) → production.refs.animatic<br>animatic_report (json, optional) → artifact only |
 | 11. Completion criteria | [artifact] Manifest validates<br>[tool: animatic:check] Made from the current spec; runtime, beat shares, pace, pauses, voice over music, terms and hit points inside the approved spec |
 | 12. Evaluation rubric | animatic<br>ANI-TIMING (tool)<br>ANI-APPROVED (human) |
 | 13. Failure conditions | Runtime over the STORY.md cap<br>A beat far from its share<br>Pace or pauses outside their gate<br>A must-say term never spoken<br>A music hit point missed |
 | 14. Retry behavior | max 3 consecutive attempts — Re-dispatch with the failing beats, gates, terms and hit points |
-| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejections → Wei: The timing the script and boards cannot meet together |
-| 16. Human-review requirements | **Required** — Approve the animatic before voice, assets and scenes are built (Wei; outcomes approved, rejected) |
+| 15. Maximum retry or escalation policy | 3 consecutive failures or 2 rejections → the project owner: The timing the script and boards cannot meet together |
+| 16. Human-review requirements | **Required** — Approve the animatic before voice, assets and scenes are built (the project owner; outcomes approved, rejected) |
 | 17. Upstream dependencies | n08_storyboard_shots (flow, when `pass`)<br>n22_targeted_regeneration (loop, when `target:n27_animatic`) |
 | 18. Downstream transitions | Q05: → n10_asset_planning (flow, when `approved`)<br>Q06: → n12_voice_audio (flow, when `approved`)<br>Q07: → n07_script_development (loop, when `rejected`) |
 | 19. Provenance and logging | animatic.json and animatic-report.json per attempt (spec hash, measurements, beat shares, hit points)<br>Ledger: node_dispatched, node_passed/node_failed, checkpoint |

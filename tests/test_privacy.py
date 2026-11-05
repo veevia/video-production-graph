@@ -1,7 +1,4 @@
-"""The privacy scan must never pass a master it has not checked, must catch a listed name however it comes on screen,
-must not block on innocent words, and must never write a name (first real run, #48: a full name showed for 5 frames
-during a scroll because the veil followed sampled boxes; two independent reviews then found ways the scan could pass
-without checking). All names below are fictional placeholders or on-screen phrases of the packaged sample film."""
+"""Synthetic regression coverage: test privacy."""
 
 from __future__ import annotations
 

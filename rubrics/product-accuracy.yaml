@@ -1,8 +1,8 @@
-# Product accuracy — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Product accuracy — reusable rubric; see knowledge/rules.json for default policy.
 id: product-accuracy
 name: Product accuracy
 reviewer: product-accuracy-reviewer
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: ACC-TERMS
   name: Source terminology
@@ -51,14 +51,14 @@ dimensions:
     type: review
     scale: 1–5
   threshold: 4
-  target: the walkthrough opens the detail pages and shows the decision they support
+  target: the demonstration shows the interactions and evidence required by the approved brief
   rule: R-ACC-003
   cases:
     never:
-    - End on a list view
+    - Omit an interaction required by the brief
     - Describe a capability without showing it
     always:
-    - Open the detail and show who acts on it
+    - Show the required interaction and its source-supported result
 - id: ACC-BOUNDARIES
   name: Honest boundaries
   brief_dimension: product_accuracy
@@ -87,7 +87,7 @@ dimensions:
   rule: R-ACC-002
   cases:
     never:
-    - A number, percentage or outcome about the product with no claim id, for example 'cuts water costs 40%' untagged
+    - A number, percentage or outcome with no verified claim id
     - A comparison with a competitor or the old process that no verified claim supports
     always:
     - Tag each product claim with its verified claim id, or cut it

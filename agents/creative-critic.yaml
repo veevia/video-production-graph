@@ -43,6 +43,6 @@ evaluation:
 - narrative-pacing
 escalation:
   when: Cannot judge a dimension from the evidence available
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: FDE Design Reviewer

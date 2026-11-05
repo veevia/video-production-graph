@@ -1,47 +1,45 @@
 ---
 doc: product
 terminology:
-  - {term: "water-use signal", source: "S02 product-notes"}
-  - {term: "expected range", source: "S02 product-notes"}
-  - {term: "seven-day outlook", source: "S02 product-notes"}
+  - {term: "selection marker", source: "S02"}
+  - {term: "card group", source: "S02"}
+  - {term: "detail panel", source: "S02"}
 prohibited:
-  - {term: "predicts", use_instead: "the seven-day outlook projects", source: "S02: the outlook is a planned range, not a forecast"}
-  - {term: "forecast", use_instead: "seven-day outlook", source: "S02"}
+  - {term: "predicts", use_instead: "shows", source: "S02: the fixture is static"}
+  - {term: "forecast", use_instead: "detail panel", source: "S02"}
 verified_claims:
-  - {id: C01, text: "flags unusual water use against each plant's own expected range", source: "S02 product-notes, bullet 1"}
-  - {id: C02, text: "shows a seven-day outlook derived from the production plan", source: "S02 product-notes, bullet 3"}
+  - {id: C01, text: "outlines Card B with a selection marker", source: "S02"}
+  - {id: C02, text: "repeats the selected card label in a detail panel", source: "S02"}
 ---
-# Product — Northwind Water Monitor (fictional)
-
-> Access: written by N04; locked when approved.
+# Product contract - synthetic Shape Board
 
 ## Product truth
-Northwind Water Monitor compares each plant's daily water use with its own expected range and raises a water-use signal when use leaves it (observed, S02). It shows a seven-day outlook derived from the production plan (observed, S02).
+This is a generated test image, not a real product. A card group contains three shapes.
+The selection marker outlines Card B; the detail panel repeats its label.
 
 ## User problem
-Plant managers see their own meters but not the pattern: unusual use is found late, after water is wasted (reported, S01).
+Demonstrate the transition from a group to one labelled detail without inventing features.
 
 ## Audience
-Plant managers and the operations director. Afterwards they should believe the signal is specific to their plant and early enough to act on.
+First-time viewers of a synthetic workflow demonstration.
 
 ## Value proposition
-Unusual water use becomes a plant-specific signal early enough for the plant team to act.
+No commercial claim; the fixture exercises source-grounded scripting.
 
 ## Capabilities
-- Water-use signal against the plant's expected range (S02).
-- Seven-day outlook card (S02).
+Only C01 and C02 above.
 
 ## Required interactions
-Home view (plant list) → open a plant → the signal and its expected range → the seven-day outlook card.
+Show the card group, the selection marker and the detail panel.
 
 ## Demo scenarios
-A plant's water use leaves its expected range; the team opens the plant and reads the outlook. Synthetic data.
+Select Card B in a static, generated image.
 
 ## Claims that must be verified
-C01 and C02 (front-matter) only; both are sourced to S02.
+C01 and C02 are visible in the generated image.
 
 ## Accuracy constraints
-Tag every product frame "synthetic data". The outlook is a planned range: never "predicts" or "forecast".
+Label the material synthetic. Never claim prediction or forecasting.
 
 ## Content that must not be invented
-Savings figures, customer names, integrations, accuracy percentages and any UI not in the supplied capture.
+Customer facts, business outcomes, metrics, integrations or interactive behavior.

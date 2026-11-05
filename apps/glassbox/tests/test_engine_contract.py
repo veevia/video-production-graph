@@ -25,7 +25,7 @@ from vpg.engine import Engine
 @pytest.mark.parametrize("workflow, nodes, edges, gates", [("default", 25, 49, 5), ("quality", 27, 55, 7)])
 def test_real_engine_contract_and_read_only_reactions(tmp_path, workflow, nodes, edges, gates):
     project = tmp_path / "fictional-film"
-    assert cli.main(["init", str(project), "--name", "Fictional contract film", "--workflow", workflow]) == 0
+    assert cli.main(["init", "--human", "Reviewer", str(project), "--name", "Fictional contract film", "--workflow", workflow]) == 0
     engine = Engine(project)
     engine.run(max_steps=1)
     assert cli.main(["telemetry", str(project), "--write"]) == 0

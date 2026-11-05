@@ -23,6 +23,7 @@ jobs:
       - run: python -m vpg validate
       - run: python -m vpg validate --workflow quality
       - run: python -m vpg docs --check
+      - run: python -m vpg publication-check
       - run: python -m pytest -q -p no:cacheprovider
       - run: python -m vpg dry-run
   glassbox-browser:

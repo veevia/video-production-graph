@@ -14,16 +14,7 @@ ratchet, and N21 can propose spec changes. It is opt-in: the default graph and e
 
 ## Why
 
-A recent 90-second case-study film (NDA) went through several full builds in which reviewers kept finding problems
-that no gate measured: how saturated the frames were, how much moved, how readable product UI was in an embedded
-player, how the voice sat over the music. Each was found in a finished master, where it costs a rebuild.
-
-- reported: the reviews of that film named the look and the pacing more often than anything a gate checked.
-- observed: in the finished runs in this workspace, the reviewer scores sat at or near the ceiling across versions (the
-  [saturation alarm](judging.md#saturation-alarm)), so the reviews could not tell a better version from a worse one.
-- assumed: proving the look on a few stills and the timing on a scratch read is cheaper than finding either in the
-  master. The [research notes](research/quality-evaluation.md) cite the practice this borrows (style frames, animatics,
-  measured references).
+Check a few style frames and an animatic before a full build. The additional gates are opt-in and do not alter the node set of an existing run.
 
 ## The flow
 
@@ -41,8 +32,8 @@ producer.
 
 | Gate | The agent produces | The completion check (`vpg/tools/`) | Then |
 |---|---|---|---|
-| N26 Look development | `look-frames.json`: one style frame per role in DESIGN.md `style_frames`, a motion test of MOTION.md's length, and the spec hash they were rendered from | `look:check`: the hash is current; DESIGN.md, its tokens and MOTION.md lint clean; 3 to 5 frames, one per role; every look-stage gate in GATES.yaml passes **for each role** (or for the roles the gate names) against the same role in the pinned registry, at 1920 px; the motion test is the right length and flashes at most 3 times a second. Plus `design:check_palette` | Wei approves the look; approval locks design.md and the visual spec |
-| N27 Animatic | `animatic.json`: the storyboard beats timed to a scratch read (contiguous from 0 s to the read's end), a music sketch, and the spec hash | `animatic:check`: the hash is current; the **measured** runtime (the read, or the board video if longer) within STORY.md, with the beats covering it; each story beat within its share; pace, pauses and voice over music inside their animatic gates; every must-say term spoken, no banned phrase; every MUSIC.md hit point on a **measured** onset in the music sketch (no sketch: not measured, so it fails); and the loudness pre-check | Wei approves the timing |
+| N26 Look development | `look-frames.json`: one style frame per role in DESIGN.md `style_frames`, a motion test of MOTION.md's length, and the spec hash they were rendered from | `look:check`: the hash is current; DESIGN.md, its tokens and MOTION.md lint clean; 3 to 5 frames, one per role; every look-stage gate in GATES.yaml passes **for each role** (or for the roles the gate names) against the same role in the pinned registry, at 1920 px; the motion test is the right length and flashes at most 3 times a second. Plus `design:check_palette` | the project owner approves the look; approval locks design.md and the visual spec |
+| N27 Animatic | `animatic.json`: the storyboard beats timed to a scratch read (contiguous from 0 s to the read's end), a music sketch, and the spec hash | `animatic:check`: the hash is current; the **measured** runtime (the read, or the board video if longer) within STORY.md, with the beats covering it; each story beat within its share; pace, pauses and voice over music inside their animatic gates; every must-say term spoken, no banned phrase; every MUSIC.md hit point on a **measured** onset in the music sketch (no sketch: not measured, so it fails); and the loudness pre-check | the project owner approves the timing |
 
 Every file a manifest names must sit in that attempt's work folder (no `..`, no absolute path or link out of it), and
 none may copy a reference or degraded-anchor file of the benchmark registry: the same bytes, or the same decoded
@@ -66,13 +57,13 @@ level over the surrounding second, ignoring silence, so the music coming in is n
 everywhere and accents nowhere. These thresholds are assumed (`vpg/tools/animatic.py`).
 
 A failing check fails the attempt. The agent's next packet lists each failure with the gate, the rule ids, the role,
-the value and the envelope; three failures escalate to Wei. A gate that cannot be judged (no envelope, not measured,
+the value and the envelope; three failures escalate to the project owner. A gate that cannot be judged (no envelope, not measured,
 the registry missing, unpinned or changed) blocks like a failure: nothing passes unmeasured. A passing check is
-evidence for Wei's decision, never the decision (R-PRO-002).
+evidence for the project owner's decision, never the decision (R-PRO-002).
 
 Both gates are named humans' decisions by default. If they stall a run, a project may let a relaying agent pass them
 provisionally like N03, N04, N06 and N09:
-`autonomy: {mode: provisional, principal: Wei, provisional_gates_extra: [n26_look_development, n27_animatic]}`. No other
+`autonomy: {mode: provisional, principal: "<declared reviewer>", provisional_gates_extra: [n26_look_development, n27_animatic]}`. No other
 node can be added that way.
 
 ## Who writes each spec document
@@ -106,16 +97,18 @@ says `ratchet: true` may not get worse than the registry's accepted baseline (`p
 unless a named human waived it in GATES.yaml. Each finding is traced to the node that made the measured artifact.
 Its report is `quality-gates.json`.
 
-Both dimensions cite R-REG-001, which is not yet adopted, so their findings are nits that block nothing. **Wei decides
-when they block:** `vpg memory promote --rule R-REG-001 --to adopted --human --by <name> --adopted-in
-rubrics/quality-gates.yaml …` makes both MUST, from the next accepted configuration.
+Both dimensions cite R-REG-001, whose built-in default is advisory, so their findings
+do not block. A named human must govern the copied rule in the private project:
+enter `candidate`, collect evidence, validate, approve and adopt it before it becomes
+enforced. Use `--rules /path/to/project/.vpg/rules.json`, then accept the changed
+configuration so reviews run again. See [private learning](self-improvement.md).
 
 ## Spec proposals
 
 When feedback shows that the spec itself is wrong, not the build, N21 may add `spec_proposals` to `interpretation.json`:
 
 ```json
-{"doc": "story", "change": "modify", "rule": "ST-TERMS-001", "proposal": "say 'own range' instead of 'normal levels'",
+{"doc": "story", "change": "modify", "rule": "ST-TERMS-001", "proposal": "say 'detail panel' instead of 'extra information'",
  "because": "F003"}
 ```
 
@@ -153,18 +146,18 @@ python -m vpg run <project>
 - An existing run on the default workflow is unaffected, except that engine code changed: it needs one
   `vpg accept-config` by a named human between versions, as after every engine release
   ([releases](releases.md)).
-- The benchmark films are the project's choice: they must be films Wei would accept, measured on the same basis.
+- The benchmark films are the project's choice: they must be films the project owner would accept, measured on the same basis.
 
 ## Non-goals
 
-- No taste verdict: the gates measure properties of frames and audio; Wei decides whether the look and timing are right.
+- No taste verdict: the gates measure properties of frames and audio; the project owner decides whether the look and timing are right.
 - No change to the default graph, its nodes, prompts or rubrics, and no migration of a running production.
 - No automatic spec edits: proposals are listed, a person files them.
 - No new dependency: the checks use the engine's numpy, Pillow, ffmpeg and (for the UI-text metric) tesseract.
 
 ## Rollback triggers
 
-- A look or animatic gate blocks a production whose frames Wei approves on sight, twice in one run: set
+- A look or animatic gate blocks a production whose frames the project owner approves on sight, twice in one run: set
   `provisional_gates_extra` for that run and re-calibrate the envelope (references or tolerance) before the next one.
 - A metric's envelope flags one of its own references after a re-measure (`vpg benchmark verify` fails): stop using
   that gate until its basis is fixed.
@@ -182,18 +175,11 @@ python -m vpg run <project>
 - observed: a rejected animatic re-runs the script and comes back before anything is built; a writer that edits
   another node's spec document is reverted and fails the attempt; an edit outside the workflow blocks the run.
 - assumed: per-role envelopes from two to five references, with the metric tolerances in `vpg/metrics.py`, separate
-  acceptable frames from regressed ones; they are not yet calibrated on Wei's judgements
+  acceptable frames from regressed ones; they are not yet calibrated on the project owner's judgements
   ([judging](judging.md#calibration)).
-- observed, on real films (2026-10-27):
-  * On the motivating film's versions, with the two benchmark films as references, the build-stage metrics agreed with
-    an independent set of gates on 29 of 32 checks. The three differences were all stricter.
-    [Craft metrics](craft-metrics.md#real-film-evaluation-2026-10-27) has the detail.
-  * Following "Adopting it" literally on a real benchmark film surfaced three gaps, now fixed: media outside the
-    registry folder, a missing `--narration` or `--ocr`, and a `measure --ocr` that skipped what it should fill.
-  * With the commands above, N03's bar check passes with 16 envelopes.
 - The look gate's UI text size is the median word height that tesseract reads confidently on a style frame; the
-  template judges it on the product-UI frame only (`roles: [product_ui]`). On real footage it read words down to about
-  3 px at player width. Words it cannot read confidently are left out, so the very smallest text can go unseen, and a
+  template judges it on the product-UI frame only (`roles: [product_ui]`). Words it cannot read confidently are
+  left out, so the very smallest text can go unseen, and a
   UI frame with fewer than 3 such words cannot pass.
 - The look gate measures stills and a short motion test; motion quality across the whole film is still judged at N16
-  and by Wei.
+  and by the project owner.

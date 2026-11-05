@@ -3,14 +3,12 @@
 Every measurement names its metric, the metric's version and the hash of its basis: the exact method and parameters
 (frame sampling, downmix, meter, thresholds). Two measurements compare only when all three match. When they differ,
 the older one is re-measured under the current basis before any comparison (`benchmarks.recompute`); a value is never
-compared across bases, because a basis change can move a number without the film changing (a +3 dB change in how a
-mono voice was metered once hid a falling voice-over-music margin).
+compared across bases, because a channel-layout or metering change can move a number without the film changing.
 
 Changing a metric's method or a parameter is a new version: bump `version`, and every stored measurement of the old
 version becomes "not comparable" until it is re-measured. Values come from `vpg/tools/craft.py`.
 
-Evidence: the metric set and its v1 parameters reproduce a local investigation of a recent 90-second case-study film
-(NDA) against two benchmark films (reported). Thresholds are not set here: envelopes come from a project's benchmark
+Thresholds are not set here: envelopes come from a project's benchmark
 registry (`vpg/benchmarks.py`), so the benchmark films define what is in character.
 """
 

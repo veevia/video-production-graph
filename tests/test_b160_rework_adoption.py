@@ -57,7 +57,7 @@ def test_a_cascade_before_the_plan_still_reworks_the_node_the_gate_routed_to(tmp
     proj, eng = _routed_project(tmp_path)
     _until_the_gate_decides_rework(eng, proj)
     defect = next(d for d in eng.state.evaluation.defects if d.traced_node == "d_build")
-    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Wei")   # re-stales g_gate and x_regen
+    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Reviewer")   # re-stales g_gate and x_regen
     seq = _seq(proj)
     for _ in range(30):
         eng.step()
@@ -75,13 +75,13 @@ def test_a_cascade_before_the_plan_still_reworks_the_node_the_gate_routed_to(tmp
 def test_one_adoption_per_gate_decision_a_second_cascade_memo_passes(tmp_path):
     proj, eng = _routed_project(tmp_path)
     _until_the_gate_decides_rework(eng, proj)
-    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Reviewer")
     for _ in range(30):                                    # until the adopted attempt has passed, before the next gate
         eng.step()
         if eng.rt("d_build").status.value == "STEP_PASS" and eng.rt("g_gate").status.value != "STEP_PASS":
             break
     seq = _seq(proj)
-    eng.invalidate_nodes(["a_intake"], reason="another change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="another change request", actor="Reviewer")
     for _ in range(30):
         eng.step()
         if _d_build_after(proj, seq):
@@ -95,7 +95,7 @@ def test_a_persisting_defect_routed_again_survives_a_cascade_in_the_next_round(t
     _until_the_gate_decides_rework(eng, proj, n=2)        # round 1 was routed and reworked; the defect persisted
     defect = next(d for d in eng.state.evaluation.defects if d.traced_node == "d_build")
     assert defect.status == "persisting"
-    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Reviewer")
     seq = _seq(proj)
     for _ in range(30):
         eng.step()
@@ -115,8 +115,8 @@ def test_a_blocked_gate_routes_nothing_to_adopt(tmp_path):
     assert eng.state.evaluation.gate_results[-1].outcome == "blocked"
     flag(proj, "defect_audio", on=False)
     (proj / "flags" / "c_audio.variant").write_text("fixed")
-    eng.invalidate_nodes(["c_audio"], reason="approved change request", actor="Wei")
-    eng.unblock("g_gate", actor="Wei", note="the fix is in")
+    eng.invalidate_nodes(["c_audio"], reason="approved change request", actor="Reviewer")
+    eng.unblock("g_gate", actor="Reviewer", note="the fix is in")
     eng.on_step = lambda e: flag(proj, "defect", on=False) if e.state.runtime.rework_cycles else None
     eng.run(max_steps=200)
     assert events(proj, "rework_adopted") == []
@@ -148,7 +148,7 @@ def test_a_defect_the_plan_routed_and_a_reviewer_reported_again_waits_for_the_ne
     defect = next(d for d in eng.state.evaluation.defects if d.traced_node == "d_build")
     _step_until(eng, lambda: _reported_again(eng, defect.id))
     assert len(events(proj, "regeneration_plan")) == 1 and _defect(eng, defect.id).rework_gate == ("gate-v1-1" if stamped else "")
-    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Reviewer")
     seq = _seq(proj)
     _step_until(eng, lambda: bool(_d_build_after(proj, seq)))
     assert _d_build_after(proj, seq)[0][0] == "memo_hit"
@@ -159,10 +159,10 @@ def test_an_adopted_defect_reported_again_is_not_adopted_twice_for_one_gate_deci
     proj, eng = _routed_project(tmp_path)
     _until_the_gate_decides_rework(eng, proj)
     defect = next(d for d in eng.state.evaluation.defects if d.traced_node == "d_build")
-    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Reviewer")
     _step_until(eng, lambda: _reported_again(eng, defect.id))     # adopted, corrected, and reported again on the new version
     assert eng.state.runtime.defect_failures[defect.signature] == 1
-    eng.invalidate_nodes(["a_intake"], reason="another change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="another change request", actor="Reviewer")
     seq = _seq(proj)
     _step_until(eng, lambda: bool(_d_build_after(proj, seq)))
     assert _d_build_after(proj, seq)[0][0] == "memo_hit"
@@ -185,12 +185,12 @@ def test_a_report_on_the_same_version_does_not_reopen_the_gate_decision(tmp_path
     _until_the_gate_decides_rework(eng, proj)
     defect = next(d for d in eng.state.evaluation.defects if d.traced_node == "b_plan")
     version = eng.state.evaluation.gate_results[-1].version
-    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="approved change request", actor="Reviewer")
     _step_until(eng, lambda: _defect(eng, defect.id).status == "in_rework" and eng.rt("b_plan").status.value == "STEP_PASS")
-    eng.invalidate_nodes(["r1_review"], reason="its rubric changed", actor="Wei")
+    eng.invalidate_nodes(["r1_review"], reason="its rubric changed", actor="Reviewer")
     _step_until(eng, lambda: _reported_again(eng, defect.id))
     assert eng.state.runtime.current_version == version == _defect(eng, defect.id).last_seen_version
-    eng.invalidate_nodes(["a_intake"], reason="another change request", actor="Wei")
+    eng.invalidate_nodes(["a_intake"], reason="another change request", actor="Reviewer")
     seq = _seq(proj)
     _step_until(eng, lambda: bool(_d_build_after(proj, seq, "b_plan")))
     assert _d_build_after(proj, seq, "b_plan")[0][0] == "memo_hit"

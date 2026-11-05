@@ -25,7 +25,7 @@ tools:
 - transcript search
 outputs:
 - product_summary
-decision_authority: Drafts product truth. Wei approves it, and after approval it is locked.
+decision_authority: Drafts product truth. the project owner approves it, and after approval it is locked.
 constraints:
 - Every term and claim cites a source
 - Read-only prototype walks (no submits)
@@ -34,6 +34,6 @@ evaluation:
 - product-truth
 escalation:
   when: An unsourced claim is needed for the story
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: Prototype Runner & QA

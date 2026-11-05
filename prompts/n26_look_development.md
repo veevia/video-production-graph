@@ -19,7 +19,7 @@ The look gate measures your frames, not your intent:
 {{inputs}}
 
 ## Control documents
-Read: {{controls_read}} · Write: {{controls_write}}. Wei's approval locks what you write; after that, a change needs a change request (`vpg change-request`). The engine reverts unauthorised edits and fails the attempt. GATES.yaml is the approved bar: never edit it.
+Read: {{controls_read}} · Write: {{controls_write}}. the project owner's approval locks what you write; after that, a change needs a change request (`vpg change-request`). The engine reverts unauthorised edits and fails the attempt. GATES.yaml is the approved bar: never edit it.
 
 ## Produce (in `{{workdir}}`)
 {{outputs}}
@@ -38,6 +38,6 @@ Read: {{controls_read}} · Write: {{controls_write}}. Wei's approval locks what 
 
 ## Never
 - Invent product facts, UI, terms, metrics, rights or approvals.
-- Claim taste approval: a passing look gate is evidence for Wei's decision, not the decision.
+- Claim taste approval: a passing look gate is evidence for the project owner's decision, not the decision.
 - Regenerate or restyle a logo, or import a template's colours or fonts.
 - Change the benchmark registry or its pin.

@@ -132,12 +132,12 @@ class ScoreSystemTests(unittest.TestCase):
 
     def test_cli_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
-            data, fork_path = Path(tmp) / "wei", Path(tmp) / "fork.json"
+            data, fork_path = Path(tmp) / "reviewer", Path(tmp) / "fork.json"
             fork = {k: v for k, v in synth(1, seed=8)[0].items() if k != "ranking"}
             fork_path.write_text(json.dumps(fork))
             self.assertEqual(vs.main(["--data", str(data), "score", str(fork_path)]), 0)
             self.assertEqual(vs.main(["--data", str(data), "record", str(fork_path), "--rank", "B,A,C",
-                                      "--rate", "B:CON-FIT=5", "--why", "clearer story"]), 0)
+                                      "--principal", "Reviewer", "--rate", "B:CON-FIT=5", "--why", "clearer story"]), 0)
             row = json.loads((data / "decisions.jsonl").read_text().splitlines()[0])
             self.assertEqual((row["ranking"], row["model_version"], row["blind"]), (["B", "A", "C"], 0, True))
             self.assertEqual(set(row["predicted"]), {"A", "B", "C"})

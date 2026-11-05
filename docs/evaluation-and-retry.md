@@ -18,7 +18,7 @@
 All 18 brief dimensions are covered by 80 rubric dimensions in `rubrics/*.yaml`. Each dimension has:
 - an id;
 - a level (MUST or SHOULD);
-- a check type: `tool` (deterministic), `review` (scored 1–5 by an agent, threshold 4) or `human` (decided by Wei and never scored by an agent);
+- a check type: `tool` (deterministic), `review` (scored 1–5 by an agent, threshold 4) or `human` (decided by the project owner and never scored by an agent);
 - a threshold or concrete never/always cases;
 - the rule it enforces (`knowledge/rules.json`).
 
@@ -98,7 +98,7 @@ A finding on a failed MUST dimension is never a nit. Whatever severity a reviewe
 
 ## Budgets that follow quality (v1.6)
 
-A loop bound measures effort, not quality. On the SRA run, rework loop E43 reached its bound of 3 just after cycle 4 had resolved 15 defects, and the run sat blocked for a day while the film kept improving outside the graph. So budgets are project settings (`vpg/budget.py`):
+A loop bound measures effort, not quality. Project settings can permit bounded extensions when measured reviews show convergence (`vpg/budget.py`):
 
 ```yaml
 loop_budget:
@@ -138,7 +138,7 @@ loop_budget:
 
 ## Independent pre-flight (v1.6, optional)
 
-`preflight: {nodes: [n14_video_assembly], when: rework}` in `vpg.project.yaml` holds a listed node's finished attempt before the graph spends a review round on it. `when: always` holds the first build too. This is how the SRA side chat took v16 to v19 through an independent reviewer; the graph now does it as a step.
+`preflight: {nodes: [n14_video_assembly], when: rework}` in `vpg.project.yaml` holds a listed node's finished attempt before the graph spends a review round on it. `when: always` holds the first build too.
 
 - **Which nodes:** only producers. A review, a gate, the freeze, the package node, a human-gated node or a per-item node is refused, because it has already acted when it finishes, or a human decides it.
 - **What is held:** the attempt is judged (outputs registered, completion checks passed), but no version is cut and nothing downstream starts. The node waits (`WAITING_RUNTIME`) on a packet, `.vpg/tasks/<node>-a<N>-preflight.md`. The packet lists:

@@ -10,7 +10,7 @@ verified_claims:        # the only claims a script unit may make
 ---
 # Product — <fill: product name>
 
-> Access: written by N04 Product Understanding; read by N01, N05–N07, N19. Locked when Wei approves N04. Changes go through `vpg change-request product`.
+> Access: written by N04 Product Understanding; read by N01, N05–N07, N19. Locked when the project owner approves N04. Changes go through `vpg change-request product`.
 
 ## Product truth
 <fill: what the product is and does today, in the engineers' words; tag each statement observed/reported/assumed>

@@ -1,6 +1,6 @@
 ---
 name: Glass Box
-description: A local review room for AI-produced films, in Present's editorial monochrome.
+description: A local review room for AI-produced films, with an editorial monochrome interface.
 colors:
   paper: "#fafafa"
   white: "#ffffff"
@@ -275,9 +275,9 @@ components:
 
 ## Overview
 
-**Creative North Star: "Present's editorial monochrome, in operate mode"**
+**Creative direction: "Editorial monochrome for a local review tool"**
 
-Glass Box is where the owner of AI-produced films decides, watches and traces how each version was made. It borrows the owner's Present reference (an editorial, monochrome presentation system) and applies it in operate mode: familiar navigation and controls, a fixed type scale, and the brand in precise details rather than spectacle. The frames of the films are the only colour on screen; everything the app draws is ink on paper.
+Glass Box is a local review interface for watching versions, inspecting evidence and sending producer feedback. Navigation is familiar, typography has a fixed hierarchy, and film frames carry the colour while the surrounding interface stays monochrome.
 
 Three ideas carry the system. Decisions sit beside their film and evidence. Films read as a contact sheet: rows of frames, newest first, each with its status underneath. The pipeline is drawn, not tabulated: a hairline traced through the workflow up to where the engine run stands.
 
@@ -289,27 +289,9 @@ Three ideas carry the system. Decisions sit beside their film and evidence. Film
 * 11 to 12 px mono scaffolding under 13 to 40 px regular-weight sans; bold only in the wordmark.
 * Motion only for state and transfer: 150 to 250 ms transitions and the pipeline's one-time trace.
 
-### Adaptations from Present
-
-Present is a scrolling presentation; Glass Box is a tool used between production rounds. Each departure below is deliberate, with its reason.
-
-* **Masthead scale.** Present's masthead is 76 px plus its 8 px rule, translucent with a 20 px backdrop blur, turns dark over the dark band, carries numbered section links, and scales its wordmark from 26 to 40 px. Glass Box keeps the 8 px black rule, the centred bold wordmark and the mono navigation, but in a 65 px plain-paper masthead with a fixed 26 px wordmark that never changes theme. Reason: the masthead is chrome on every view, so the first viewport goes to the decisions and the frames; a solid ground keeps the navigation crisp over scrolling frames; there are no sections to number.
-* **Scan line instead of reading progress.** Present's second rule tracks reading progress. Glass Box's 1 px rule at the masthead's foot appears only while the library scan runs: dashed ink while it walks the folders, a solid ink rule growing from the left while it reads files. Reason: a working view has no reading progress to report, and the long background scan does.
-* **Fixed title scale.** Present's titles are fluid, clamp(40px, 4.6vw, 72px) at -0.045em with a 0.98 line-height. Glass Box fixes page titles at Present's floor, 40 px (30 px on phones) at -0.035em, and the room title at 30 px. Reason: operate mode keeps one scale on every screen size, and the decision count or a film's full name must leave room for the band and the first frames.
-* **No kickers or section numbers.** Present opens each section with a small numbered kicker above the title. Glass Box puts nothing above a heading. Reason: eyebrows are below the craft floor; context sits beside or below the heading.
-* **Installed type.** Present embeds Liberation Sans under the alias Maison Sans. Glass Box uses the installed Helvetica Neue (Present's own first fallback), then Arial, and the platform's ui-monospace. Reason: the app is local only and downloads no fonts.
-* **Monochrome status vocabulary.** Present separates kinds by shape and stroke pattern before tone, and marks the active card with an ink border rather than a colour. Glass Box extends that into a full status vocabulary: a 12 px drawn glyph, a word, a weight and a line style, with no status colour at all (not even one red for P1 or failure), and status dots that never pulse. Reason: the frames are the only colour, and status has to survive greyscale, small sizes and colour blindness.
-* **A pipeline that reflows.** Present's runtime diagram is a fixed 1472 px canvas scaled with CSS zoom, illegible on a phone (its 10 px labels shrink to about 2.4 px). Glass Box lays real node cards out in phase lanes and draws the connectors over them from their measured positions; at 760 px and below the lanes stack and one vertical line runs down a 26 px track. Lane names still stand vertically, as in Present, but in 11 px stone mono instead of 9.5 px graphite. Reason: every node is a control that must stay legible and reachable at 390 px, and graphite small text is under 4.5:1.
-* **One signal, no halo.** Present runs several phase-offset 7 px signals, each with a 4 px, 9 % ink halo, on every path. Glass Box sends one 7 px ink dot, without a halo, along the line into the node that is running, only while the selected version is in progress; the trace draws once in 0.9 s instead of 2.4 s. Reason: motion reports a transfer that is actually happening, and a tool reopens the view too often for a long draw.
-* **No reveals, orbits or pulses.** Present's scroll reveals, revolving loops, pulses and graph bloom are absent. Reason: content must be there at once when the owner comes back; motion is kept for state and transfer.
-* **The List table and the versions Table.** Present has no tables. Glass Box keeps hairline tables where scanning by attribute matters: the Films List of every video file (file, role, film and version, duration, size, date) and the versions Table in the review room (status, open findings by level, checks, notes and source, with A and B ticks for Compare). They use Present's materials: mono 11 px uppercase stone headers over an ash rule, 14 px rows on line rules, mono tabular numbers. Reason: the owner asked to keep every capability, the file lists and the checks table included, and a contact sheet cannot compare sizes, dates or counts side by side.
-* **The node drawer.** Present has no drawers or dialogs. Glass Box opens a node's evidence in a full-height white sheet from the right over an ink scrim, and asks for confirmation in small white dialogs. Reason: the evidence stays one step away without leaving the pipeline, and the owner asked to keep the node drawer with all its content.
-* **The ink climax becomes the Decide band.** Present's single dark moment is a full-bleed ink section. Glass Box's one ink surface is the Decide band, a 6 px sheet inside the page. Reason: the darkest moment marks the one place where a decision is recorded.
-* **No capsule.** Present reserves one ink capsule for a diagram's legend. Glass Box has no capsules or pills; the pipeline's key is a plain line of drawn swatches. Reason: the ring at the waiting gate is the one rounded emphasis, and nothing competes with it.
-
 ## Colors
 
-The palette is Present's, strictly monochrome. Contrast pairs are WCAG AA for their uses.
+The palette is strictly monochrome. Contrast pairs are WCAG AA for their uses.
 
 ### Neutral
 

@@ -10,7 +10,7 @@
    "rule": "R-CAP-001"
   },
   {
-   "text": "The word 'predicts' misdescribes a planned-range outlook for this product.",
+   "text": "The static fixture shows a selection; the word 'predicts' invents behavior not present in the source.",
    "class": "project_specific",
    "evidence": [
     "n07 attempt 1 failure"

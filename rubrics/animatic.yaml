@@ -25,7 +25,7 @@ dimensions:
   check:
     type: human
   threshold: null
-  target: Wei approves the animatic at N27 before voice, assets and scenes are built
+  target: the project owner approves the animatic at N27 before voice, assets and scenes are built
   rule: R-PRO-002
   cases:
     never:

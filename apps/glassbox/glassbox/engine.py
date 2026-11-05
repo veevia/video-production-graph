@@ -79,7 +79,7 @@ class Graph:
         return self.id_by_num.get(num, f"n{num:02d}")
 
     def node_ref(self, text):
-        """First node reference in free text such as 'n13 (pipeline/scenes.py)' or 'N04 (Wei)'."""
+        """First node reference in free text such as 'n13 (pipeline/scenes.py)' or 'N04 (the project owner)'."""
         if not isinstance(text, str):
             return None
         for match in _NODE_REF.finditer(text):

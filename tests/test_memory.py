@@ -17,7 +17,7 @@ def rules(tmp_path):
     return p
 
 
-def _candidate(rb, rid="R-TEST-001", scope="production_default", check=None, evidence=("R07-v10",)):
+def _candidate(rb, rid="R-TEST-001", scope="production_default", check=None, evidence=("example-run-a",)):
     return rb.add_candidate({"id": rid, "statement": "test rule", "category": "craft_quality", "scope": scope,
                              "check": check or {"type": "tool", "fn": "legibility:check"}, "evidence": list(evidence)}, by="agent:learning")
 
@@ -27,45 +27,45 @@ def test_lifecycle_requires_evidence(rules):
     _candidate(rb)
     with pytest.raises(GovernanceError, match="≥2 distinct evidence"):
         rb.transition("R-TEST-001", "observed_again", by="agent:learning", evidence=[])
-    rb.transition("R-TEST-001", "observed_again", by="agent:learning", evidence=["R07-v13"])
+    rb.transition("R-TEST-001", "observed_again", by="agent:learning", evidence=["example-run-b"])
     with pytest.raises(GovernanceError, match="validation evidence"):
         rb.transition("R-TEST-001", "validated", by="agent:learning", evidence=[])
     rb.transition("R-TEST-001", "validated", by="agent:learning", evidence=["tests/test_tools.py::test_density_limit"])
     with pytest.raises(GovernanceError, match="not an allowed lifecycle step"):
-        rb.transition("R-TEST-001", "monitored", by="Wei", evidence=["x"], human=True)
+        rb.transition("R-TEST-001", "monitored", by="Reviewer", evidence=["x"], human=True)
 
 
 def test_only_humans_approve(rules):
     rb = RuleBase(rules)
-    _candidate(rb, evidence=("R07-v10", "R07-v13"))
-    rb.transition("R-TEST-001", "observed_again", by="agent:learning", evidence=["R07-v13"])
+    _candidate(rb, evidence=("example-run-a", "example-run-b"))
+    rb.transition("R-TEST-001", "observed_again", by="agent:learning", evidence=["example-run-b"])
     rb.transition("R-TEST-001", "validated", by="agent:learning", evidence=["run:x"])
-    for by, human in (("agent:critic", True), ("Wei", False)):
+    for by, human in (("agent:critic", True), ("Reviewer", False)):
         with pytest.raises(GovernanceError, match="named human"):
             rb.transition("R-TEST-001", "approved", by=by, evidence=["ok"], human=human)
-    rb.transition("R-TEST-001", "approved", by="Wei", evidence=["review 2026-09-26"], human=True)
+    rb.transition("R-TEST-001", "approved", by="Reviewer", evidence=["review 2026-09-26"], human=True)
     with pytest.raises(GovernanceError, match="must name the rubric"):
-        rb.transition("R-TEST-001", "adopted", by="Wei", evidence=["x"], human=True)
-    rb.transition("R-TEST-001", "adopted", by="Wei", evidence=["x"], human=True, adopted_in="rubrics/accessibility.yaml")
+        rb.transition("R-TEST-001", "adopted", by="Reviewer", evidence=["x"], human=True)
+    rb.transition("R-TEST-001", "adopted", by="Reviewer", evidence=["x"], human=True, adopted_in="rubrics/accessibility.yaml")
     assert enforcement(rb.get("R-TEST-001")) == "enforced"
     with pytest.raises(GovernanceError, match="production observation"):
-        rb.transition("R-TEST-001", "monitored", by="Wei", evidence=["x"], human=True)
+        rb.transition("R-TEST-001", "monitored", by="Reviewer", evidence=["x"], human=True)
     rb.observe("R-TEST-001", "run-1", fired=True, helped=True)
-    rb.transition("R-TEST-001", "monitored", by="Wei", evidence=["run-1"], human=True)
+    rb.transition("R-TEST-001", "monitored", by="Reviewer", evidence=["run-1"], human=True)
     for to in ("retired", "revised"):   # an agent cannot switch off or rewrite an enforced rule
         with pytest.raises(GovernanceError, match="only a named human"):
             rb.transition("R-TEST-001", to, by="agent:learning", evidence=["run-2"], reason="looked redundant", human=True)
     assert enforcement(rb.get("R-TEST-001")) == "enforced"
-    rb.transition("R-TEST-001", "retired", by="Wei", evidence=["review 2026-09-27"], reason="superseded by R-TEST-002", human=True)
+    rb.transition("R-TEST-001", "retired", by="Reviewer", evidence=["review 2026-09-27"], reason="superseded by R-TEST-002", human=True)
 
 
 def test_protected_scope_refused(rules):
     rb = RuleBase(rules)
-    _candidate(rb, rid="R-TEST-PT", scope="product_truth", evidence=("R07-v10", "R07-v13"))
-    rb.transition("R-TEST-PT", "observed_again", by="agent", evidence=["R07-v13"])
+    _candidate(rb, rid="R-TEST-PT", scope="product_truth", evidence=("example-run-a", "example-run-b"))
+    rb.transition("R-TEST-PT", "observed_again", by="agent", evidence=["example-run-b"])
     rb.transition("R-TEST-PT", "validated", by="agent", evidence=["t"])
     with pytest.raises(GovernanceError, match="protected"):
-        rb.transition("R-TEST-PT", "approved", by="Wei", evidence=["x"], human=True)
+        rb.transition("R-TEST-PT", "approved", by="Reviewer", evidence=["x"], human=True)
 
 
 def test_revision_preserves_previous_version(rules):
@@ -73,8 +73,8 @@ def test_revision_preserves_previous_version(rules):
     rid = "R-LEG-001"
     before = json.loads(json.dumps(rb.get(rid)))
     with pytest.raises(GovernanceError, match="reason and evidence"):
-        rb.transition(rid, "revised", by="Wei", evidence=[], human=True)
-    rb.transition(rid, "revised", by="Wei", evidence=["calibration round 1"], human=True, reason="Wei wants 24 px")
+        rb.transition(rid, "revised", by="Reviewer", evidence=[], human=True)
+    rb.transition(rid, "revised", by="Reviewer", evidence=["calibration round 1"], human=True, reason="Reviewer wants 24 px")
     r = rb.get(rid)
     assert r["previous_versions"][-1]["statement"] == before["statement"] and r["rule_version"] == 2
     assert r["lifecycle"]["state"] == "revised" and enforcement(r) == "inactive"
@@ -99,7 +99,7 @@ def test_apply_proposal_requires_human(rules):
     for bad in ("agent:learning", "dry-run-auto", ""):
         with pytest.raises(GovernanceError):
             apply_proposal(proposal, approved_by=bad, rules_path=rules)
-    assert apply_proposal(proposal, approved_by="Wei", rules_path=rules) == {"observations": 1, "candidates": 1}
+    assert apply_proposal(proposal, approved_by="Reviewer", rules_path=rules) == {"observations": 1, "candidates": 1}
     rb = RuleBase(rules)
     assert rb.get("R-CAND-X")["lifecycle"]["state"] == "candidate" and rb.get("R-CAP-001")["observations"][-1]["run"] == "r1"
 
@@ -118,6 +118,11 @@ def test_seed_rules_reference_existing_tests():
 def test_rule_histories_follow_allowed_transitions():
     rules = json.loads((PKG / "knowledge/rules.json").read_text())["rules"]
     for r in rules:
+        if r["lifecycle"]["state"] == "builtin":
+            assert r["lifecycle"]["history"] == []
+            assert r["evidence"] == []
+            assert enforcement(r) in {"enforced", "advisory", "inactive"}
+            continue
         states = [h["state"] for h in r["lifecycle"]["history"]]
         assert states and states[0] == "candidate", r["id"]
         for a, b in zip(states, states[1:]):
@@ -132,4 +137,29 @@ def test_advisory_rules_downgrade_rubric_dimensions(project):
     proj, _ = project
     eng = Engine(proj, executor=FnExecutor())
     ring = next(d for d in eng.rubrics["accessibility"]["dimensions"] if d["id"] == "LEG-RING")
-    assert ring["level"] == "SHOULD" and "not yet adopted" in ring["advisory_reason"]      # R-UI-002 is validated, not adopted
+    assert ring["level"] == "SHOULD" and "advisory in the shipped policy" in ring["advisory_reason"]
+
+
+def test_builtin_policy_is_not_a_recorded_human_approval(rules):
+    rb = RuleBase(rules)
+    rule = rb.get("R-LEG-001")
+    assert rule["lifecycle"] == {"state": "builtin", "history": []}
+    assert enforcement(rule) == "enforced"
+    with pytest.raises(GovernanceError, match="only a named human"):
+        rb.transition(rule["id"], "candidate", by="agent:learning", evidence=[])
+    rb.transition(rule["id"], "candidate", by="Reviewer", human=True, evidence=["project:review"])
+    assert enforcement(rb.get(rule["id"])) == "inactive"
+    assert rb.get(rule["id"])["lifecycle"]["history"][0]["by"] == "Reviewer"
+
+
+def test_shipped_policy_cannot_be_mutated():
+    from vpg.memory import DEFAULT_RULES
+    before = DEFAULT_RULES.read_bytes()
+    with pytest.raises(GovernanceError, match="shipped policy is read-only"):
+        RuleBase().observe("R-LEG-001", "fictional-run", fired=True, helped=True)
+    assert DEFAULT_RULES.read_bytes() == before
+
+
+def test_malformed_builtin_enforcement_fails_explicitly():
+    with pytest.raises(GovernanceError, match="default_enforcement"):
+        enforcement({"id": "R-TEST", "lifecycle": {"state": "builtin"}})

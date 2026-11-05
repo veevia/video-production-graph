@@ -65,7 +65,7 @@ def principal_key(principal: str) -> str:
 
 
 def preference_store(root: Path, principal: str) -> Path:
-    return root / "knowledge" / "preferences" / principal_key(principal)
+    return root / "preferences" / principal_key(principal)
 
 
 def now() -> str:
@@ -83,7 +83,7 @@ def sigmoid(x: float) -> float:
     return 1 / (1 + math.exp(-x)) if x >= 0 else math.exp(x) / (1 + math.exp(x))
 
 
-def new_model(principal: str = "Wei") -> dict:
+def new_model(principal: str = "") -> dict:
     return {"schema": "vpg-score-model/v1", "principal": principal, "version": 0, "parent": None, "created": now(),
             "types": {}, "beta": BETA0, "dim_bias": {}, "trained_on": {"decisions": 0, "sha256": None}, "metrics": {}}
 
@@ -168,7 +168,7 @@ def pairs_from_ranking(ranking: list[str]) -> list[tuple[str, str]]:
     return [(ranking[i], ranking[j]) for i in range(len(ranking)) for j in range(i + 1, len(ranking))]
 
 
-def fit(decisions: list[dict], principal: str = "Wei", version: int = 1, parent: int | None = 0,
+def fit(decisions: list[dict], principal: str = "the project owner", version: int = 1, parent: int | None = 0,
         epochs: int = 300, lr: float = 1.0) -> dict:
     """MAP fit on every decision: per-dimension bias from the principal's ratings, then weights and beta."""
     model = new_model(principal)
@@ -575,18 +575,20 @@ def cmd_report(a) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data", default=str(Path(__file__).resolve().parents[1] / "knowledge" / "preferences" / "wei"),
-                    help="the preference store (default: knowledge/preferences/wei, outside the run config fingerprint)")
+    ap.add_argument("--data", required=True,
+                    help="private preference store outside the toolkit checkout")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sp = sub.add_parser("score"); sp.add_argument("fork"); sp.set_defaults(fn=cmd_score)
     sp = sub.add_parser("record"); sp.add_argument("fork"); sp.add_argument("--rank", required=True)
     sp.add_argument("--rate", action="append", metavar="CAND:DIM=1-5"); sp.add_argument("--why")
-    sp.add_argument("--principal", default="Wei"); sp.add_argument("--not-blind", action="store_true")
+    sp.add_argument("--principal", required=True); sp.add_argument("--not-blind", action="store_true")
     sp.add_argument("--retrospective", action="store_true", help="hindsight-biased: learn weights from it, keep it out of ECE")
     sp.add_argument("--source", help="where the choice was made, e.g. the chat turn quoted"); sp.set_defaults(fn=cmd_record)
     sp = sub.add_parser("fit"); sp.set_defaults(fn=cmd_fit)
     sp = sub.add_parser("report"); sp.set_defaults(fn=cmd_report)
     a = ap.parse_args(argv)
+    if Path(a.data).expanduser().resolve().is_relative_to(Path(__file__).resolve().parents[1]):
+        ap.error("--data must be outside the toolkit checkout")
     return a.fn(a)
 
 

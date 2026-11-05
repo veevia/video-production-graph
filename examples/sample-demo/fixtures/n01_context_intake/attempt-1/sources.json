@@ -23,14 +23,14 @@
   },
   {
    "id": "S04",
-   "path": "sources/ui/dashboard.png",
+   "path": "sources/ui/board.png",
    "kind": "prototype",
    "evidence": "observed",
    "notes": "captured product screen (synthetic data)"
   },
   {
    "id": "S05",
-   "path": "assets/brand/northwind-mark.png",
+   "path": "assets/brand/shape-mark.png",
    "kind": "brand",
    "evidence": "observed",
    "notes": "supplied mark"

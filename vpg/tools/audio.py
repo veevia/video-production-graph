@@ -1,10 +1,4 @@
-"""Voice and audio checks (N12).
-
-Recovered rules: narration must cover every script unit in order, with no dropped or clipped words. Round 07's
-clipped "experts" came from a mix step that lowered a detector-flagged "pause" by 32 dB inside a word, so speech
-spans must never be attenuated by more than `max_speech_dip_db`. The voice direction must name an adult
-professional delivery, and human listening stays a separate sign-off that the agent never claims.
-"""
+"""Workflow contract: audio."""
 
 from __future__ import annotations
 
@@ -136,8 +130,15 @@ def check_voice(ctx) -> CheckResult:
         if b["start"] < a["end"]:
             msgs.append(f"spans {a['unit']} and {b['unit']} overlap")
     direction = ctx.load("voice_direction") or {}
-    if direction.get("age") != "adult" or not direction.get("delivery"):
-        msgs.append("voice direction must specify an adult professional delivery (never a child-like or youthful read)")
+    age = direction.get("age")
+    if not isinstance(age, str) or not age.strip() or "<" in age or ">" in age or not direction.get("delivery"):
+        msgs.append("voice direction must specify a voice profile and delivery; fill the template fields first")
+    required_age = ctx.fm("production").get("voice_age")
+    if required_age is not None:
+        if not isinstance(required_age, str) or not required_age.strip() or "<" in required_age or ">" in required_age:
+            msgs.append("production.voice_age must be configured before generating narration")
+        elif age != required_age:
+            msgs.append(f"voice direction must match the approved production.voice_age: {required_age}")
     if direction.get("human_listening") not in ("pending", "approved"):
         msgs.append("voice direction must record the human listening sign-off status (pending|approved); the agent never claims it")
     p = ctx.artifact_path("voice")

@@ -211,10 +211,10 @@ def test_labels_come_from_named_humans_and_feed_agreement(tmp_path):
     with pytest.raises(jd.JudgingError, match="named human"):
         jd.label("C1", "C2", "C1", "agent:critic")
     with pytest.raises(jd.JudgingError, match="pick is"):
-        jd.label("C1", "C2", "C9", "Wei")
+        jd.label("C1", "C2", "C9", "Reviewer")
     packet, key = _batch()
     res = jd.score_batch(key, _judge(packet, key, honest))
-    labels = [jd.label(c["a"], c["b"], c["winner"] or "tie", "Wei", note="ground is calmer", t=12.0, version="v3")
+    labels = [jd.label(c["a"], c["b"], c["winner"] or "tie", "Reviewer", note="ground is calmer", t=12.0, version="v3")
               for c in res["comparisons"]]
     agree = jd.agreement_from([res], labels)
     assert agree["labels"] == 10 and agree["alpha"] == 1.0 and agree["status"] == "insufficient"
@@ -320,7 +320,7 @@ def test_cli_pack_score_and_label(tmp_path, capsys):
     verdict.write_text(json.dumps(_judge(p, k, lambda f, s: "first")))
     assert cli.main(["judge", "score", "--key", str(key), "--verdict", str(verdict)]) == 1    # not trusted
     labels = tmp_path / "labels.jsonl"
-    assert cli.main(["judge", "label", "--labels", str(labels), "--a", "C1", "--b", "C2", "--pick", "C1", "--by", "Wei",
+    assert cli.main(["judge", "label", "--labels", str(labels), "--a", "C1", "--b", "C2", "--pick", "C1", "--by", "Reviewer",
                      "--t", "14.5", "--note", "calmer ground"]) == 0
     assert cli.main(["judge", "label", "--labels", str(labels), "--a", "C1", "--b", "C2", "--pick", "C1",
                      "--by", "agent:x"]) == 4

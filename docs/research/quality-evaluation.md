@@ -5,32 +5,7 @@ every judge against a named human before it gates anything, measure craft determ
 basis, describe the creative intent as versioned specs with tokens, check looks and timing before full builds, and keep
 every decision observable. None of this is a learned "beauty" score.
 
-**Provenance.** The sources below were collected for the 2026-10-26 quality upgrade (v1.9) and are cited as published
-(reported). The motivating evidence is a local investigation of a recent 90-second case-study film (NDA): it compared
-the film's last four versions with two benchmark films and with its own earlier best, using one set of tools on all
-films (reported; its records stay with that project and are not part of this package). Statements about this engine
-are observed in its tests. Nothing here authorises calling a model, a cloud service or publishing media.
-
-## What the investigation found (reported)
-
-Measured with one set of tools on all films:
-
-* a saturated gradient as every frame's ground raised whole-frame colourfulness several-fold over the benchmark films
-  and the film's own earlier best;
-* frames in motion rose well above the benchmark films' share, and the share of the spoken span left as pauses fell to
-  about half;
-* narration got faster than both the benchmark films and the earlier best;
-* the voice-over-music margin (10th percentile) fell well below the benchmark films' margin and below the roughly 10 LU
-  at which speech over music stays intelligible, while a change of loudness basis (+3 dB for the voice) hid the fall;
-* the narration spoke about half of the design-approach terms the earlier best had covered.
-
-The measured values stay with that project, under its NDA; they are not part of this package.
-
-Every gate and all five reviewers passed the regressed versions. The causes it named: the governed path was bypassed
-while the run waited at its first human gate; the art direction lived in unversioned notes; there was no cheap look
-check, no reference and no pairwise judging, and the 1 to 5 scores saturated; the checks missed transitions, ground
-saturation, UI legibility at player width and breathing room; a loudness-basis change hid a falling margin; and human
-reactions arrived as free text.
+The references below describe public evaluation and production techniques. The toolkit uses synthetic regression evidence; it does not redistribute private investigations, benchmark results or project observations.
 
 ## Judging
 

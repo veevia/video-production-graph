@@ -1,19 +1,18 @@
 {
- "objective": "A first-time viewer can say, within 20 seconds, that the monitor flags unusual water use per plant and shows a seven-day outlook.",
+ "objective": "Show a card group, select one card, and read its detail panel.",
  "audience": [
-  "plant managers",
-  "operations director"
+  "first-time viewers"
  ],
- "business_context": "Unusual water use is found too late to act on.",
+ "business_context": "Synthetic workflow demonstration; no business claims.",
  "success_criteria": [
-  "viewer can name the water-use signal",
-  "viewer can say the outlook is based on the production plan",
-  "runtime ≤ 20 s",
-  "never uses the word 'predicts'"
+  "viewer can name the selection marker",
+  "viewer can locate the detail panel",
+  "runtime <= 20 s",
+  "never claim the static fixture predicts a selection"
  ],
  "runtime_target_s": 16,
  "runtime_max_s": 20,
  "constraints": [
-  "synthetic data tagged on screen"
+  "label all example images synthetic"
  ]
 }

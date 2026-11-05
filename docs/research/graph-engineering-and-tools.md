@@ -6,11 +6,7 @@
 > learning, and the ones that need no running service (LangGraph OSS, Burr, CrewAI Flows) were mirrored in vocabulary
 > rather than adopted as a dependency (see [ADR 0001](../adr/0001-graph-engine.md)).
 
-**Provenance.** A source-verified research pass, 2026-09-26 (a research agent with web access; every non-trivial claim is
-cited below and anything unverifiable is marked UNVERIFIED). The "Observed in production" notes come from the 2026-09
-platform-film case study (`knowledge/case-studies/platform-film-2026-09/`), not from vendor descriptions. Evidence tags: cited docs = *reported*;
-production notes = *observed*; recommendations in the last section = *introduced by this task*. Nothing here authorises
-installing a tool, calling a provider or publishing media.
+**Scope.** Public technical references and design trade-offs. No private production observations are included. Verify provider capabilities and licensing before using them with project material.
 
 ## 1. Graph-engineering concepts: verdicts for creative video production
 
@@ -62,7 +58,7 @@ The **Fit** column is the research verdict on each framework taken alone. vpg's 
 
 ## 3. Production tools: capabilities, limits, integration, and the node they fit
 
-Concrete capabilities and limitations come from the cited sources. The last column adds what the case-study production observed.
+Concrete capabilities and limitations come from the cited sources. The last column describes possible workflow bindings.
 
 | Tool | Capabilities | Limitations | Inputs → Outputs | Integration/licence | Pipeline node |
 |---|---|---|---|---|---|
@@ -83,20 +79,7 @@ Concrete capabilities and limitations come from the cited sources. The last colu
 | **Whisper large-v3** | Word-level timestamps **natively built into the base repo** (`word_timestamps=True`, cross-attention+DTW, per-model `_ALIGNMENT_HEADS`) — not solely a WhisperX/stable-ts add-on; exposes `no_speech_threshold`/`hallucination_silence_threshold` to fight silence hallucination [84] | Model card itself admits hallucination from weakly-supervised training, worse in low-resource languages; independent research (Koenecke et al.) finds ~1% of transcripts contain fully fabricated phrases, correlated with longer non-vocal spans [84][85] | Audio → transcript + word timestamps | **MIT**, local inference, 1550M params, ~10GB VRAM [84] | ASR/QC node (verify narration vs. captions, flag hallucinated silence) |
 | **Impeccable** | 24 commands (`critique`/`audit`/`polish`/`harden`/`animate`...), 61 deterministic detector rules + LLM critique, live-browser variant iteration, `PRODUCT.md`/`DESIGN.md` context model [98][104] | **Frontend/UI craft skill only** — no video, render, or voice capability whatsoever; its launcher downloads a small engine binary on first run (SHA-256 verified) | Project code/design docs → design critique or edits | Apache-2.0; upstream `pbakaus/impeccable`, docs at impeccable.style; explicitly descends from Anthropic's `frontend-design` skill [98][99] | Pre-production creative-direction QA (esp. product-UI capture fidelity before it enters a shot) |
 | **video-shotcraft** | 12 curated shot/transition recipe families (of upstream's own inconsistently-reported ~152–157 cards / 209–216 previews) — e.g. `depth-layer-moves`, `circle-match-iris`, `spotlight-hero-card` — each with a source card + Remotion (TSX) implementation [100][102] | **Curated reference only** — "does not install or run a renderer, generate voices, launch a workbench or publish media"; adapting the TSX still needs a separately-licensed Remotion project [102] | Brief+brand+asset registry → a bounded shot-selection **plan** (table), not rendered video | Apache-2.0 (upstream `Vincentwei1021/video-shotcraft`, pinned commit `a1ec677c`); Remotion's own license is explicitly separate and not covered [100][102] | Shot-planning layer sitting above a Remotion renderer |
-| **OpenMontage** | Self-described "first open-source, agentic video production system" — hybrid pipeline distinguishing anchor footage from generated/designed support; asset-role mapping; voice/style sample-approval gates before batching [101][103] | **AGPL-3.0** — network-service/distribution obligations need dedicated legal review before adoption; default setup installs Python deps + Remotion + Piper with an automatic cloud-TTS fallback if Piper fails, "unsuitable as an unattended repair for a private local voice workflow" [103] | Natural-language brief → researched/scripted/assembled video (full pipeline) | AGPL-3.0 [101]; Python+Node+Remotion+Piper stack; own state/artifact schema and provider selectors | Reference architecture for pipeline design only — **not vendored/adopted** locally [102][103] |
-
-### Observed in the case-study production (local evidence)
-
-| Tool | Where it was used | What was observed | Node in this workflow |
-|---|---|---|---|
-| Deterministic HTML/SVG renderer (Playwright/Chromium) + ffmpeg | R01–R07 | The picture is a pure function of time. A lossless capture of the untouched prototype went into a 1:1 editorial window. Accepted outputs must never be overwritten. | N13, N14 |
-| Qwen3-TTS VoiceDesign/Base (local, identity-locked) | R06–R07 | About 0.28× real time; several seeds per unit, with ASR choosing the take. "Versioned" was heard as "version" in 8 of 8 takes, so the line was rephrased. ASR and levels cannot certify warmth or age; a human listening pass is required. | N12 |
-| Whisper large-v3 (MLX, offline) | R02, R05, R07 | Word timings drive captions and cues. Plain ASR split "experts" at the /p/ closure; a zoomed spectrogram plus a local-snippet test were needed to prove the word was intact. | N12 QC, N18 |
-| Apple Vision OCR (on-device) | R02, R07 | Terminology and density measurement from frames; uncorrected and approximate. | N19, density |
-| FDE Design Reviewer (independent critic agent) | R07 v01–v15 | Pixel-evidenced critique with severities and traced fixes. It is read-only, cannot listen and never approves a release. | N16, N17, N20 |
-| video-shotcraft (curated, reference-only) | R06–R07 | Motivated seams, source-locked reveals and restrained real-UI camera attention. It must not bring in its template skin or fictional UI. | N08, N13 |
-| Azure AI Foundry media adapters | R01, R03 | Generic image, video and TTS smoke tests only. Private product material may not be uploaded without scope approval. Sora output was 720p, upscaled. | N11 (generic plates only) |
-| OpenMontage | R01, R06 | Research-only (AGPL-3.0). Its asset-role mapping and voice-sample gate informed N10 and N12; nothing was vendored. | reference |
+| **OpenMontage** | Open-source video-production project [101] | Review its licence, provider calls and data handling before adoption | Consult upstream documentation for setup and interfaces | AGPL-3.0 [101] | Optional research reference; not bundled |
 
 ## 4. Quality standards that became testable gates
 
@@ -260,6 +243,3 @@ would override them in `evaluation.md`.
 99. https://impeccable.style — official documentation site (linked from README)
 100. https://github.com/Vincentwei1021/video-shotcraft — README
 101. https://github.com/calesthio/OpenMontage — README (license badge: AGPL‑3.0)
-102. Local: `03_Agents-and-Skills/Skills/video-production/video-shotcraft/{SKILL.md,NOTICE.md,README.md,references/*,import-manifest.json}` (this workspace)
-103. Local: `~/.copilot/session-state/de8afd0b-b951-4087-a1a9-e0bce91e22ae/files/video-production-skills-research.md` (prior research note, reviewed 2026‑09‑25)
-104. Local: `03_Agents-and-Skills/Skills/impeccable/README.md` (provenance record: `pbakaus/impeccable` @ commit `9d715cc4`, Apache‑2.0)

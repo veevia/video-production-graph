@@ -2,22 +2,22 @@
 spec: {family: vpg-spec/v1, doc: story, version: 1}
 runtime_s: {target: 18, max: 20}
 beats:
-  - {id: problem, share: 0.33, idea: "Every plant reports, but nobody sees the pattern in time", chapters: [ch1]}
-  - {id: signal, share: 0.33, idea: "A signal fires when a plant leaves its own range", chapters: [ch2]}
-  - {id: outlook, share: 0.34, idea: "The outlook lets the team act first", chapters: [ch3]}
+  - {id: group, share: 0.33, idea: "Introduce three geometric cards", chapters: [ch1]}
+  - {id: select, share: 0.33, idea: "Outline Card B with a selection marker", chapters: [ch2]}
+  - {id: inspect, share: 0.34, idea: "Read the matching detail panel", chapters: [ch3]}
 beat_tolerance: 0.06
-must_say: ["Northwind Water Monitor", "expected range", "seven-day outlook"]
+must_say: ["Shape Board", "card group", "detail panel"]
 banned_phrases: ["game-changing", "revolutionary"]
 rules:
   - id: ST-TERMS-001
     level: MUST
     statement: Every must-say term is spoken.
-    rationale: The three terms are the product's promise in the brief.
+    rationale: The three terms identify the generated fixture's visible elements.
     source: brief
     enforcement: {type: tool, check: "specchecks:story_terms"}
     examples:
-      do: ["its own expected range"]
-      dont: ["its normal levels"]
+      do: ["a selection marker on Card B"]
+      dont: ["an invented interactive feature"]
   - id: ST-BAN-001
     level: MUST
     statement: No banned phrase is spoken or shown.
@@ -25,8 +25,8 @@ rules:
     source: brief (tone)
     enforcement: {type: tool, check: "specchecks:story_terms"}
     examples:
-      do: ["Say what the signal does"]
-      dont: ["A game-changing monitor"]
+      do: ["Describe the visible selection"]
+      dont: ["An unsupported product claim"]
   - id: ST-IDEA-001
     level: MUST
     statement: One idea per scene.
@@ -34,16 +34,16 @@ rules:
     source: R-DEN-001
     enforcement: {type: judge}
     examples:
-      do: ["The outlook scene only shows the outlook"]
-      dont: ["The signal and the outlook in one scene"]
+      do: ["The detail panel scene only shows the detail panel"]
+      dont: ["The signal and the detail panel in one scene"]
 ---
 # Story spec
 
 ## Intent
-A plant manager ends knowing the monitor watches each plant against its own range and looks a week ahead.
+A viewer can identify Card B and read the matching label in its detail panel.
 
 ## Beats
-Problem, signal, outlook: one scene each.
+Group, select, inspect: one scene each.
 
 ## Terms
-The product name, its own expected range and the seven-day outlook are the promise.
+The fixture name, card group and detail panel are literal labels, not business claims.

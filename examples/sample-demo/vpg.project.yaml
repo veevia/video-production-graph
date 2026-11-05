@@ -1,7 +1,7 @@
 # Example production: a fictional product with synthetic data. `python -m vpg dry-run` copies it to a temp dir and runs
 # it with scripted agents (fixtures/) and real local media commands (pipeline/).
 id: sample-demo
-name: Northwind Water Monitor teaser (fictional example)
+name: Shape Board teaser (fictional example)
 workflow: default
 executor: scripted
 fixtures: fixtures

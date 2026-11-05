@@ -1,8 +1,8 @@
-# Product truth — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Product truth — reusable rubric; see knowledge/rules.json for default policy.
 id: product-truth
 name: Product truth
 reviewer: product-understanding
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: PT-CONTRACT
   name: Machine contract
@@ -24,11 +24,11 @@ dimensions:
   check:
     type: human
   threshold: null
-  target: 'Wei approves product truth at N04: every claim traced to an engineer source'
+  target: 'the project owner approves product truth at N04: every claim traced to an engineer source'
   rule: R-ACC-002
   cases:
     never:
     - A capability with no source
     always:
     - List it under 'content that must not be invented'
-    - Record Wei's product-truth decision
+    - Record the project owner's product-truth decision

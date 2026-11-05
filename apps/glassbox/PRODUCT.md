@@ -23,8 +23,7 @@ web
 Make AI video production observable and steerable from one local place. For every production job the app shows what
 each pipeline node and gate produced, why it passed, failed or waits, and what needs the owner. Its Library shows every
 video under explicitly configured library roots, grouped into films and versions. Success: within seconds the owner knows what needs attention and why,
-and can record a decision or note the producer picks up. **[inferred from "observe how/what your subagent working on",
-"a place where you can see and react", "load all videos ... with all versions"]**
+and can record a decision or note the producer picks up. **[design intent]**
 
 The interface leads with decisions and keeps supporting evidence one step away. **[inferred: design intent]**
 
@@ -45,8 +44,7 @@ it, and returns the owner's reactions to the producer. **[observed]**
 
 ## Capabilities and Constraints
 
-Every capability below exists today and must survive any redesign (owner, 2026-10-27: "don't lose the capabilities").
-**[observed]**
+These capabilities form the app's public contract and are exercised by synthetic tests.
 
 * Needs you: decisions for the owner across all jobs (human gates, release decisions, P1 and P2 defects, rework
   verdicts), and an FYI list of what the producer is still working on, with the reason for each item. A gate the
@@ -79,7 +77,7 @@ Every capability below exists today and must survive any redesign (owner, 2026-1
 
 Constraints:
 
-* Local only: bound to `127.0.0.1`, never online, no CDNs or downloaded web fonts; production content is under NDA.
+* Local only: bound to `127.0.0.1`, never online, no CDNs or downloaded web fonts; projects may contain private media.
   **[observed]**
 * Read-only over every project. Server writes are the owner's reactions and library index, in the private data
   folder. The browser also caches thumbnails in IndexedDB; the README describes removal and temporary profiles.
@@ -102,7 +100,7 @@ Constraints:
 1. Decision first: what needs the owner leads every entry point; everything else is one step away. **[inferred]**
 2. Evidence before verdict: every status links to the artifact, check or review that produced it. **[inferred]**
 3. Honest signals: never claim more than the data supports (basis changes, per-version targets, provisional
-   approvals, direct runs not in the ledger). **[observed: owner feedback on hidden regressions]**
+   approvals, direct runs not in the ledger). **[design requirement]**
 4. Observe by default, write on purpose: production files are read-only; reactions and caches stay separate. **[observed]**
 5. Familiar operation: standard navigation and controls; the brand lives in precise details. **[inferred]**
 

@@ -1,18 +1,4 @@
-"""Caption tools: SRT parsing and caption/speech synchronisation.
-
-The rule set was tightened across three Round 07 critic rounds (r07-v13 → v15):
-  * a cue never starts after its first spoken word (no lag);
-  * a sentence's first cue may lead by up to 0.45 s into cleared time; a mid-sentence cue by at most 0.20 s;
-  * no cue clears more than 0.10 s before its last word ends;
-  * reading rate ≤ 20 characters per second; minimum cue duration 0.8 s.
-Spoken timings come in as spans (one per narration unit). When the timings carry the unit's words in order
-(`words: [{unit, i, word, start, end, measured}]`), its measured words keep their times, and a word that was not measured
-is given the whole gap between the measured words around it (or the unit's edges): it starts as early and ends as late as
-it could, so the no-lag and early-clear checks flag every cue that could lag or clear early. A unit with no measured
-word, or whose entries are not its words, is interpolated by character length over its whole span, which at clause
-breaks can be off from real speech by most of a second. "Could" assumes a unit's words follow one another inside its
-span (see _measured_unit).
-"""
+"""Workflow contract: captions."""
 
 from __future__ import annotations
 

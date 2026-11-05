@@ -27,6 +27,12 @@ from vpg.tools import audio, layout, regress, review_prep, verify
 FFMPEG = shutil.which("ffmpeg")
 
 
+def validate_builtin(rb, rule):
+    rb.transition(rule, "candidate", by="Reviewer", human=True, evidence=["synthetic:one"])
+    rb.transition(rule, "observed_again", by="agent:test", evidence=["synthetic:two"])
+    rb.transition(rule, "validated", by="agent:test", evidence=["tests/test_b3_regression_harness.py"])
+
+
 def _artifact(key: str, path: str, node: str = "n13_motion_scenes", version: int = 1) -> ArtifactRecord:
     return ArtifactRecord(id=f"a-{key}", key=key, path=path, sha256="0" * 64, bytes=1, node=node, attempt=1,
                           produced_at="2026-10-02T00:00:00", version=version)
@@ -81,9 +87,9 @@ def _regression_ctx(tmp_path: Path, baseline: dict, candidate: dict, departures:
         loads["layout_audit"] = candidate_layout
     return HarnessCtx(tmp_path, loads=loads, config=config,
                       artifacts=[_artifact("inventory", cand.relative_to(tmp_path).as_posix())],
-                      feedback=[Feedback(id="F012", text="keep only signal", actor="Wei", created_at="2026-10-02T00:00:00")],
-                      changes=[ChangeRequest(id="CR-004", doc="evaluation", requested_by="Wei", reason="threshold",
-                                             at="2026-10-02T00:00:00", status="approved", approved_by="Wei")])
+                      feedback=[Feedback(id="F012", text="keep only signal", actor="Reviewer", created_at="2026-10-02T00:00:00")],
+                      changes=[ChangeRequest(id="CR-004", doc="evaluation", requested_by="Reviewer", reason="threshold",
+                                             at="2026-10-02T00:00:00", status="approved", approved_by="Reviewer")])
 
 
 def _demo_samples(n, *, cap_prefix="frame", pointer=True, zoom=1.0):
@@ -202,13 +208,13 @@ def test_regression_is_safety_only_only_when_added_mid_run(tmp_path):
     for doc in ("product", "creative", "design", "production", "evaluation", "memory"):
         shutil.copy2(PKG / "examples/sample-demo/controls" / f"{doc}.md", proj / "controls" / f"{doc}.md")
     wf = mini_workflow(tmp_path)
-    cfg = {"id": "t", "name": "t", "workflow": str(wf), "executor": "task", "humans": ["Wei"]}
+    cfg = {"id": "t", "name": "t", "workflow": str(wf), "executor": "task", "humans": ["Reviewer"]}
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=1)
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump({**cfg, "regression": {"baseline": {"label": "released", "inventory": "inv.json"}}}))
     assert Engine(proj)._safety_only_config_change()
-    Engine(proj).accept_config("Wei", "add baseline safety check")
+    Engine(proj).accept_config("Reviewer", "add baseline safety check")
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump({**cfg, "regression": {"baseline": {"label": "released", "inventory": "other.json"}}}))
     assert not Engine(proj)._safety_only_config_change()
 
@@ -236,7 +242,7 @@ def test_baseline_swap_plus_other_safety_key_is_not_safety_only(tmp_path):
     for doc in ("product", "creative", "design", "production", "evaluation", "memory"):
         shutil.copy2(PKG / "examples/sample-demo/controls" / f"{doc}.md", proj / "controls" / f"{doc}.md")
     inv = _write_json(proj / "base.json", {"film": "a", "fps": 1, "chapters": [], "samples": []})
-    cfg = {"id": "t", "name": "t", "workflow": str(mini_workflow(tmp_path)), "executor": "task", "humans": ["Wei"],
+    cfg = {"id": "t", "name": "t", "workflow": str(mini_workflow(tmp_path)), "executor": "task", "humans": ["Reviewer"],
            "regression": {"baseline": {"label": "released", "inventory": str(inv)}}}
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
     eng = Engine(proj, executor=FnExecutor())
@@ -320,8 +326,9 @@ def test_n12_seams_are_shadow_until_rule_adopted(tmp_path):
     rules = tmp_path / "rules.json"
     shutil.copy2(PKG / "knowledge/rules.json", rules)
     rb = RuleBase(rules)
-    rb.transition("R-VOI-004", "approved", by="Wei", evidence=["review"], human=True)
-    rb.transition("R-VOI-004", "adopted", by="Wei", evidence=["review"], human=True, adopted_in="rubrics/voice-audio.yaml")
+    validate_builtin(rb, "R-VOI-004")
+    rb.transition("R-VOI-004", "approved", by="Reviewer", evidence=["review"], human=True)
+    rb.transition("R-VOI-004", "adopted", by="Reviewer", evidence=["review"], human=True, adopted_in="rubrics/voice-audio.yaml")
     _proj2, eng2 = _n12_project(tmp_path / "adopted", rules_path=rules)
     eng2.run(max_steps=20)
     assert eng2.rt("n12_voice_audio").status.value in {"ITERATE", "BLOCKED"}
@@ -334,8 +341,9 @@ def test_n12_rerun_audits_submitted_attempt_files(tmp_path):
         shutil.copy2(PKG / "knowledge/rules.json", rules)
         if adopted:
             rb = RuleBase(rules)
-            rb.transition("R-VOI-004", "approved", by="Wei", evidence=["review"], human=True)
-            rb.transition("R-VOI-004", "adopted", by="Wei", evidence=["review"], human=True, adopted_in="rubrics/voice-audio.yaml")
+            validate_builtin(rb, "R-VOI-004")
+            rb.transition("R-VOI-004", "approved", by="Reviewer", evidence=["review"], human=True)
+            rb.transition("R-VOI-004", "adopted", by="Reviewer", evidence=["review"], human=True, adopted_in="rubrics/voice-audio.yaml")
         proj, eng = _task_n12_project(tmp_path / ("adopted" if adopted else "validated"), rules_path=rules)
         eng.run(max_steps=20)
         _submit_waiting(eng, "a_intake", {"a_intake": str(_write_json(proj / "submit-a.json", {}))})
@@ -421,8 +429,9 @@ def test_n12_submit_path_blocks_hard_cut_after_seam_rule_adoption(tmp_path):
     rules = tmp_path / "rules.json"
     shutil.copy2(PKG / "knowledge/rules.json", rules)
     rb = RuleBase(rules)
-    rb.transition("R-VOI-004", "approved", by="Wei", evidence=["review"], human=True)
-    rb.transition("R-VOI-004", "adopted", by="Wei", evidence=["review"], human=True, adopted_in="rubrics/voice-audio.yaml")
+    validate_builtin(rb, "R-VOI-004")
+    rb.transition("R-VOI-004", "approved", by="Reviewer", evidence=["review"], human=True)
+    rb.transition("R-VOI-004", "adopted", by="Reviewer", evidence=["review"], human=True, adopted_in="rubrics/voice-audio.yaml")
     proj, eng = _task_n12_project(tmp_path / "adopted", rules_path=rules)
     eng.run(max_steps=20)
     _submit_waiting(eng, "a_intake", {"a_intake": str(_write_json(proj / "submit-a.json", {}))})
@@ -640,7 +649,7 @@ def test_privacy_baseline_strips_register_manifest_not_external_images(tmp_path,
     r1["outputs"] = [{"key": "baseline_strips", "kind": "json", "description": "strips", "required": False}]
     path = tmp_path / "wf.yaml"
     path.write_text(yaml.safe_dump(wf, sort_keys=False))
-    cfg = {"id": "t", "name": "t", "workflow": str(path), "executor": "task", "humans": ["Wei"],
+    cfg = {"id": "t", "name": "t", "workflow": str(path), "executor": "task", "humans": ["Reviewer"],
            "privacy": {"names": "names.json"},
            "regression": {"baseline": {"label": "released", "inventory": "base-inv.json", "master": "base.mp4"}}}
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
@@ -707,9 +716,10 @@ def test_rule_promotion_by_human_makes_layout_row_must(tmp_path):
     rules = tmp_path / "rules.json"
     shutil.copy2(PKG / "knowledge/rules.json", rules)
     rb = RuleBase(rules)
-    assert rb.get("R-LAY-001")["lifecycle"]["state"] == "validated"
-    rb.transition("R-LAY-001", "approved", by="Wei", evidence=["review:2026-10-02"], human=True)
-    rb.transition("R-LAY-001", "adopted", by="Wei", evidence=["review:2026-10-02"], human=True,
+    assert rb.get("R-LAY-001")["lifecycle"]["state"] == "builtin"
+    validate_builtin(rb, "R-LAY-001")
+    rb.transition("R-LAY-001", "approved", by="Reviewer", evidence=["review:2026-10-02"], human=True)
+    rb.transition("R-LAY-001", "adopted", by="Reviewer", evidence=["review:2026-10-02"], human=True,
                   adopted_in="rubrics/accessibility.yaml")
     proj = tmp_path / "proj"
     (proj / "controls").mkdir(parents=True)
@@ -738,7 +748,7 @@ def test_release_summary_lists_declared_departures(tmp_path):
     proj = _human_gated_project(tmp_path)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei", reason="looks right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="looks right")
     eng.run(max_steps=200)
     dep = {"removals": [{"chapter": "c1", "match": "SIGNAL", "why": "synthetic scoped removal", "cites": ["F012", "CR-004"]}]}
     dep_path = proj / "departures.json"

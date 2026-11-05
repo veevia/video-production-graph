@@ -1,8 +1,4 @@
-"""#171: a consumer re-runs when a file its input manifest names by path changes, even if the manifest's bytes didn't.
-
-Water r08 (E29): N13 a19 re-rendered `film.mp4`, but `scenes.json` names it only as `"video": "film.mp4"` and no beat
-changed, so N14 memo-hit on the unchanged manifest and kept v15's master; N15–N20 memo-hit after it. Nothing warned.
-"""
+"""Synthetic regression coverage: test b171 manifest refs."""
 from __future__ import annotations
 
 import hashlib
@@ -36,7 +32,7 @@ def _after(proj, seq, node):
 
 def _rerender(proj, eng):
     seq = max(e["seq"] for e in Ledger(proj / ".vpg/ledger.jsonl").events())
-    eng.invalidate_nodes(["b_plan"], reason="re-render the film", actor="Wei")
+    eng.invalidate_nodes(["b_plan"], reason="re-render the film", actor="Reviewer")
     eng.run(max_steps=200)
     return _after(proj, seq, "d_build")
 

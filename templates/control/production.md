@@ -8,6 +8,7 @@ pix_fmt: yuv420p
 audio_codec: aac
 sample_rate: 48000
 narration_wps: 2.5            # planning estimate for the runtime check
+voice_age: "<fill: approved voice profile or age category>"
 unit_pause_s: 0.4
 head_tail_s: 1.0
 deliverables:                 # current artifact key → path inside the package
@@ -21,7 +22,7 @@ deliverables:                 # current artifact key → path inside the package
 ---
 # Production — <fill: film title>
 
-> Access: written by N09 Visual System; read by N07, N10–N15, N23, N24. Locked when Wei approves N09.
+> Access: written by N09 Visual System; read by N07, N10–N15, N23, N24. Locked when the project owner approves N09.
 
 ## Technical pipeline
 <fill: the renderer, TTS, assembly and QA chain, and the command bound to each node in vpg.project.yaml>

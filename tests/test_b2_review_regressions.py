@@ -28,8 +28,8 @@ def _copy_controls(proj: Path) -> None:
         shutil.copy2(PKG / "examples/sample-demo/controls" / f"{doc}.md", proj / "controls" / f"{doc}.md")
 
 
-def _project(tmp_path: Path, monkeypatch, *, store: Path, humans=("Wei",), privacy_names: list[str] | None = None,
-             principal="Wei", scored=True, gated=False, title="A") -> tuple[Path, Engine]:
+def _project(tmp_path: Path, monkeypatch, *, store: Path, humans=("Reviewer",), privacy_names: list[str] | None = None,
+             principal="Reviewer", scored=True, gated=False, title="A") -> tuple[Path, Engine]:
     proj = tmp_path / f"proj-{len(list(tmp_path.glob('proj-*')))}"
     _copy_controls(proj)
     cfg = {"id": "review", "name": "review", "workflow": "default", "humans": list(humans)}
@@ -141,9 +141,9 @@ def test_calibrate_between_packet_and_record_keeps_frozen_prediction(tmp_path, m
     fork = read_json(proj / eng.state.production.forks_ref["F-001"])
     frozen = fork["scored"]
     for i in range(6):
-        scoring.record_choice(store, {**fork, "fork_id": f"H-{i}"}, ["C3", "C2", "C1"], {}, "Wei", "past", source="seed")
+        scoring.record_choice(store, {**fork, "fork_id": f"H-{i}"}, ["C3", "C2", "C1"], {}, "Reviewer", "past", source="seed")
     scoring.fit_store(store)
-    eng.record_review(_write(proj, _decision(ctx)), actor="Wei")
+    eng.record_review(_write(proj, _decision(ctx)), actor="Reviewer")
     row = _rows(store)[-1]
     assert row["model_version"] == frozen["model_version"]
     assert row["predicted"] == frozen["predicted"]
@@ -158,7 +158,7 @@ def test_option_label_rankings_map_to_ids_and_mixed_rankings_refuse(tmp_path, mo
     option_ids = tmpl["forks"]["F-001"]["option_map"]
     d = _decision(ctx)
     d["forks"]["F-001"]["ranking"] = list(option_ids)
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     assert _rows(store)[-1]["ranking"] == [option_ids[k] for k in option_ids]
 
     proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "prefs2")
@@ -167,7 +167,7 @@ def test_option_label_rankings_map_to_ids_and_mixed_rankings_refuse(tmp_path, mo
     first = next(iter(read_json(ctx2.workdir / "decision.template.json")["forks"]["F-001"]["option_map"]))
     d2["forks"]["F-001"]["ranking"] = [first, "C2", "C3"]
     with pytest.raises(Exception, match="either option labels or candidate ids"):
-        eng2.record_review(_write(proj2, d2), actor="Wei")
+        eng2.record_review(_write(proj2, d2), actor="Reviewer")
 
 
 def test_fork_drift_refused_even_without_answer_sha(tmp_path, monkeypatch):
@@ -181,7 +181,7 @@ def test_fork_drift_refused_even_without_answer_sha(tmp_path, monkeypatch):
     d = _decision(ctx)
     d["forks"]["F-001"].pop("sha256")
     with pytest.raises(Exception, match="sha256"):
-        eng.record_review(_write(proj, d), actor="Wei")
+        eng.record_review(_write(proj, d), actor="Reviewer")
 
 
 def test_edited_registered_template_is_refused(tmp_path, monkeypatch):
@@ -193,19 +193,19 @@ def test_edited_registered_template_is_refused(tmp_path, monkeypatch):
     data["forks"]["F-001"]["option_map"] = {"Option 1": "C3", "Option 2": "C2", "Option 3": "C1"}
     template.write_text(json.dumps(data))
     with pytest.raises(Exception, match="decision.template.json changed"):
-        eng.record_review(_write(proj, _decision(ctx)), actor="Wei")
+        eng.record_review(_write(proj, _decision(ctx)), actor="Reviewer")
 
 
 def test_second_version_omits_answered_forks_and_writes_no_duplicate_rows(tmp_path, monkeypatch):
     store = tmp_path / "prefs"
     proj, eng = _project(tmp_path, monkeypatch, store=store)
     ctx1 = _release_wait(eng, proj, attempt=1, version=1)
-    eng.record_review(_write(proj, _decision(ctx1), "d1.json"), actor="Wei")
+    eng.record_review(_write(proj, _decision(ctx1), "d1.json"), actor="Reviewer")
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None, _s=store: _s)
     ctx2 = _release_wait(eng, proj, attempt=2, version=2)
     assert read_json(ctx2.workdir / "decision.template.json")["forks"] == {}
-    eng.record_review(_write(proj, _decision(ctx2), "d2.json"), actor="Wei")
+    eng.record_review(_write(proj, _decision(ctx2), "d2.json"), actor="Reviewer")
     assert [r["fork_id"] for r in _rows(store)].count("F-001") == 1
 
 
@@ -214,8 +214,8 @@ def test_decision_digest_is_numbered_masked_and_mapped_to_template(tmp_path, mon
     listed = "Jordan Sample"
     proj, eng = _project(tmp_path, monkeypatch, store=store, privacy_names=[listed])
     eng.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
-    eng.state.evaluation.feedback.append(Feedback(id="F001", text=f"{listed} said the ending needs proof", actor="Wei",
+                                                human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
+    eng.state.evaluation.feedback.append(Feedback(id="F001", text=f"{listed} said the ending needs proof", actor="Reviewer",
                                                   at="42", version=1, created_at=now(),
                                                   status="resolved_pending_confirmation", defect_ids=["D001"],
                                                   no_action_reason=f"{listed} confirmed it was fixed"))
@@ -236,7 +236,7 @@ def test_decision_digest_is_numbered_masked_and_mapped_to_template(tmp_path, mon
 def test_review_record_confirms_and_rejects_feedback_items(tmp_path, monkeypatch):
     store = tmp_path / "prefs"
     proj, eng = _project(tmp_path, monkeypatch, store=store)
-    eng.state.evaluation.feedback.append(Feedback(id="F001", text="the ending needs proof", actor="Wei",
+    eng.state.evaluation.feedback.append(Feedback(id="F001", text="the ending needs proof", actor="Reviewer",
                                                   at="42", version=1, created_at=now(),
                                                   status="resolved_pending_confirmation", no_action_reason="fixed"))
     ctx = _release_wait(eng, proj)
@@ -244,11 +244,11 @@ def test_review_record_confirms_and_rejects_feedback_items(tmp_path, monkeypatch
     item = next(k for k, v in template["item_map"].items() if v.get("target") == "feedback.F001")
     d = _decision(ctx)
     d["confirm_items"] = [item]
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     assert eng.state.evaluation.feedback[0].status == "confirmed"
 
     proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "prefs2")
-    eng2.state.evaluation.feedback.append(Feedback(id="F001", text="the ending needs proof", actor="Wei",
+    eng2.state.evaluation.feedback.append(Feedback(id="F001", text="the ending needs proof", actor="Reviewer",
                                                    at="42", version=1, created_at=now(),
                                                    status="resolved_pending_confirmation", no_action_reason="fixed"))
     ctx2 = _release_wait(eng2, proj2)
@@ -256,15 +256,15 @@ def test_review_record_confirms_and_rejects_feedback_items(tmp_path, monkeypatch
     item2 = next(k for k, v in template2["item_map"].items() if v.get("target") == "feedback.F001")
     d2 = _decision(ctx2)
     d2["reject_items"] = [item2]
-    eng2.record_review(_write(proj2, d2), actor="Wei")
+    eng2.record_review(_write(proj2, d2), actor="Reviewer")
     fb = eng2.state.evaluation.feedback[0]
     assert (fb.status, fb.defect_ids, fb.no_action_reason) == ("open", [], "")
 
 
 def test_review_record_reject_item_forces_changes_and_relay_needs_time(tmp_path, monkeypatch):
     store = tmp_path / "prefs"
-    proj, eng = _project(tmp_path, monkeypatch, store=store, humans=("Wei",), principal="Wei")
-    eng.state.evaluation.feedback.append(Feedback(id="F001", text="needs proof", actor="Wei",
+    proj, eng = _project(tmp_path, monkeypatch, store=store, humans=("Reviewer",), principal="Reviewer")
+    eng.state.evaluation.feedback.append(Feedback(id="F001", text="needs proof", actor="Reviewer",
                                                   at="42", version=1, created_at=now(),
                                                   status="resolved_pending_confirmation", no_action_reason="fixed"))
     ctx = _release_wait(eng, proj)
@@ -272,11 +272,11 @@ def test_review_record_reject_item_forces_changes_and_relay_needs_time(tmp_path,
                 if v.get("target") == "feedback.F001")
     d = _decision(ctx)
     d["reject_items"] = [item]
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     assert eng.rt("n23_final_verification").status == S.STALE
 
-    proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "prefs2", humans=("Wei",), principal="Wei")
-    eng2.state.evaluation.feedback.append(Feedback(id="F001", text="needs proof", actor="Wei",
+    proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "prefs2", humans=("Reviewer",), principal="Reviewer")
+    eng2.state.evaluation.feedback.append(Feedback(id="F001", text="needs proof", actor="Reviewer",
                                                    at="42", version=1, created_at=now(),
                                                    status="resolved_pending_confirmation", no_action_reason="fixed"))
     ctx2 = _release_wait(eng2, proj2)
@@ -285,7 +285,7 @@ def test_review_record_reject_item_forces_changes_and_relay_needs_time(tmp_path,
     d2 = _decision(ctx2)
     d2["confirm_items"] = [item2]
     with pytest.raises(Exception, match="instruction-at"):
-        eng2.record_review(_write(proj2, d2), actor="agent:relay", on_behalf_of="Wei", instruction="confirm")
+        eng2.record_review(_write(proj2, d2), actor="agent:relay", on_behalf_of="Reviewer", instruction="confirm")
 
 
 def test_k_item_ack_counts_and_p1_end_review_all_is_not_default(tmp_path, monkeypatch):
@@ -308,7 +308,7 @@ def test_k_item_ack_counts_and_p1_end_review_all_is_not_default(tmp_path, monkey
     d["confirm_items"] = [k]
     d["ack_warnings"] = []
     with pytest.raises(Exception, match="explicit decision required"):
-        eng.record_review(_write(proj, d), actor="Wei")
+        eng.record_review(_write(proj, d), actor="Reviewer")
     assert eng.state.runtime.end_review_items[0].get("disposition") != "acknowledged"
 
 
@@ -319,15 +319,15 @@ def test_changes_with_provisional_rejections_never_passes_release_or_spends_rele
     nodes = ["n04_product_understanding", "n09_visual_system"][:count]
     for node in nodes:
         eng.state.history.approvals.append(Approval(node=node, decision="approved", actor="agent:x", human=False,
-                                                    at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                    at=now(), provisional=True, principal="Reviewer", instruction="go"))
     ctx = _release_wait(eng, proj)
     reject = {node: f"fix {node}" for node in nodes}
     kwargs = {}
     if relayed:
-        kwargs = {"actor": "agent:chat", "on_behalf_of": "Wei", "instruction": "request changes",
+        kwargs = {"actor": "agent:chat", "on_behalf_of": "Reviewer", "instruction": "request changes",
                   "instruction_at": (datetime.now(timezone.utc) + timedelta(seconds=5)).isoformat()}
     else:
-        kwargs = {"actor": "Wei"}
+        kwargs = {"actor": "Reviewer"}
     eng.record_review(_write(proj, _decision(ctx, release="changes", reject=reject, feedback="more energy")), **kwargs)
     eng = Engine(proj)
     assert eng.rt("n23_final_verification").status == S.STALE
@@ -337,25 +337,25 @@ def test_decide_release_confirm_reject_parity_table(tmp_path, monkeypatch):
     store = tmp_path / "prefs"
     proj, eng = _project(tmp_path, monkeypatch, store=store)
     eng.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
     _release_wait(eng, proj)
-    eng.decide("n23_final_verification", "changes_requested", actor="Wei", confirm_provisional="all", feedback=["revise"])
+    eng.decide("n23_final_verification", "changes_requested", actor="Reviewer", confirm_provisional="all", feedback=["revise"])
     eng = Engine(proj)
     assert eng._standing_provisional() == [] and len(_events(proj, "provisional_confirmed")) == 1
     assert eng.rt("n23_final_verification").status == S.STALE
 
     proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "prefs2")
     eng2.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                 human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                 human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
     eng2.rt("n06_creative_direction").status = S.WAITING_HUMAN
     with pytest.raises(Exception, match="only allowed at the release"):
-        eng2.decide("n06_creative_direction", "approved", actor="Wei", reject_provisional="n04_product_understanding",
+        eng2.decide("n06_creative_direction", "approved", actor="Reviewer", reject_provisional="n04_product_understanding",
                     rejection_feedback="x")
 
     proj3, eng3 = _project(tmp_path, monkeypatch, store=tmp_path / "prefs3")
     _release_wait(eng3, proj3)
     with pytest.raises(Exception, match="no standing provisional"):
-        eng3.decide("n23_final_verification", "approved", actor="Wei", confirm_provisional="n04_product_understanding",
+        eng3.decide("n23_final_verification", "approved", actor="Reviewer", confirm_provisional="n04_product_understanding",
                     ack_warnings=["all"])
 
 
@@ -363,10 +363,10 @@ def test_changes_can_confirm_provisional_without_release_pass(tmp_path, monkeypa
     store = tmp_path / "prefs"
     proj, eng = _project(tmp_path, monkeypatch, store=store)
     eng.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
     ctx = _release_wait(eng, proj)
     eng.record_review(_write(proj, _decision(ctx, release="changes", confirm=["n04_product_understanding"],
-                                             feedback="revise")), actor="Wei")
+                                             feedback="revise")), actor="Reviewer")
     eng = Engine(proj)
     assert eng._standing_provisional() == []
     assert len(_events(proj, "provisional_confirmed")) == 1
@@ -379,7 +379,7 @@ def test_review_record_refusals_are_atomic(tmp_path, monkeypatch, case):
     proj, eng = _project(tmp_path, monkeypatch, store=store)
     if case == "standing":
         eng.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                    human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                    human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
     if case == "signoff":
         eng.state.evaluation.reviews.append(Review(id="R", node="n12_voice_audio", version=1, reviewer="r",
                                                    rubric_ids=[], verdict="pass", pending_human=["VOI-ADULT"], created_at=now()))
@@ -397,12 +397,12 @@ def test_review_record_refusals_are_atomic(tmp_path, monkeypatch, case):
         d["signoffs"] = []
     if case == "not-waiting":
         eng.rt("n23_final_verification").status = S.STEP_PASS
-    kwargs = {"actor": "Wei"}
+    kwargs = {"actor": "Reviewer"}
     if case in {"early-relay", "missing-relay-time"}:
         eng.state.history.approvals.append(Approval(node="n04_product_understanding", decision="approved", actor="agent:x",
-                                                    human=False, at=now(), provisional=True, principal="Wei", instruction="go"))
+                                                    human=False, at=now(), provisional=True, principal="Reviewer", instruction="go"))
         d["confirm_provisional"] = "all"
-        kwargs = {"actor": "agent:chat", "on_behalf_of": "Wei", "instruction": "confirm"}
+        kwargs = {"actor": "agent:chat", "on_behalf_of": "Reviewer", "instruction": "confirm"}
         if case == "early-relay":
             kwargs["instruction_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     before = len(_events(proj))
@@ -420,20 +420,20 @@ def test_privacy_name_masked_in_packet_html_and_rows_use_ids_only(tmp_path, monk
     ctx = _release_wait(eng, proj)
     assert listed not in (ctx.workdir / "review-packet.md").read_text()
     assert listed not in (ctx.workdir / "review.html").read_text()
-    eng.record_review(_write(proj, _decision(ctx)), actor="Wei")
+    eng.record_review(_write(proj, _decision(ctx)), actor="Reviewer")
     assert listed not in json.dumps(_rows(store)[-1])
 
 
 def test_non_principal_declared_human_records_to_principal_store_with_actor(tmp_path, monkeypatch):
-    store = tmp_path / "wei-store"
-    proj, eng = _project(tmp_path, monkeypatch, store=store, humans=("Wei", "Pat Example"), principal="Wei")
+    store = tmp_path / "reviewer-store"
+    proj, eng = _project(tmp_path, monkeypatch, store=store, humans=("Reviewer", "Pat Example"), principal="Reviewer")
     ctx = _release_wait(eng, proj)
     eng.record_review(_write(proj, _decision(ctx)), actor="Pat Example")
     assert _rows(store) == []
     choice = _events(proj, "human_choice")[-1]["data"]
     assert choice["principal"] == "Pat Example" and choice["actor"] == "Pat Example" and choice["learned"] is False
 
-    proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "relay-store", humans=("Wei", "Pat Example"), principal="Wei")
+    proj2, eng2 = _project(tmp_path, monkeypatch, store=tmp_path / "relay-store", humans=("Reviewer", "Pat Example"), principal="Reviewer")
     ctx2 = _release_wait(eng2, proj2)
     eng2.record_review(_write(proj2, _decision(ctx2)), actor="agent:chat", on_behalf_of="Pat Example",
                        instruction="rank for me", instruction_at=(datetime.now(timezone.utc) + timedelta(seconds=5)).isoformat())
@@ -447,7 +447,7 @@ def test_calibration_map_uses_metric_subset_and_concurrent_refits_get_distinct_v
             "candidates": [{"id": "C1", "scores": {d["id"]: 5 for d in CONCEPT_FORK_DIMS}},
                            {"id": "C2", "scores": {d["id"]: 1 for d in CONCEPT_FORK_DIMS}}]}
     for i in range(12):
-        scoring.record_choice(store, {**fork, "fork_id": f"F-{i}"}, ["C1", "C2"], {}, "Wei",
+        scoring.record_choice(store, {**fork, "fork_id": f"F-{i}"}, ["C1", "C2"], {}, "Reviewer",
                               equal_fidelity=(i % 2 == 0), source="seed")
     model = scoring.fit_store(store)
     assert model["metrics"]["n_blind"] == 12 and model["metrics"]["n_calibration"] == 6
@@ -467,11 +467,11 @@ def test_refit_after_rollback_and_corrupt_store_fallback_do_not_break_n06(tmp_pa
             "candidates": [{"id": "C1", "scores": {d["id"]: 5 for d in CONCEPT_FORK_DIMS}, "passes_rubric": True},
                            {"id": "C2", "scores": {d["id"]: 1 for d in CONCEPT_FORK_DIMS}, "passes_rubric": True}]}
     for i in range(3):
-        scoring.record_choice(store, {**fork, "fork_id": f"R-{i}"}, ["C1", "C2"], {}, "Wei", source="seed")
+        scoring.record_choice(store, {**fork, "fork_id": f"R-{i}"}, ["C1", "C2"], {}, "Reviewer", source="seed")
         scoring.fit_store(store)
     v2 = (store / "models/model-v2.json").read_text()
     (store / "current.json").write_text(json.dumps({"version": 1}))
-    scoring.record_choice(store, {**fork, "fork_id": "R-9"}, ["C2", "C1"], {}, "Wei", source="seed")
+    scoring.record_choice(store, {**fork, "fork_id": "R-9"}, ["C2", "C1"], {}, "Reviewer", source="seed")
     model = scoring.fit_store(store)
     assert model["version"] == 4 and (store / "models/model-v2.json").read_text() == v2
     (store / "current.json").write_text('{"version": ')
@@ -517,7 +517,7 @@ def test_concurrent_append_survives_and_undo_removes_only_own_review_rows(tmp_pa
     orig_pass = Engine._pass
 
     def interleaved(self, node, rt, outcome, data):
-        scoring.record_choice(store, {**fork, "fork_id": "B", "run": "project-B"}, ["C2", "C1", "C3"], {}, "Wei",
+        scoring.record_choice(store, {**fork, "fork_id": "B", "run": "project-B"}, ["C2", "C1", "C3"], {}, "Reviewer",
                               "B row", source="B")
         sp = self.project.state_path
         time.sleep(0.01)
@@ -527,10 +527,10 @@ def test_concurrent_append_survives_and_undo_removes_only_own_review_rows(tmp_pa
 
     monkeypatch.setattr(Engine, "_pass", interleaved)
     with pytest.raises(Exception):
-        eng.record_review(_write(proj, _decision(ctx)), actor="Wei")
+        eng.record_review(_write(proj, _decision(ctx)), actor="Reviewer")
     assert [(r["run"], r["why"]) for r in _rows(store)] == [("project-B", "B row")]
     monkeypatch.setattr(Engine, "_pass", orig_pass)
-    Engine(proj).record_review(_write(proj, _decision(ctx), "d2.json"), actor="Wei")
+    Engine(proj).record_review(_write(proj, _decision(ctx), "d2.json"), actor="Reviewer")
     assert {r["why"] for r in _rows(store)} == {"B row", "Clearer story."}
 
 
@@ -545,7 +545,7 @@ def test_retry_replaces_orphan_row_for_same_review_and_fork(tmp_path, monkeypatc
     assert len(_rows(store)) == 1
     d2 = _decision(ctx)
     d2["forks"]["F-001"]["ranking"] = ["C3", "C2", "C1"]
-    Engine(proj).record_review(_write(proj, d2, "second.json"), actor="Wei")
+    Engine(proj).record_review(_write(proj, d2, "second.json"), actor="Reviewer")
     rows = _rows(store)
     assert len(rows) == 1 and rows[0]["ranking"] == ["C3", "C2", "C1"]
     assert _events(proj, "human_choice")[-1]["data"]["ranking"] == ["C3", "C2", "C1"]
@@ -558,7 +558,7 @@ def test_model_pin_fingerprint_and_midrun_calibrate(tmp_path, monkeypatch):
     fp1 = eng.fingerprint(n06)
     pin = dict(eng.state.runtime.preference_model_pins)
     fork = read_json(proj / eng.state.production.forks_ref["F-001"])
-    scoring.record_choice(store, {**fork, "fork_id": "H-1"}, ["C3", "C2", "C1"], {}, "Wei", source="seed")
+    scoring.record_choice(store, {**fork, "fork_id": "H-1"}, ["C3", "C2", "C1"], {}, "Reviewer", source="seed")
     scoring.fit_store(store)
     assert eng.state.runtime.preference_model_pins == pin
     assert eng.fingerprint(n06) == fp1
@@ -572,14 +572,14 @@ def test_first_n06_dispatch_fingerprint_includes_pin(tmp_path, monkeypatch):
     fork = {"fork_id": "seed", "fork_type": "concept", "dims": CONCEPT_FORK_DIMS,
             "candidates": [{"id": "C1", "scores": {d["id"]: 5 for d in CONCEPT_FORK_DIMS}},
                            {"id": "C2", "scores": {d["id"]: 1 for d in CONCEPT_FORK_DIMS}}]}
-    scoring.record_choice(store, fork, ["C1", "C2"], {}, "Wei", source="seed")
+    scoring.record_choice(store, fork, ["C1", "C2"], {}, "Reviewer", source="seed")
     scoring.fit_store(store)
     proj = tmp_path / "dispatch-pin"
     _copy_controls(proj)
-    (proj / "vpg.project.yaml").write_text(json.dumps({"id": "pin", "name": "pin", "workflow": "default", "humans": ["Wei"]}))
+    (proj / "vpg.project.yaml").write_text(json.dumps({"id": "pin", "name": "pin", "workflow": "default", "humans": ["Reviewer"]}))
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None, _s=store: _s)
     eng = Engine(proj)
-    eng.state.runtime.accepted_policy = {"humans": ["Wei"], "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    eng.state.runtime.accepted_policy = {"humans": ["Reviewer"], "autonomy": {"mode": "provisional", "principal": "Reviewer"}}
     n05 = proj / "work/n05_narrative_ideation/a1"; n05.mkdir(parents=True)
     cp = n05 / "concepts.json"
     cp.write_text(json.dumps({"concepts": [
@@ -594,7 +594,7 @@ def test_first_n06_dispatch_fingerprint_includes_pin(tmp_path, monkeypatch):
         id="concepts@n05#a1", key="concepts", path=str(cp.relative_to(proj)), sha256=sha256_file(cp),
         bytes=cp.stat().st_size, node="n05_narrative_ideation", attempt=1, produced_at=now())
     ctx = eng._prepare("n06_creative_direction")
-    assert eng.state.runtime.preference_model_pins == {"wei": 1}
+    assert eng.state.runtime.preference_model_pins == {"reviewer": 1}
     assert ctx.fingerprint == eng.rt("n06_creative_direction").fingerprint
     assert ctx.fingerprint == eng.fingerprint(eng.node("n06_creative_direction"))
 
@@ -604,7 +604,7 @@ def test_packet_shows_calibrated_metrics_after_calibrate(tmp_path, monkeypatch):
     monkeypatch.setattr(scoring, "preference_store", lambda _root, _principal: store)
     proj, eng = _project(tmp_path, monkeypatch, store=store)
     fork = read_json(proj / eng.state.production.forks_ref["F-001"])
-    scoring.record_choice(store, {**fork, "fork_id": "H-1"}, ["C1", "C2", "C3"], {}, "Wei", source="seed")
+    scoring.record_choice(store, {**fork, "fork_id": "H-1"}, ["C1", "C2", "C3"], {}, "Reviewer", source="seed")
     scoring.fit_store(store)
     ctx = _release_wait(eng, proj)
     packet = (ctx.workdir / "review-packet.md").read_text()
@@ -654,7 +654,7 @@ def test_malformed_none_score_row_is_skipped_by_fit(tmp_path):
     fork = {"fork_id": "ok", "fork_type": "concept", "dims": CONCEPT_FORK_DIMS,
             "candidates": [{"id": "C1", "scores": {d["id"]: 5 for d in CONCEPT_FORK_DIMS}},
                            {"id": "C2", "scores": {d["id"]: 1 for d in CONCEPT_FORK_DIMS}}]}
-    scoring.record_choice(store, fork, ["C1", "C2"], {}, "Wei", source="seed")
+    scoring.record_choice(store, fork, ["C1", "C2"], {}, "Reviewer", source="seed")
     row = _rows(store)[0]
     row["fork_id"] = "bad"
     row["candidate_scores"]["C1"]["CON-FIT"] = None
@@ -666,7 +666,7 @@ def test_malformed_none_score_row_is_skipped_by_fit(tmp_path):
 
 def test_pdg_shared_cli_sequence_accepts_open_ended_fork_types(tmp_path):
     work = tmp_path / "prototype-design"
-    data = work / "knowledge/preferences/wei"
+    data = work / "knowledge/preferences/reviewer"
     work.mkdir(parents=True)
     fork = {
         "fork_id": "F-001",
@@ -698,7 +698,7 @@ def test_pdg_shared_cli_sequence_accepts_open_ended_fork_types(tmp_path):
     assert scored["fork_type"] == "refinement" and scored["dropped_by_rubric"] == ["C"]
 
     record = subprocess.run([py, str(script), "--data", str(data), "record", str(fork_path),
-                             "--rank", "B,A", "--why", "cleaner system fit"],
+                             "--rank", "B,A", "--principal", "Reviewer", "--why", "cleaner system fit"],
                             cwd=work, text=True, capture_output=True)
     assert record.returncode == 0, record.stderr
     rows = _rows(data)

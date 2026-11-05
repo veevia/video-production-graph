@@ -1,10 +1,4 @@
-"""#162: a reviewer's P1–P3 that the rubric's levels demote or drop is never silent.
-
-Water v6, N16: a P3 (an empty card) and a nit, both on CRE-POLISH, merged into one nit defect, and the P3 vanished.
-CRE-POLISH is SHOULD while its rule R-UI-001 is only `validated`, so the rubric demoted the P3, yet the review still
-read "fail" and nothing recorded what the reviewer had filed. These tests use a fixture rule base, so they hold whatever
-the live rules' states become.
-"""
+"""Synthetic regression coverage: test b162 governed findings."""
 from __future__ import annotations
 
 import json
@@ -135,7 +129,7 @@ def _same_build(ctx):
 
 def test_a_carried_forward_review_still_reports_its_demotions(tmp_path):
     proj, eng = _run(tmp_path, WATER, handlers={"d_build": _same_build})
-    eng.invalidate_nodes(["d_build"], reason="re-render", actor="Wei")      # a new version the reviewer doesn't re-judge
+    eng.invalidate_nodes(["d_build"], reason="re-render", actor="Reviewer")      # a new version the reviewer doesn't re-judge
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and eng.state.runtime.current_version == 2
     assert next(r for r in reversed(eng.state.evaluation.reviews) if r.node == "r1_review").carried_forward
@@ -147,7 +141,7 @@ def test_a_carried_forward_review_still_reports_its_demotions(tmp_path):
                          ids=["re-filed elsewhere", "nothing filed"])
 def test_a_re_review_of_the_same_version_replaces_its_earlier_attempt(tmp_path, second, left):
     proj, eng = _run(tmp_path, lambda attempt: WATER if attempt == 1 else second)
-    eng.invalidate_nodes(["r1_review"], reason="its rubric changed", actor="Wei")
+    eng.invalidate_nodes(["r1_review"], reason="its rubric changed", actor="Reviewer")
     eng.run(max_steps=200)
     warnings, _ = _warnings(eng)
     governed = [w for w in warnings if "reviewer-filed blocking findings" in w]
@@ -170,14 +164,14 @@ def test_governed_warnings_read_the_current_judgment_only():
          ev("rev-r2-v1", "OTH-Y", "D3", rule=""),             # r2's v2 review is a carried copy of this one
          ev("rev-r2-v1", "OTH-Y", "D9", rule=""),             # resolved since
          {"type": "finding_governed"}, "junk"],
-        st, 2, {"creative": {"dimensions": [{"id": "CRE-X"}]}}, {"R-1": "approved"}, "Wei")
+        st, 2, {"creative": {"dimensions": [{"id": "CRE-X"}]}}, {"R-1": "approved"}, "Reviewer")
     assert len(out) == 2
     assert "D2 (filed P2 by rev-r1-v2)" in out[0] and "D1" not in out[0] and out[0].count("D2") == 1
     assert "promote rule R-1 to adopted:" in out[0] and "rubrics/creative.yaml" in out[0]
     assert "D3" in out[1] and "D9" not in out[1] and out[1].endswith("making OTH-Y block is a rubric change")
-    assert "is already adopted; then accept" in verify._block_steps("CRE-X", "R-1", {"R-1": "adopted"}, {}, "Wei", "rev")
+    assert "is already adopted; then accept" in verify._block_steps("CRE-X", "R-1", {"R-1": "adopted"}, {}, "Reviewer", "rev")
     for state in ("retired", None):   # retired is terminal; a rule missing from the base can't be promoted either
-        steps = verify._block_steps("CRE-X", "R-1", {"R-1": state} if state else {}, {}, "Wei", "rev")
+        steps = verify._block_steps("CRE-X", "R-1", {"R-1": state} if state else {}, {}, "Reviewer", "rev")
         assert steps.endswith("making CRE-X block needs a new rule or a rubric change") and "evidence" not in steps
 
 

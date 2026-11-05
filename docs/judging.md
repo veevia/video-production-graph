@@ -7,12 +7,7 @@ fires when its pointwise scores saturate.
 
 ## Why
 
-In a recent 90-second case-study film (NDA), the critic scored 4 or 5 on all 20 dimensions for good and regressed
-versions alike (reported). The same pattern shows in review scores recorded by earlier productions on this engine:
-read-only, the saturation alarm below fires for most reviewers in most runs, and in one run a reviewer gave the
-maximum to every score across all of its versions (observed). Absolute scores saturate; "is A better than B on this criterion?"
-against the previous best and a benchmark keeps separating versions, provided position bias and judge drift are
-controlled (reported: see [the research basis](research/quality-evaluation.md)).
+Pointwise scores can saturate. Compare candidates in both orders against known references and degraded anchors, then calibrate against actual human choices.
 
 ## Tiers
 
@@ -97,18 +92,11 @@ comparison against the previous best and a benchmark.
 
 ## Evidence and limits
 
-* observed: order swap, ties, the ranking, intervals, anchors, kappa, alpha and both alarms are unit-tested on
-  synthetic judges, including a judge that always picks the first film shown (it cannot pass the anchor check).
-* observed, on real films (2026-10-27):
-  * A batch packed before this fix showed each film's own path. Its file names named the version or the benchmark,
-    and every candidate's container title named the project while the benchmark had none.
-  * Packed now, the packet names no film. Each copy's streams are bit-identical to its original.
-  * On that film's recorded reviews, the alarm fired for every reviewer with scores at each version the investigation
-    examined, when run on the history up to that version. On the four versions the investigation cites, it fired for
-    the creative critic on both counts.
-  * It cannot see a reviewer rank a regressed version above a good one (one did). Anchors and labels catch that.
-* Blinding covers names, order, hashes and container metadata. It cannot hide what is in the film itself: its length,
-  its resolution, a burned-in title or a watermark. Stills and text keep their own metadata.
-* assumed: 200 bootstrap rounds, the 0.5 prior and the 0.15 collapse threshold are first choices.
-* The engine never calls a model: judging is a task packet for an agent. Whether a judge's taste matches Wei's is
-  exactly what the labels measure; nothing here claims it.
+Order swapping, ties, ranking, intervals, anchors, agreement and saturation checks
+are exercised with synthetic fixtures. A judge that always selects the first
+item cannot pass the anchor check.
+
+Blinding removes path labels and container metadata, not visible titles,
+watermarks or recognizable content. Stills and text retain their own metadata.
+Bootstrap counts and alarm thresholds are documented defaults, not a claim of
+production calibration. The engine never calls a model; judging uses task packets.

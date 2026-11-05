@@ -1,8 +1,8 @@
-# Creative critique (five lenses) — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Creative critique — reusable rubric; see knowledge/rules.json for default policy.
 id: creative
-name: Creative critique (five lenses)
+name: Creative critique
 reviewer: creative-critic
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: CRE-HOOK
   name: Opening hook
@@ -160,19 +160,19 @@ dimensions:
     always:
     - Cite the seam report before scoring the voice row
 - id: VOI-ADULT
-  name: Adult professional voice (human listening)
+  name: Approved voice profile (human listening)
   brief_dimension: voice_quality
   level: MUST
   check:
     type: human
   threshold: null
-  target: Wei hears an adult tech professional, warm and confident
+  target: the project owner confirms the approved voice profile and delivery
   rule: R-VOI-001
   cases:
     never:
-    - A child-like or youthful read
+    - A delivery that contradicts the approved voice direction
     always:
-    - Record Wei's listening decision; never claim it
+    - Record the project owner's listening decision; never claim it
 - id: CRE-MUSIC
   name: Music supports the voice (human listening)
   brief_dimension: audio_quality
@@ -180,7 +180,7 @@ dimensions:
   check:
     type: human
   threshold: null
-  target: Wei hears music that supports rather than competes
+  target: the project owner hears music that supports rather than competes
   rule: R-AUD-002
   cases:
     never:

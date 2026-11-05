@@ -7,10 +7,7 @@ the six control documents keep working.
 
 ## Why
 
-In a recent 90-second case-study film (NDA), the art direction lived in notes without rule ids or versions (reported).
-Every feedback round appended rules, nobody retired any, and the reviewers graded compliance with whatever the notes
-said that day. A spec family gives each rule an identity, a reason, a source, an enforcement and a boundary, so a change
-is a diff a human can confirm rather than another appended sentence.
+Versioned rules make creative intent auditable. A rule has an identity, rationale and source; projects can review changes without accumulating contradictory notes.
 
 ## The files
 
@@ -140,4 +137,4 @@ existing ones. `vpg init <project> --workflow quality` copies the templates into
   problem, and a diff names added, modified and retired rules and the stage they re-open (`tests/test_spec_family.py`).
 * assumed: the growth warning at five new rules with none retired is a first guess.
 * The family describes intent and gates measurable properties; it cannot certify taste. Human-enforced rules stay
-  Wei's decision.
+  the project owner's decision.

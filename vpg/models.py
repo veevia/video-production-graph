@@ -73,7 +73,7 @@ class EscalationPolicy(_Strict):
 class HumanReview(_Strict):
     required: bool
     decision: str
-    approver: str = "Wei"
+    approver: str = "project owner"
     outcomes: list[str] = Field(default_factory=lambda: ["approved", "rejected"])
     dry_run_auto: bool = True
 
@@ -177,7 +177,7 @@ class Workflow(_Strict):
 
 
 class NodeStatus(str, Enum):
-    # Names follow Workflow OS (02_Workflows/workflow-os) where the meaning is the same; STALE is new here.
+    # Names follow Workflow OS (an external workflow adapter) where the meaning is the same; STALE is new here.
     PLANNED = "PLANNED"
     READY = "READY"
     RUNNING = "RUNNING"
@@ -241,7 +241,7 @@ class Question(_Strict):
     id: str
     text: str
     blocking: bool = False
-    owner: str = "Wei"
+    owner: str = "the project owner"
     status: Literal["open", "answered", "waived"] = "open"
     answer: str = ""
 

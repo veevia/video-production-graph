@@ -1,9 +1,4 @@
-"""v1.1 regressions from the first real production (the SRA film): defect bookkeeping (#25 #26 #27 #41), `vpg resolve`,
-the bound command's code in the fingerprint (#21 #40), the engine in the accepted configuration (#9), on-screen density
-and reading time (#36), the submitter's recorded identity (#11) and failed-attempt timing (#30).
-
-Each test fails on the behaviour the production observed.
-"""
+"""Synthetic regression coverage: test bookkeeping."""
 from __future__ import annotations
 
 import json
@@ -48,7 +43,7 @@ def release_workflow(tmp_path, release_id="n23_final_verification", **kw):
     for node in data["nodes"]:
         if node["id"] == "z_done":
             node["id"] = release_id
-            node["human_review"] = {"required": True, "decision": "release", "approver": "Wei",
+            node["human_review"] = {"required": True, "decision": "release", "approver": "Reviewer",
                                     "outcomes": ["approved", "changes_requested"]}
             node["outcomes"] = ["approved", "changes_requested"]
             for output in node.get("outputs", []):
@@ -85,7 +80,8 @@ def add_verification_artifact(eng, warnings=None, pending=None):
 
 def _state(*defects, failures=None):
     return SimpleNamespace(evaluation=EvaluationState(defects=list(defects)),
-                           runtime=RuntimeState(run_id="t", defect_failures=dict(failures or {})))
+                           runtime=RuntimeState(run_id="t", defect_failures=dict(failures or {}),
+                                                accepted_policy={"humans": ["Reviewer"]}))
 
 
 def _defect(id, dim, trace, check, status="open", severity="P2", source="rev-n16-v1", seen=1):
@@ -116,8 +112,8 @@ def test_a_defect_fixed_outside_rework_is_resolved_and_the_gate_passes(tmp_path)
     assert eng.state.runtime.status.value == "BLOCKED" and d.traced_node == "c_audio" and d.needs_human
     flag(proj, "defect_audio", on=False)
     (proj / "flags" / "c_audio.variant").write_text("fixed")      # the human's fix changes c_audio's output
-    eng.invalidate_nodes(["c_audio"], reason="approved change request", actor="Wei")
-    eng.unblock("g_gate", actor="Wei", note="the fix is in")
+    eng.invalidate_nodes(["c_audio"], reason="approved change request", actor="Reviewer")
+    eng.unblock("g_gate", actor="Reviewer", note="the fix is in")
     eng.run(max_steps=200)
     d = eng.state.evaluation.defects[0]
     assert eng.state.runtime.status.value == "RUN_PASS", eng.state.evaluation.gate_results[-1].reasons
@@ -138,8 +134,8 @@ def test_after_a_fix_outside_rework_the_remaining_defects_still_go_through_rewor
     assert eng.state.evaluation.gate_results[-1].outcome == "blocked"
     flag(proj, "defect_audio", on=False)
     (proj / "flags" / "c_audio.variant").write_text("fixed")
-    eng.invalidate_nodes(["c_audio"], reason="approved change request", actor="Wei")
-    eng.unblock("g_gate", actor="Wei", note="the fix is in")
+    eng.invalidate_nodes(["c_audio"], reason="approved change request", actor="Reviewer")
+    eng.unblock("g_gate", actor="Reviewer", note="the fix is in")
     eng.on_step = lambda e: flag(proj, "defect", on=False) if e.state.runtime.rework_cycles else None
     eng.run(max_steps=200)
     assert [g.outcome for g in eng.state.evaluation.gate_results] == ["blocked", "rework", "pass"]
@@ -178,14 +174,14 @@ def test_a_retrace_off_a_human_gated_node_waits_for_a_human(tmp_path):
     flag(proj, "defect_plan")
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     eng.run(max_steps=200)
     d = eng.state.evaluation.defects[0]
     assert eng.state.evaluation.gate_results[-1].outcome == "blocked" and d.needs_human and d.traced_node == "b_plan"
     flag(proj, "retrace_plan")                                     # the next review traces the problem to d_build
     (proj / "flags" / "c_audio.variant").write_text("new take")    # an unrelated change builds a new version
-    eng.invalidate_nodes(["c_audio"], reason="a new take", actor="Wei")
-    eng.unblock("g_gate", actor="Wei", note="re-review the new take")
+    eng.invalidate_nodes(["c_audio"], reason="a new take", actor="Reviewer")
+    eng.unblock("g_gate", actor="Reviewer", note="re-review the new take")
     eng.run(max_steps=200)
     d = eng.state.evaluation.defects[0]
     held = eng.state.evaluation.gate_results[-1]
@@ -195,7 +191,7 @@ def test_a_retrace_off_a_human_gated_node_waits_for_a_human(tmp_path):
     assert events(proj, "defect_held")[0]["id"] == d.id
     with pytest.raises(EngineError, match="named human"):
         eng.unblock("g_gate", actor="agent:critic", note="route it")
-    eng.unblock("g_gate", actor="Wei", note="the fix belongs in the build, not the plan")
+    eng.unblock("g_gate", actor="Reviewer", note="the fix belongs in the build, not the plan")
     assert events(proj, "unblocked")[-1]["released_holds"] == [d.id]
     eng.on_step = lambda e: flag(proj, "defect_plan", on=False) if e.state.runtime.rework_cycles else None
     eng.run(max_steps=200)
@@ -226,25 +222,25 @@ def test_a_named_human_resolves_a_defect_no_review_can_clear(tmp_path, capsys):
     eng = Engine(proj, executor=FnExecutor(handlers))
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
-    eng.add_feedback("the voice sounds rushed", actor="Wei")
+    eng.add_feedback("the voice sounds rushed", actor="Reviewer")
     eng.run(max_steps=200)
     d = eng.state.evaluation.defects[-1]
     assert d.source == "feedback:F001" and d.needs_human and eng.state.runtime.status.value == "BLOCKED"
     with pytest.raises(EngineError, match="named human"):
         eng.resolve_defect(d.id, actor="agent:critic", evidence="sounds fine")
     with pytest.raises(EngineError, match="evidence"):
-        eng.resolve_defect(d.id, actor="Wei", evidence="  ")
-    assert cli.main(["resolve", str(proj), d.id, "--actor", "Wei", "--evidence", "played back on headphones: the pace is fine"]) == 0
+        eng.resolve_defect(d.id, actor="Reviewer", evidence="  ")
+    assert cli.main(["resolve", str(proj), d.id, "--actor", "Reviewer", "--evidence", "played back on headphones: the pace is fine"]) == 0
     out = capsys.readouterr().out
-    assert f"{d.id} resolved by Wei" in out and "unblock" in out and "g_gate" in out
+    assert f"{d.id} resolved by Reviewer" in out and "unblock" in out and "g_gate" in out
     eng = Engine(proj, executor=FnExecutor(handlers))
     assert eng.state.evaluation.defects[-1].status == "resolved"
-    assert events(proj, "defect_resolved")[-1] == {"id": d.id, "actor": "Wei", "evidence": "played back on headphones: the pace is fine",
+    assert events(proj, "defect_resolved")[-1] == {"id": d.id, "actor": "Reviewer", "evidence": "played back on headphones: the pace is fine",
                                                    "was": "open", "version": 1}
-    assert "resolved by Wei" in eng.state.evaluation.comparisons[-1].after
+    assert "resolved by Reviewer" in eng.state.evaluation.comparisons[-1].after
     with pytest.raises(EngineError, match="only an open"):
-        eng.resolve_defect(d.id, actor="Wei", evidence="again")
-    eng.unblock("g_gate", actor="Wei", note="the feedback does not apply")
+        eng.resolve_defect(d.id, actor="Reviewer", evidence="again")
+    eng.unblock("g_gate", actor="Reviewer", note="the feedback does not apply")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS", eng.state.evaluation.gate_results[-1].reasons
 
@@ -259,7 +255,7 @@ def test_tool_defect_cannot_be_resolved_by_command(tmp_path):
     eng.state.evaluation.reviews.append(review)
     did = eng._record_findings([finding], review.id, version=1)[0]
     with pytest.raises(EngineError, match="deterministic tool check.*next tool check.*end review"):
-        eng.resolve_defect(did, actor="Wei", evidence="looks fixed")
+        eng.resolve_defect(did, actor="Reviewer", evidence="looks fixed")
     assert eng.state.evaluation.defects[0].status == "open"
 
 
@@ -278,6 +274,7 @@ def test_reproduced_closed_defect_reopens_for_routing():
 def test_independent_review_defect_needs_fresh_pass_or_principal(tmp_path):
     proj = make_project(tmp_path)
     eng = Engine(proj, executor=FnExecutor())
+    eng.state.runtime.accepted_policy = {"humans": ["Reviewer", "Pat Example"]}
     finding = Finding(check="review:r1_review", dimension="CRE-ARC", severity="P2", message="story is unclear",
                       evidence="review notes", traced_node="d_build")
     review = Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
@@ -286,14 +283,14 @@ def test_independent_review_defect_needs_fresh_pass_or_principal(tmp_path):
     did = eng._record_findings([finding], review.id, version=1)[0]
     with pytest.raises(EngineError, match="independent review.*producer cannot close"):
         eng.resolve_defect(did, actor="Pat Example", evidence="I fixed it")
-    eng.resolve_defect(did, actor="Wei", evidence="end-review decision accepts it")
+    eng.resolve_defect(did, actor="Reviewer", evidence="end-review decision accepts it")
     assert eng.state.evaluation.defects[0].status == "resolved"
 
 
 def test_relayed_resolve_of_review_defect_refused_mid_run(tmp_path):
     proj = make_project(tmp_path)
     eng = Engine(proj, executor=FnExecutor())
-    eng.state.runtime.accepted_policy = {"humans": ["Wei"], "autonomy": {"mode": "provisional", "principal": "Wei"}}
+    eng.state.runtime.accepted_policy = {"humans": ["Reviewer"], "autonomy": {"mode": "provisional", "principal": "Reviewer"}}
     finding = Finding(check="review:r1_review", dimension="CRE-ARC", severity="P2", message="story is unclear",
                       evidence="review notes", traced_node="d_build")
     review = Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
@@ -301,7 +298,7 @@ def test_relayed_resolve_of_review_defect_refused_mid_run(tmp_path):
     eng.state.evaluation.reviews.append(review)
     did = eng._record_findings([finding], review.id, version=1)[0]
     with pytest.raises(EngineError, match="release end review"):
-        eng.resolve_defect(did, actor="agent:producer", on_behalf_of="Wei", instruction="looks fine", evidence="fixed")
+        eng.resolve_defect(did, actor="agent:producer", on_behalf_of="Reviewer", instruction="looks fine", evidence="fixed")
 
 
 def test_non_independent_fresh_review_does_not_close_defect():
@@ -320,7 +317,7 @@ def test_non_independent_fresh_review_does_not_close_defect():
 def test_failed_review_satisfied_when_all_defects_resolved():
     d = Defect(id="D001", signature=signature("CRE-ARC", "d_build", "review:r1_review"), severity="P2",
                dimension="CRE-ARC", description="story unclear", source="rev-r1_review-v1", traced_node="d_build",
-               first_seen_version=1, last_seen_version=1, status="resolved", resolved_by="Wei")
+               first_seen_version=1, last_seen_version=1, status="resolved", resolved_by="Reviewer")
     st = _state(d)
     st.evaluation.reviews = [Review(id="rev-r1_review-v1", node="r1_review", version=1, reviewer="critic", rubric_ids=[],
                                     verdict="fail", independent=True, defect_ids=["D001"], created_at=now())]
@@ -491,10 +488,10 @@ def test_a_state_written_before_v1_1_still_loads_and_runs(tmp_path):
     assert '"elements"' not in path.read_text() and '"command_code"' not in path.read_text()
     eng = Engine(proj, executor=FnExecutor())
     assert eng.state.evaluation.defects[0].elements == [] and eng.rt("d_build").command_code == {}
-    eng.add_feedback("the title reads well now", actor="Wei")
-    eng.run(max_steps=200)                                          # the interpreter closes it with no action: held for Wei
+    eng.add_feedback("the title reads well now", actor="Reviewer")
+    eng.run(max_steps=200)                                          # the interpreter closes it with no action: held for Reviewer
     assert eng.state.runtime.status.value == "BLOCKED" and eng.state.evaluation.feedback[0].hold
-    eng.unblock("g_gate", actor="Wei", note="no change needed")
+    eng.unblock("g_gate", actor="Reviewer", note="no change needed")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
 
@@ -556,7 +553,7 @@ def test_the_engine_code_is_part_of_the_configuration_a_run_accepted(tmp_path):
     eng._save("test")
     eng = Engine(proj, executor=FnExecutor())
     assert any("engine/evaluation.py" in p and "accept-config" in p for p in eng._integrity_problems())
-    eng.accept_config(actor="Wei", reason="v1.1 engine fixes")
+    eng.accept_config(actor="Reviewer", reason="v1.1 engine fixes")
     assert not eng._integrity_problems()
 
 
@@ -613,7 +610,7 @@ def test_a_file_a_command_generates_is_reported_and_can_be_excluded(tmp_path):
                                                 "'window.FILM = ' + json.dumps(ctx['attempt']))\n")
         cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
         (proj / "vpg.project.yaml").write_text(yaml.safe_dump({**cfg, "privacy": {"names": "none", "reason": "synthetic"},
-                                                                "humans": ["Wei"],
+                                                                "humans": ["Reviewer"],
                                                                 "commands": {"b_plan": "{python} pipeline/plan.py",
                                                                              "d_build": "{python} pipeline/build.py"}, **extra}))
         eng = Engine(proj, executor=FnExecutor())
@@ -716,7 +713,7 @@ def test_a_real_production_refuses_auto_approval_and_fixtures(tmp_path, capsys):
 
 def test_the_human_check_ignores_case_and_spacing():
     """Judge finding: 'Agent:x' passed the human check (it was case-sensitive)."""
-    assert is_human_name("Wei") and is_human_name("Sam Placeholder")
+    assert is_human_name("Reviewer") and is_human_name("Sam Placeholder")
     for fake in ("agent:x", "Agent:x", " AGENT:critic", "dry-run-auto", "DRY-RUN-AUTO", "", "   ", None):
         assert not is_human_name(fake), fake
     with pytest.raises(GovernanceError, match="named human"):
@@ -739,7 +736,7 @@ def test_agents_in_any_case_cannot_act_as_humans(tmp_path):
             eng.resolve_defect(manual.id, actor=actor, evidence="it is fine")
         with pytest.raises(EngineError, match="came from a deterministic tool check"):
             eng.resolve_defect(d.id, actor=actor, evidence="it is fine")
-    cr = eng.change_request("design", "tighten the plate", by="Wei")
+    cr = eng.change_request("design", "tighten the plate", by="Reviewer")
     with pytest.raises(EngineError, match="named human"):
         eng.approve_change_request(cr.id, by="Agent:designer")
 
@@ -770,10 +767,10 @@ def test_a_submission_cannot_replace_a_tool_output(tmp_path):
 
 
 def test_approve_needs_the_humans_reason(project):
-    """Judge finding (J05): `approve` without --reason recorded an empty reason, though the SOP requires Wei's words."""
+    """Judge finding (J05): `approve` without --reason recorded an empty reason, though the SOP requires Reviewer's words."""
     proj, _ = project
     with pytest.raises(SystemExit):
-        cli.main(["approve", str(proj), "b_plan", "--actor", "Wei"])
+        cli.main(["approve", str(proj), "b_plan", "--actor", "Reviewer"])
 
 
 def test_declared_humans_refuse_free_text_and_record_relays(tmp_path, monkeypatch):
@@ -781,23 +778,23 @@ def test_declared_humans_refuse_free_text_and_record_relays(tmp_path, monkeypatc
     monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
     proj = make_project(tmp_path, human_b=True, lock_b=("design",))
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg.update({"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
                 "reviews": {"binding": "require", "independence": "require"},
                 "loop_budget": {"on_exhaust": "extend_if_converging"},
-                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+                "autonomy": {"mode": "provisional", "principal": "Reviewer"}})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
     with pytest.raises(EngineError, match="--actor must be exactly one of the declared humans"):
-        eng.decide("b_plan", "approved", actor="Wei (standing instruction)", reason="go")
-    st = eng.decide("b_plan", "approved", actor="agent:runner", reason="proceed", on_behalf_of="Wei",
+        eng.decide("b_plan", "approved", actor="Reviewer (standing instruction)", reason="go")
+    st = eng.decide("b_plan", "approved", actor="agent:runner", reason="proceed", on_behalf_of="Reviewer",
                     instruction="approve the plan and keep going", instruction_at="2026-09-30T12:00:00Z",
                     provisional=True)
     assert st["nodes"]["b_plan"]["status"] == "STEP_PASS"
     approval = eng.state.history.approvals[-1]
-    assert approval.actor == "agent:runner" and approval.relayed and approval.principal == "Wei"
+    assert approval.actor == "agent:runner" and approval.relayed and approval.principal == "Reviewer"
     decision = list(Ledger(proj / ".vpg/ledger.jsonl").events("decision"))[-1]["data"]
-    assert decision["actor"] == "agent:runner" and decision["principal"] == "Wei" and decision["relayed"] is True
+    assert decision["actor"] == "agent:runner" and decision["principal"] == "Reviewer" and decision["relayed"] is True
 
 
 def test_invalid_humans_config_is_refused(tmp_path):
@@ -817,14 +814,14 @@ def test_unaccepted_policy_config_cannot_authorize_human_actions(tmp_path, monke
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg.update({"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
                 "reviews": {"binding": "require", "independence": "require"},
                 "loop_budget": {"on_exhaust": "extend_if_converging"},
-                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+                "autonomy": {"mode": "provisional", "principal": "Reviewer"}})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="unaccepted configuration change"):
-        eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go",
+        eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Reviewer", instruction="go",
                    reason="p", provisional=True)
 
 
@@ -833,26 +830,26 @@ def test_provisional_approval_requires_policy_and_records_standing_pass(tmp_path
     proj = make_project(tmp_path, human_b=True, lock_b=("design",))
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
     cfg.update({
-        "humans": ["Wei"],
+        "humans": ["Reviewer"],
         "privacy": {"names": "none", "reason": "synthetic"},
         "reviews": {"binding": "require", "independence": "require"},
         "loop_budget": {"on_exhaust": "extend_if_converging"},
-        "autonomy": {"mode": "provisional", "principal": "Wei"},
+        "autonomy": {"mode": "provisional", "principal": "Reviewer"},
     })
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
     with pytest.raises(EngineError, match="cannot approve its own output"):
-        eng.decide("b_plan", "approved", actor="agent:production-orchestrator", on_behalf_of="Wei", instruction="go",
+        eng.decide("b_plan", "approved", actor="agent:production-orchestrator", on_behalf_of="Reviewer", instruction="go",
                    reason="provisional", provisional=True)
-    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go", reason="provisional",
+    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Reviewer", instruction="go", reason="provisional",
                provisional=True)
     approval = eng.state.history.approvals[-1]
-    assert approval.provisional and approval.relayed and approval.principal == "Wei"
+    assert approval.provisional and approval.relayed and approval.principal == "Reviewer"
     assert eng.state.controls["design"].provisional is True
     data = list(Ledger(proj / ".vpg/ledger.jsonl").events("decision"))[-1]["data"]
-    assert data["provisional"] is True and data["principal"] == "Wei"
+    assert data["provisional"] is True and data["principal"] == "Reviewer"
 
 
 @pytest.mark.parametrize("remove_key, expected", [
@@ -863,10 +860,10 @@ def test_provisional_approval_requires_policy_and_records_standing_pass(tmp_path
 ])
 def test_each_autonomy_precondition_fails_on_its_own(tmp_path, remove_key, expected):
     import vpg.engine as ve
-    cfg = {"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg = {"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
            "reviews": {"binding": "require", "independence": "require"},
            "loop_budget": {"on_exhaust": "extend_if_converging"},
-           "autonomy": {"mode": "provisional", "principal": "Wei"}}
+           "autonomy": {"mode": "provisional", "principal": "Reviewer"}}
     if remove_key == "principal":
         del cfg["autonomy"]["principal"]
     else:
@@ -879,15 +876,15 @@ def test_provisional_refused_at_release_and_review_descendant(tmp_path, monkeypa
     wf = release_workflow(tmp_path)
     proj = make_project(tmp_path, workflow=wf)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg.update({"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
                 "reviews": {"binding": "require", "independence": "require"},
                 "loop_budget": {"on_exhaust": "extend_if_converging"},
-                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+                "autonomy": {"mode": "provisional", "principal": "Reviewer"}})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"n23_final_verification", "d_build"})
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="release-review side"):
-        eng._check_provisional_decision(eng.node("n23_final_verification"), "approved", "agent:ops", "Wei", "go")
+        eng._check_provisional_decision(eng.node("n23_final_verification"), "approved", "agent:ops", "Reviewer", "go")
 
 
 def test_release_structure_requires_warning_acks_and_human_signoffs(tmp_path):
@@ -909,19 +906,19 @@ def test_release_structure_requires_warning_acks_and_human_signoffs(tmp_path):
 def test_partial_confirm_leaves_standing_and_reject_reopens_node(tmp_path):
     proj = make_project(tmp_path, human_b=True)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei", "Pat Example"]
+    cfg["humans"] = ["Reviewer", "Pat Example"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     eng.state.history.approvals += [
         Approval(node="b_plan", decision="approved", actor="agent:a", human=True, at=now(), provisional=True, relayed=True,
-                 principal="Wei", instruction="go"),
+                 principal="Reviewer", instruction="go"),
         Approval(node="c_audio", decision="approved", actor="agent:b", human=True, at=now(), provisional=True, relayed=True,
-                 principal="Wei", instruction="go"),
+                 principal="Reviewer", instruction="go"),
     ]
     eng.rt("c_audio").status = S.STEP_PASS
-    eng._handle_release_provisional_controls("b_plan", "", "", "Wei", "", "", "", now())
+    eng._handle_release_provisional_controls("b_plan", "", "", "Reviewer", "", "", "", now())
     assert [a.node for a in eng._standing_provisional()] == ["c_audio"]
-    eng._handle_release_provisional_controls("", "c_audio", "redo the mix", "Wei", "", "", "", now())
+    eng._handle_release_provisional_controls("", "c_audio", "redo the mix", "Reviewer", "", "", "", now())
     assert not eng._standing_provisional()
     assert eng.rt("c_audio").status == S.STALE
     assert eng.rt("c_audio").task_notes_by_attempt[eng.rt("c_audio").attempts + 1][-1].endswith("redo the mix")
@@ -934,9 +931,9 @@ def test_reject_provisional_restores_prelock_and_later_reaches_release(tmp_path,
     monkeypatch.setattr(ve, "autonomy_precondition_problems", lambda config: [])
     proj = make_project(tmp_path, workflow=release_workflow(tmp_path, human_b=True, lock_b=("design",)))
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg.update({"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
                 "loop_budget": {"on_exhaust": "extend_if_converging"},
-                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+                "autonomy": {"mode": "provisional", "principal": "Reviewer"}})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
 
     def write_design(ctx):
@@ -947,16 +944,16 @@ def test_reject_provisional_restores_prelock_and_later_reaches_release(tmp_path,
 
     eng = Engine(proj, executor=FnExecutor({"b_plan": write_design}))
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Wei", instruction="go", reason="p", provisional=True)
+    eng.decide("b_plan", "approved", actor="agent:runner", on_behalf_of="Reviewer", instruction="go", reason="p", provisional=True)
     eng.run(max_steps=300)
     assert eng.rt("n23_final_verification").status == S.WAITING_HUMAN
-    eng.decide("n23_final_verification", "approved", actor="Wei", reason="reject", reject_provisional="b_plan",
+    eng.decide("n23_final_verification", "approved", actor="Reviewer", reason="reject", reject_provisional="b_plan",
                rejection_feedback="change palette")
     assert eng.state.controls["design"].status == "draft"
     ctx = eng._context(eng.node("b_plan"), eng.rt("b_plan").attempts + 1, eng.rt("b_plan").fingerprint or "fp", "tok")
     packet = TaskPacketExecutor().execute(ctx)
     packet_path = proj / packet.task_packet
-    assert packet_path.exists() and "Wei's rejection of the provisional approval (verbatim): change palette" in packet_path.read_text()
+    assert packet_path.exists() and "Reviewer's rejection of the provisional approval (verbatim): change palette" in packet_path.read_text()
     eng = Engine(proj, executor=FnExecutor({"b_plan": write_design}))
     eng.run(max_steps=300)
     assert "attempt 2" in (proj / "controls/design.md").read_text()
@@ -965,7 +962,7 @@ def test_reject_provisional_restores_prelock_and_later_reaches_release(tmp_path,
     ctx3 = eng._context(eng.node("b_plan"), eng.rt("b_plan").attempts + 1, eng.rt("b_plan").fingerprint or "fp", "tok3")
     packet3 = TaskPacketExecutor().execute(ctx3)
     assert "rejection of the provisional approval" not in (proj / packet3.task_packet).read_text()
-    eng.decide("b_plan", "approved", actor="Wei", reason="ok")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="ok")
     eng.run(max_steps=300)
     if eng.rt("n23_final_verification").status == S.STALE:
         eng.run(max_steps=300)
@@ -975,36 +972,36 @@ def test_reject_provisional_restores_prelock_and_later_reaches_release(tmp_path,
 def test_relayed_signoff_requires_principal_and_instruction(tmp_path):
     proj = make_project(tmp_path, workflow=release_workflow(tmp_path))
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="--on-behalf-of must be one of"):
         eng._require_human("agent:release", "release signoff", instruction="sign VOI-ADULT")
     with pytest.raises(EngineError, match="needs --instruction"):
-        eng._require_human("agent:release", "release signoff", on_behalf_of="Wei")
+        eng._require_human("agent:release", "release signoff", on_behalf_of="Reviewer")
     eng.rt(eng._release_node()).status = S.WAITING_HUMAN
-    meta = eng._require_human("agent:release", "release signoff", on_behalf_of="Wei", instruction="sign VOI-ADULT")
-    assert meta["relayed"] is True and meta["principal"] == "Wei"
+    meta = eng._require_human("agent:release", "release signoff", on_behalf_of="Reviewer", instruction="sign VOI-ADULT")
+    assert meta["relayed"] is True and meta["principal"] == "Reviewer"
 
 
 def test_relayed_confirm_requires_fresh_instruction_at(tmp_path):
     proj = make_project(tmp_path, workflow=release_workflow(tmp_path))
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     eng.state.history.approvals.append(Approval(node="b_plan", decision="approved", actor="agent:a", human=False, at=now(),
-                                                provisional=True, relayed=True, principal="Wei", instruction="go"))
+                                                provisional=True, relayed=True, principal="Reviewer", instruction="go"))
     eng.rt("n23_final_verification").status = S.WAITING_HUMAN
     eng.rt("n23_final_verification").started_at = "2026-09-30T12:00:00+00:00"
     with pytest.raises(EngineError, match="instruction-at"):
-        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Wei", instruction="ship",
+        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Reviewer", instruction="ship",
                    reason="ship", confirm_provisional="all")
     with pytest.raises(EngineError, match="ISO timestamp"):
-        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Wei", instruction="ship",
+        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Reviewer", instruction="ship",
                    instruction_at="whenever", reason="ship", confirm_provisional="all")
     with pytest.raises(EngineError, match="later"):
-        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Wei", instruction="ship",
+        eng.decide("n23_final_verification", "approved", actor="agent:a", on_behalf_of="Reviewer", instruction="ship",
                    instruction_at="2026-09-30T11:59:59+00:00", reason="ship", confirm_provisional="all")
 
 
@@ -1013,19 +1010,19 @@ def test_superseded_provisional_approval_confirm_all_clears_latest(tmp_path, mon
     monkeypatch.setattr(ve, "PROVISIONAL_GATES", {"b_plan"})
     proj = make_project(tmp_path, human_b=True)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg.update({"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
                 "reviews": {"binding": "require", "independence": "require"},
                 "loop_budget": {"on_exhaust": "extend_if_converging"},
-                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+                "autonomy": {"mode": "provisional", "principal": "Reviewer"}})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="agent:a", on_behalf_of="Wei", instruction="go", reason="p", provisional=True)
-    eng.invalidate_nodes(["b_plan"], reason="again", actor="Wei")
+    eng.decide("b_plan", "approved", actor="agent:a", on_behalf_of="Reviewer", instruction="go", reason="p", provisional=True)
+    eng.invalidate_nodes(["b_plan"], reason="again", actor="Reviewer")
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="agent:a", on_behalf_of="Wei", instruction="go", reason="p2", provisional=True)
+    eng.decide("b_plan", "approved", actor="agent:a", on_behalf_of="Reviewer", instruction="go", reason="p2", provisional=True)
     assert len(eng._standing_provisional()) == 1
-    eng._handle_release_provisional_controls("all", "", "", "Wei", "", "", "", now())
+    eng._handle_release_provisional_controls("all", "", "", "Reviewer", "", "", "", now())
     assert not eng._standing_provisional()
 
 
@@ -1041,17 +1038,17 @@ GRANTABLE_ACTS = [("unblock", "unblocking"),
 def test_declared_human_actions_refuse_free_text_and_accept_structured_relay(tmp_path, action, what):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="--actor must be exactly one of the declared humans"):
-        eng._require_human("Wei (standing instruction)", what)
+        eng._require_human("Reviewer (standing instruction)", what)
     if not action:
         with pytest.raises(EngineError, match="refused mid-run"):
-            eng._require_human("agent:ops", what, on_behalf_of="Wei", instruction="do this")
+            eng._require_human("agent:ops", what, on_behalf_of="Reviewer", instruction="do this")
     else:
-        assert eng._authorize("agent:ops", action, what, on_behalf_of="Wei", instruction="do this") is None
-        assert eng.ledger.stamp["principal"] == "Wei" and eng.ledger.stamp["relayed"] is True
+        assert eng._authorize("agent:ops", action, what, on_behalf_of="Reviewer", instruction="do this") is None
+        assert eng.ledger.stamp["principal"] == "Reviewer" and eng.ledger.stamp["relayed"] is True
 
 
 @pytest.mark.parametrize("action", ["granting a delegation", "accepting a configuration change", "a rollback", "accepting a ledger break",
@@ -1059,21 +1056,21 @@ def test_declared_human_actions_refuse_free_text_and_accept_structured_relay(tmp
 def test_mid_run_relays_are_refused_for_non_grantable_human_actions(tmp_path, action):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="release|accept-config|refused mid-run"):
-        eng._require_human("agent:ops", action, on_behalf_of="Wei", instruction="do this")
+        eng._require_human("agent:ops", action, on_behalf_of="Reviewer", instruction="do this")
 
 
 def test_waiver_path_refuses_free_text_declared_human(tmp_path):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="declared humans"):
-        eng._require_human("Wei (standing instruction)", "waiving an intake gap")
+        eng._require_human("Reviewer (standing instruction)", "waiving an intake gap")
 
 
 def test_v17_project_gets_clear_new_release_refusals(tmp_path):
@@ -1098,26 +1095,26 @@ def test_custom_release_node_enforces_provisional_and_structured_release(tmp_pat
     proj = make_project(tmp_path, workflow=release_workflow(tmp_path, release_id="ship_release"))
     eng = Engine(proj, executor=FnExecutor())
     eng.state.history.approvals.append(Approval(node="b_plan", decision="approved", actor="agent:a", human=False, at=now(),
-                                                provisional=True, relayed=True, principal="Wei", instruction="go"))
+                                                provisional=True, relayed=True, principal="Reviewer", instruction="go"))
     eng.rt("ship_release").status = S.WAITING_HUMAN
     add_verification_artifact(eng, warnings=["check"], pending=["VOI-ADULT"])
     with pytest.raises(EngineError, match="standing provisional"):
-        eng.decide("ship_release", "approved", actor="Wei", reason="ship", ack_warnings=["all"], signoffs=["VOI-ADULT"])
-    eng._handle_release_provisional_controls("all", "", "", "Wei", "", "", "", now())
+        eng.decide("ship_release", "approved", actor="Reviewer", reason="ship", ack_warnings=["all"], signoffs=["VOI-ADULT"])
+    eng._handle_release_provisional_controls("all", "", "", "Reviewer", "", "", "", now())
     with pytest.raises(EngineError, match="--ack-warning"):
-        eng.decide("ship_release", "approved", actor="Wei", reason="ship", signoffs=["VOI-ADULT"])
+        eng.decide("ship_release", "approved", actor="Reviewer", reason="ship", signoffs=["VOI-ADULT"])
     with pytest.raises(EngineError, match="--signoff"):
-        eng.decide("ship_release", "approved", actor="Wei", reason="ship", ack_warnings=["all"])
+        eng.decide("ship_release", "approved", actor="Reviewer", reason="ship", ack_warnings=["all"])
 
 
 def test_cli_release_approve_with_ack_warning_and_signoff_on_default_workflow(tmp_path):
     proj = tmp_path / "film"
-    assert cli.main(["init", str(proj), "--name", "film"]) == 0
+    assert cli.main(["init", "--human", "Reviewer", str(proj), "--name", "film"]) == 0
     eng = Engine(proj, executor=FnExecutor())
     eng.rt("n23_final_verification").status = S.WAITING_HUMAN
     add_verification_artifact(eng, warnings=["review warning"], pending=["VOI-ADULT", "CRE-MUSIC"])
     eng._save("test")
-    assert cli.main(["approve", str(proj), "n23_final_verification", "--actor", "Wei", "--reason", "ship",
+    assert cli.main(["approve", str(proj), "n23_final_verification", "--actor", "Reviewer", "--reason", "ship",
                      "--ack-warning", "all", "--signoff", "VOI-ADULT,CRE-MUSIC"]) == 0
     eng = Engine(proj, read_only=True)
     approval = eng.state.history.approvals[-1]
@@ -1129,7 +1126,7 @@ def test_pre_v18_state_loads_accepts_config_and_steps(tmp_path):
     proj = make_project(tmp_path, human_b=True)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei (standing instruction)", reason="go")
+    eng.decide("b_plan", "approved", actor="Reviewer (standing instruction)", reason="go")
     raw = json.loads((proj / ".vpg/state.json").read_text())
     raw["runtime"].pop("accepted_policy", None)
     raw["runtime"].pop("accepted_config", None)
@@ -1138,8 +1135,8 @@ def test_pre_v18_state_loads_accepts_config_and_steps(tmp_path):
             approval.pop(key, None)
     (proj / ".vpg/state.json").write_text(json.dumps(raw))
     eng = Engine(proj, executor=FnExecutor())
-    assert eng.state.history.approvals[0].actor == "Wei (standing instruction)"
-    eng.accept_config(actor="Wei", reason="adopt")
+    assert eng.state.history.approvals[0].actor == "Reviewer (standing instruction)"
+    eng.accept_config(actor="Reviewer", reason="adopt")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value in ("RUN_PASS", "RUNNING", "WAITING_RUNTIME", "WAITING_HUMAN")
 
@@ -1164,14 +1161,14 @@ def test_release_structure_fails_closed_on_missing_or_drifted_verification(tmp_p
 def test_feedback_declared_humans_and_relays(tmp_path):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     with pytest.raises(EngineError, match="declared humans"):
-        eng.add_feedback("make it bluer", actor="Wei (standing instruction)")
-    fb = eng.add_feedback("make it shorter", actor="agent:runner", on_behalf_of="Wei", instruction="shorter")
+        eng.add_feedback("make it bluer", actor="Reviewer (standing instruction)")
+    fb = eng.add_feedback("make it shorter", actor="agent:runner", on_behalf_of="Reviewer", instruction="shorter")
     ev = list(Ledger(proj / ".vpg/ledger.jsonl").events("feedback"))[-1]["data"]
-    assert fb.actor == "Wei" and fb.triage == "" and ev["relayed"] is True and ev["relay_actor"] == "agent:runner"
+    assert fb.actor == "Reviewer" and fb.triage == "" and ev["relayed"] is True and ev["relay_actor"] == "agent:runner"
 
 
 @pytest.mark.parametrize("action", [
@@ -1182,60 +1179,60 @@ def test_feedback_declared_humans_and_relays(tmp_path):
 def test_relays_allowed_for_human_actions_at_waiting_release(tmp_path, action):
     proj = make_project(tmp_path, workflow=release_workflow(tmp_path))
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     eng.rt("n23_final_verification").status = S.WAITING_HUMAN
-    meta = eng._require_human("agent:ops", action, on_behalf_of="Wei", instruction="do it")
-    assert meta["relayed"] is True and eng.ledger.stamp["principal"] == "Wei"
+    meta = eng._require_human("agent:ops", action, on_behalf_of="Reviewer", instruction="do it")
+    assert meta["relayed"] is True and eng.ledger.stamp["principal"] == "Reviewer"
 
 
 @pytest.mark.parametrize("action,what", GRANTABLE_ACTS)
 def test_grantable_relays_allowed_mid_run(tmp_path, action, what):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     assert not eng._at_release_wait()
-    assert eng._authorize("agent:ops", action, what, on_behalf_of="Wei", instruction="do it") is None
-    assert eng.ledger.stamp["principal"] == "Wei"
+    assert eng._authorize("agent:ops", action, what, on_behalf_of="Reviewer", instruction="do it") is None
+    assert eng.ledger.stamp["principal"] == "Reviewer"
 
 
 def test_relayed_safety_accept_config_allowed_but_broad_config_refused(tmp_path):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
-    eng.accept_config(actor="Wei", reason="declare")
+    eng.accept_config(actor="Reviewer", reason="declare")
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
     cfg["loop_budget"] = {"on_exhaust": "extend_if_converging"}
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
-    assert eng._require_human("agent:ops", "accepting a configuration change", on_behalf_of="Wei", instruction="safety")["principal"] == "Wei"
+    assert eng._require_human("agent:ops", "accepting a configuration change", on_behalf_of="Reviewer", instruction="safety")["principal"] == "Reviewer"
     eng = Engine(proj, executor=FnExecutor())
-    eng.accept_config(actor="Wei", reason="accept safety")
+    eng.accept_config(actor="Reviewer", reason="accept safety")
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
     cfg["commands"] = {"b_plan": "echo x"}
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     with pytest.raises(EngineError, match="safety-key-only"):
-        eng._require_human("agent:ops", "accepting a configuration change", on_behalf_of="Wei", instruction="broad")
+        eng._require_human("agent:ops", "accepting a configuration change", on_behalf_of="Reviewer", instruction="broad")
 
 
 def test_relayed_threshold_change_request_refused_mid_run(tmp_path):
     proj = make_project(tmp_path)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei"]
+    cfg["humans"] = ["Reviewer"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     cr = eng.change_request("evaluation", "lower threshold", by="agent:critic")
     with pytest.raises(EngineError, match="bar changes"):
-        eng.approve_change_request(cr.id, by="agent:ops", on_behalf_of="Wei", instruction="approve")
+        eng.approve_change_request(cr.id, by="agent:ops", on_behalf_of="Reviewer", instruction="approve")
     with pytest.raises(EngineError, match="bar changes"):
-        eng.reject_change_request(cr.id, by="agent:ops", reason="reject", on_behalf_of="Wei", instruction="reject")
+        eng.reject_change_request(cr.id, by="agent:ops", reason="reject", on_behalf_of="Reviewer", instruction="reject")
     with pytest.raises(EngineError, match="bar changes"):
-        eng.defer_change_request(cr.id, by="agent:ops", until="later", reason="defer", on_behalf_of="Wei", instruction="defer")
+        eng.defer_change_request(cr.id, by="agent:ops", until="later", reason="defer", on_behalf_of="Reviewer", instruction="defer")
 
 
 def test_adoption_relay_instruction_at_validation(tmp_path):
@@ -1244,26 +1241,26 @@ def test_adoption_relay_instruction_at_validation(tmp_path):
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.decide("b_plan", "approved", actor="Wei", reason="ok")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="ok")
     eng.run(max_steps=300)
-    cfg.update({"humans": ["Wei"], "privacy": {"names": "none", "reason": "synthetic"},
+    cfg.update({"humans": ["Reviewer"], "privacy": {"names": "none", "reason": "synthetic"},
                 "reviews": {"binding": "require", "independence": "require"},
                 "loop_budget": {"on_exhaust": "extend_if_converging"},
-                "autonomy": {"mode": "provisional", "principal": "Wei"}})
+                "autonomy": {"mode": "provisional", "principal": "Reviewer"}})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     with pytest.raises(EngineError, match="ISO timestamp"):
-        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Reviewer",
                                                           instruction="adopt", instruction_at="whenever")
     with pytest.raises(EngineError, match="timezone"):
-        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Reviewer",
                                                           instruction="adopt", instruction_at="2099-01-01T10:00:00")
     with pytest.raises(EngineError, match="later"):
-        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+        Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Reviewer",
                                                           instruction="adopt", instruction_at="2000-01-01T10:00:00+00:00")
     later_at = "2099-01-01T10:00:00+00:00"
-    Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Wei",
+    Engine(proj, executor=FnExecutor()).accept_config(actor="agent:ops", reason="adopt", on_behalf_of="Reviewer",
                                                       instruction="adopt", instruction_at=later_at)
-    assert Engine(proj, read_only=True).state.runtime.accepted_policy["humans"] == ["Wei"]
+    assert Engine(proj, read_only=True).state.runtime.accepted_policy["humans"] == ["Reviewer"]
 
 
 # ---------------------------------------------------------------------------------------------- printed commands run as written (judge, J05)
@@ -1277,7 +1274,7 @@ def test_the_printed_gate_commands_run_as_written(tmp_path, monkeypatch):
     def printed(kind):
         line = next(ln.strip() for ln in cli._human_gate_lines(Engine(proj, read_only=True), "b_plan") if ln.strip().startswith(kind + ":"))
         cmd = re.sub(r"\s+\(records '[^']*'\)$", "", line.split(":", 1)[1].strip())
-        return shlex.split(cmd.replace("<human>", "Wei").replace("<their words>", "too long").replace("<what to change>", "cut it"))[3:]
+        return shlex.split(cmd.replace("<human>", "Reviewer").replace("<their words>", "too long").replace("<what to change>", "cut it"))[3:]
     assert cli.main(printed("reject")) == 0
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)                                          # the rejection loops back and the gate asks again
@@ -1331,9 +1328,7 @@ def test_a_relative_review_path_is_found_in_the_work_directory(tmp_path, monkeyp
 
 # ---------------------------------------------------------------------------------------------- v1.2: human feedback is never dismissed silently
 def test_human_feedback_closed_with_no_action_waits_for_its_author(tmp_path):
-    """Monitor finding (the SRA run): the interpreter could close Wei's 'v3 is even worse' with a no-action reason, and the
-    gate then passed that version and opened the release. A human's feedback closed with no action is held: no version
-    passes until its author, or the gate's owner, accepts the dismissal by unblocking the gate."""
+    """Synthetic regression coverage: test human feedback closed with no action waits for its author."""
     proj = make_project(tmp_path, review_tool=ROUTES)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
@@ -1345,12 +1340,12 @@ def test_human_feedback_closed_with_no_action_waits_for_its_author(tmp_path):
     assert "leads to no open blocking defect" in g.reasons[0] and any("on hold" in r and "F001" in r for r in g.reasons)
     assert any(h.startswith("F001: ") for h in eng.status()["holds"])
     assert events(proj, "feedback_held")[0] == {"id": "F001", "actor": "Maria", "reason": "test"}
-    with pytest.raises(EngineError, match="F001.*Wei|Wei.*F001"):
+    with pytest.raises(EngineError, match="F001.*Reviewer|Reviewer.*F001"):
         eng.unblock("g_gate", actor="Sam Placeholder", note="looks fine to me")   # neither the author nor the gate's owner
     assert eng.state.evaluation.feedback[0].hold
     eng.run(max_steps=200)
     assert eng.state.evaluation.gate_results[-1].outcome == "blocked"
-    eng.unblock("g_gate", actor="Wei", note="as the owner I accept: no change")   # the gate's owner (escalation.to)
+    eng.unblock("g_gate", actor="Reviewer", note="as the owner I accept: no change")   # the gate's owner (escalation.to)
     assert events(proj, "unblocked")[-1]["released_holds"] == ["F001"]
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and not eng.state.evaluation.feedback[0].hold
@@ -1374,7 +1369,7 @@ def test_a_held_feedback_blocks_only_the_pass_not_the_rework(tmp_path):
 def test_feedback_hold_unblock_accepts_relay_principal_or_exact_author(tmp_path):
     proj = make_project(tmp_path, review_tool=ROUTES)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg["humans"] = ["Wei", "Pat Example"]
+    cfg["humans"] = ["Reviewer", "Pat Example"]
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg))
 
     def no_action(ctx):
@@ -1385,20 +1380,20 @@ def test_feedback_hold_unblock_accepts_relay_principal_or_exact_author(tmp_path)
 
     eng = Engine(proj, executor=FnExecutor({"g_gate": no_action}))
     eng.run(max_steps=200)
-    eng.add_feedback("the proof point is now clear", actor="Wei")
+    eng.add_feedback("the proof point is now clear", actor="Reviewer")
     eng.run(max_steps=200)
     gate = eng._gate_node()
-    with pytest.raises(EngineError, match="--actor must be one of Wei"):
+    with pytest.raises(EngineError, match="--actor must be one of Reviewer"):
         eng.unblock(gate, actor="agent:relay", on_behalf_of="Pat Example", instruction="continue")
-    eng.unblock(gate, actor="agent:relay", on_behalf_of="Wei", instruction="continue", note="relayed")
+    eng.unblock(gate, actor="agent:relay", on_behalf_of="Reviewer", instruction="continue", note="relayed")
     assert events(proj, "unblocked")[-1]["released_holds"] == ["F001"]
 
     proj2 = make_project(tmp_path / "exact", review_tool=ROUTES)
     eng2 = Engine(proj2, executor=FnExecutor({"g_gate": no_action}))
     eng2.run(max_steps=200)
-    eng2.add_feedback("the proof point is now clear", actor="Wei")
+    eng2.add_feedback("the proof point is now clear", actor="Reviewer")
     eng2.run(max_steps=200)
-    eng2.unblock(eng2._gate_node(), actor="Wei", note="exact author")
+    eng2.unblock(eng2._gate_node(), actor="Reviewer", note="exact author")
     assert events(proj2, "unblocked")[-1]["released_holds"] == ["F001"]
 
 
@@ -1409,7 +1404,7 @@ def test_feedback_mapped_to_a_defect_is_not_held(tmp_path):
                                            "traced_node": "d_build"})}
     eng = Engine(proj, executor=FnExecutor(handlers))
     eng.run(max_steps=200)
-    eng.add_feedback("the middle sags", actor="Wei")
+    eng.add_feedback("the middle sags", actor="Reviewer")
     eng.run(max_steps=10)
     assert not eng.state.evaluation.feedback[0].hold and eng.state.evaluation.feedback[0].defect_ids
     assert eng.state.evaluation.gate_results[-1].outcome == "rework"
@@ -1434,14 +1429,14 @@ def test_human_feedback_cannot_be_closed_on_a_closed_defect_or_a_nit(tmp_path):
             (ctx.workdir / "interpretation.json").write_text(json.dumps(plans[plan]))
             return {"interpretation": "interpretation.json"}
         eng = Engine(proj, executor=FnExecutor({"g_gate": g_gate}))
-        eng.add_feedback(f"feedback for the {plan} case", actor="Wei")
+        eng.add_feedback(f"feedback for the {plan} case", actor="Reviewer")
         eng.run(max_steps=200)
         fb = next(f for f in eng.state.evaluation.feedback if f.id == fid)
         if plan == "unknown":
             assert fb.status == "open" and any("unknown defect(s) ['D999']" in x for x in eng.rt("g_gate").failures)
         else:
             assert fb.hold and eng.state.evaluation.gate_results[-1].outcome == "blocked", plan
-            eng.unblock("g_gate", actor="Wei", note=f"accept the {plan} mapping")
+            eng.unblock("g_gate", actor="Reviewer", note=f"accept the {plan} mapping")
 
 
 def test_principal_feedback_resolved_under_provisional_does_not_hold_gate(tmp_path):
@@ -1453,9 +1448,9 @@ def test_principal_feedback_resolved_under_provisional_does_not_hold_gate(tmp_pa
 
     proj = make_project(tmp_path, review_tool=ROUTES)
     eng = Engine(proj, executor=FnExecutor({"g_gate": no_action}))
-    eng.state.runtime.accepted_policy = {"autonomy": {"mode": "provisional", "principal": "Wei"}, "humans": ["Wei"]}
+    eng.state.runtime.accepted_policy = {"autonomy": {"mode": "provisional", "principal": "Reviewer"}, "humans": ["Reviewer"]}
     eng.run(max_steps=200)
-    eng.add_feedback("the evidence label is wrong", actor="Wei")
+    eng.add_feedback("the evidence label is wrong", actor="Reviewer")
     eng.run(max_steps=200)
     fb = eng.state.evaluation.feedback[0]
     assert (fb.status, fb.hold, fb.no_action_reason) == ("resolved_pending_confirmation", "", "fixed with evidence")
@@ -1465,7 +1460,7 @@ def test_principal_feedback_resolved_under_provisional_does_not_hold_gate(tmp_pa
     proj2 = make_project(tmp_path / "gated", review_tool=ROUTES)
     eng2 = Engine(proj2, executor=FnExecutor({"g_gate": no_action}))
     eng2.run(max_steps=200)
-    eng2.add_feedback("the evidence label is wrong", actor="Wei")
+    eng2.add_feedback("the evidence label is wrong", actor="Reviewer")
     eng2.run(max_steps=200)
     assert eng2.state.evaluation.feedback[0].hold
     assert eng2.state.runtime.status.value == "BLOCKED"
@@ -1480,7 +1475,7 @@ def test_non_principal_feedback_still_holds_under_provisional(tmp_path):
 
     proj = make_project(tmp_path, review_tool=ROUTES)
     eng = Engine(proj, executor=FnExecutor({"g_gate": no_action}))
-    eng.state.runtime.accepted_policy = {"autonomy": {"mode": "provisional", "principal": "Wei"}, "humans": ["Wei", "Pat Example"]}
+    eng.state.runtime.accepted_policy = {"autonomy": {"mode": "provisional", "principal": "Reviewer"}, "humans": ["Reviewer", "Pat Example"]}
     eng.run(max_steps=200)
     eng.add_feedback("labels are wrong", actor="Pat Example")
     eng.run(max_steps=200)
@@ -1819,7 +1814,7 @@ def test_symlinked_workdir_does_not_move_video_target(tmp_path, monkeypatch):
 
 
 def test_a_feedback_mapping_that_closes_in_the_same_gate_is_held(tmp_path):
-    """Reviewer (round 3): the interpreter mapped Wei's complaint to a defect in rework that the same gate then resolved,
+    """Reviewer (round 3): the interpreter mapped Reviewer's complaint to a defect in rework that the same gate then resolved,
     so the feedback led to nothing and the version passed. The hold is checked again after the gate's comparison."""
     proj = make_project(tmp_path, review_tool=ROUTES)
     flag(proj, "defect")
@@ -1834,7 +1829,7 @@ def test_a_feedback_mapping_that_closes_in_the_same_gate_is_held(tmp_path):
     def step(e):
         if e.state.runtime.rework_cycles and not e.state.evaluation.feedback:
             flag(proj, "defect", on=False)                        # the correction lands in the rework …
-            e.add_feedback("this version is even worse", actor="Wei")   # … and Wei rejects the version anyway
+            e.add_feedback("this version is even worse", actor="Reviewer")   # … and Reviewer rejects the version anyway
     eng = Engine(proj, executor=FnExecutor({"g_gate": g_gate}))
     eng.on_step = step
     eng.run(max_steps=200)
@@ -1860,13 +1855,13 @@ def test_an_unblock_releases_only_the_holds_its_human_was_shown(tmp_path):
         return {"interpretation": "interpretation.json"}
     eng = Engine(proj, executor=FnExecutor({"g_gate": g_gate}))
     eng.run(max_steps=200)
-    eng.add_feedback("the ending is flat", actor="Wei")
+    eng.add_feedback("the ending is flat", actor="Reviewer")
     eng.run(max_steps=200)
     assert eng.state.evaluation.feedback[0].hold and eng.state.runtime.status.value == "BLOCKED"
-    with pytest.raises(EngineError, match="F001.*Wei|Wei.*F001"):
+    with pytest.raises(EngineError, match="F001.*Reviewer|Reviewer.*F001"):
         eng.unblock("g_gate", actor="Sam Placeholder", note="not the author")     # not the author or the owner
     assert eng.state.evaluation.feedback[0].hold and not events(proj, "unblocked")
-    eng.unblock("g_gate", actor="Wei", note="the ending stays as it is")
+    eng.unblock("g_gate", actor="Reviewer", note="the ending stays as it is")
     assert events(proj, "unblocked")[-1]["released_holds"] == ["F001"]
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"

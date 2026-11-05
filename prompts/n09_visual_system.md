@@ -10,7 +10,7 @@ Objective: {{objective}} · Audience: {{audience}}
 {{instructions}}
 
 Craft rules (from knowledge/rules.json):
-- Bookends are minimal and iconic: bold caps on the brand field with white type and the supplied partner logos (R-DES-001).
+- Bookends follow the approved visual hierarchy, palette, typography and required supplied marks (R-DES-001).
 - One type system shared by bookends, section titles and infographics (R-DES-002); only approved text pairs that meet WCAG contrast (R-LEG-002).
 - List the prohibited patterns explicitly, including any template skin you borrowed motion grammar from (R-DES-004).
 

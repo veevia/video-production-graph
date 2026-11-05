@@ -14,22 +14,22 @@
   {
    "dimension": "CRE-MOTION",
    "score": 4.5,
-   "evidence": "B2 animates the line leaving the band"
+   "evidence": "B2 introduces three shapes and the selection outline"
   },
   {
    "dimension": "CRE-TRANSITIONS",
    "score": 4.5,
-   "evidence": "signal line carries B1\u2192B2"
+   "evidence": "the selected shape connects adjacent beats"
   },
   {
    "dimension": "CRE-FOCUS",
    "score": 4.5,
-   "evidence": "B3 ring on the outlook card"
+   "evidence": "B3 ring on the detail panel"
   },
   {
    "dimension": "CRE-LENSES",
    "score": 4.5,
-   "evidence": "plant manager, director, first-time viewer each follow"
+   "evidence": "the first-time viewer can identify Card B and its label"
   },
   {
    "dimension": "CRE-POLISH",
@@ -39,7 +39,7 @@
   {
    "dimension": "CRE-ARC",
    "score": 4.5,
-   "evidence": "unease \u2192 clarity \u2192 confidence"
+   "evidence": "group, selection and detail are shown in order"
   }
  ],
  "defects": []

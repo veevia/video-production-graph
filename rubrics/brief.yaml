@@ -1,8 +1,8 @@
-# Objective and audience — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Objective and audience — reusable rubric; see knowledge/rules.json for default policy.
 id: brief
 name: Objective and audience
 reviewer: production-orchestrator
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: BRF-OBSERVABLE
   name: Observable objective
@@ -24,11 +24,11 @@ dimensions:
   check:
     type: human
   threshold: null
-  target: Wei approves the review lenses at N03; CRE-LENSES later scores that they were applied
+  target: the project owner approves the review lenses at N03; CRE-LENSES later scores that they were applied
   rule: R-PRO-007
   cases:
     never:
     - '''Executives'' as the only audience'
     always:
     - Name 3–5 lenses
-    - Record the lenses Wei approved
+    - Record the lenses the project owner approved

@@ -21,7 +21,7 @@ NOTE = {"type": "version", "id": "v10"}
 def test_library_items_inside_a_job_folder_carry_its_pid(tmp_path):
     home = tmp_path / "home"
     make_library_tree(home)
-    projects_root = home / "GitHub" / "Demo_workspace" / "01_Project-Hubs"
+    projects_root = home / "GitHub" / "Demo_workspace" / "projects"
     server = make_server([str(projects_root)], str(write_engine(tmp_path)), str(tmp_path / "data"), port=0, quiet=True,
                          library_roots=[str(home / "GitHub"), str(home / "Downloads")], library_home=str(home))
     server.app.registry.scan()
@@ -32,12 +32,12 @@ def test_library_items_inside_a_job_folder_carry_its_pid(tmp_path):
         job_pid = server.app.registry.projects()[0].id
         items = get_json(ctx, "/api/library/items?limit=200")["items"]
         inside = [i for i in items if "/Demo_hub/video/vpg/" in i["path"]]
-        outside = [i for i in items if "/Water_hub/" in i["path"] or "/Archive/" in i["path"]]
+        outside = [i for i in items if "/Sample_hub/" in i["path"] or "/Archive/" in i["path"]]
         assert inside and all(i["job_pid"] == job_pid for i in inside)
         assert outside and all(i.get("job_pid") is None for i in outside)
         films = get_json(ctx, "/api/films")
-        water = next(r for r in films["rows"] if r["name"] == "Water_hub")
-        assert water["counts_text"].endswith("files") or " 1 file" in water["counts_text"]
+        sample = next(r for r in films["rows"] if r["name"] == "Sample_hub")
+        assert sample["counts_text"].endswith("files") or " 1 file" in sample["counts_text"]
         assert "file(s)" not in json.dumps(films)
     finally:
         stop(server, thread)
@@ -254,12 +254,12 @@ def test_cli_lists_acks_and_resolves_through_the_server(live, capsys):
     listed = capsys.readouterr().out
     assert "> Fade the logo out" in listed and note["id"] in listed and "## Waiting (1)" in listed
     assert inbox.main(["--base", base, "--project", folder, "--ack", note["id"], "--reply", "Fading in v11",
-                       "--producer", "Demo producer (Copilot chat)"]) == 0
+                       "--producer", "Demo producer"]) == 0
     assert "Picked up" in capsys.readouterr().out
     assert inbox.main(["--base", base, "--project", folder, "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["items"][0]["state"] == "picked_up"
-    assert payload["items"][0]["thread"]["ack"]["producer"] == "Demo producer (Copilot chat)"
+    assert payload["items"][0]["thread"]["ack"]["producer"] == "Demo producer"
     assert inbox.main(["--base", base, "--project", folder, "--resolve", note["id"], "--reply", "Faded"]) == 2
     assert "--version" in capsys.readouterr().err
     assert inbox.main(["--base", base, "--project", folder, "--resolve", note["id"], "--version", "v10",
@@ -276,6 +276,7 @@ def test_cli_lists_acks_and_resolves_through_the_server(live, capsys):
 
 def test_cli_reads_the_store_when_the_server_is_down(live, capsys):
     owner_post(live, {"kind": "note", "target": NOTE, "text": "Offline note"})
+    before = (live["data"] / "reactions.jsonl").read_bytes()
     down = f"http://127.0.0.1:{closed_port()}"
     capsys.readouterr()
     code = inbox.main(["--base", down, "--data-dir", str(live["data"]), "--project", str(live["job"])])
@@ -284,6 +285,7 @@ def test_cli_reads_the_store_when_the_server_is_down(live, capsys):
     assert "because Glass Box is not running" in out.out
     assert inbox.main(["--base", down, "--data-dir", str(live["data"]), "--all"]) == 0
     assert "1 waiting" in capsys.readouterr().out
+    assert (live["data"] / "reactions.jsonl").read_bytes() == before
     code = inbox.main(["--base", down, "--project", str(live["job"]), "--ack", "x", "--reply", "plan"])
     assert code == 2 and "Glass Box is not running: start it with" in capsys.readouterr().err
     assert inbox.main(["--project", str(live["job"]), "--version", "v1"]) == 2

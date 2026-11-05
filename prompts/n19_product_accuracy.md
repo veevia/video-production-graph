@@ -32,7 +32,7 @@ Read: {{controls_read}} · Write: {{controls_write}}. An approved document is lo
 - `scores`: one entry for **every** review-type dimension listed under Rubric: `{dimension, score 1–5, evidence}`. The evidence is a timestamp, a frame or a quoted on-screen line.
 - `defects`: for every score below its threshold, and for anything else you find: `{dimension, severity P1|P2|P3|nit, description, evidence, traced_node, smallest_fix}`.
 - The deterministic findings above are authoritative. You cannot pass a dimension a tool failed, and the engine will override that pass.
-- Human dimensions (voice warmth, music) are left for Wei. Do not score them.
+- Human dimensions (voice warmth, music) are left for the project owner. Do not score them.
 
 ## Rework context: fix these, smallest change first
 {{defects}}

@@ -21,11 +21,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from glassbox import __version__, fsio  # noqa: E402
+from glassbox import DEFAULT_DATA_DIR, __version__, fsio  # noqa: E402
 from glassbox.engine import Engine  # noqa: E402
 from glassbox.web import make_server  # noqa: E402
 
-DEFAULT_DATA_DIR = "~/.copilot/extension-data/vpg-glassbox"
 DEFAULT_PORT = 4420
 
 
@@ -53,7 +52,7 @@ def parse_args(argv=None):
                         help="engine folder holding graph/workflow.yaml (default: enclosing VPG checkout)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="port on 127.0.0.1 (default 4420)")
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, metavar="DIR",
-                        help="where reactions.jsonl lives (default ~/.copilot/extension-data/vpg-glassbox)")
+                        help="default: %(default)s; set the existing directory to retain notes")
     parser.add_argument("--rescan", type=float, default=60.0, metavar="SECONDS",
                         help="how often to look for new projects (default 60)")
     library = parser.add_mutually_exclusive_group()

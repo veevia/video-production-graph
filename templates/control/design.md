@@ -12,7 +12,7 @@ prohibited: ["font:<fill: e.g. Inter>", "color:<fill: e.g. #FFBF00>"]
 ---
 # Design — <fill: film title>
 
-> Access: written by N09 Visual System; read by N08, N10, N11, N13, N17, N18. Locked when Wei approves N09.
+> Access: written by N09 Visual System; read by N08, N10, N11, N13, N17, N18. Locked when the project owner approves N09.
 
 ## Visual language
 <fill: one sentence; e.g. minimal, bold caps, high contrast, one recurring signal line>

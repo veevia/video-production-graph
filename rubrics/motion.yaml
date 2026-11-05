@@ -1,8 +1,8 @@
-# Motion and scenes — generated from the 2026-09 case study (knowledge/case-studies/); see knowledge/rules.json for each dimension's rule.
+# Motion and scenes — reusable rubric; see knowledge/rules.json for default policy.
 id: motion
 name: Motion and scenes
 reviewer: motion-design
-scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets Wei's bar'); human dimensions are decided by a named human
+scale: tool dimensions pass/fail; review dimensions 1–5 (threshold 4 = 'meets the project owner's bar'); human dimensions are decided by a named human
 dimensions:
 - id: MO-MANIFEST
   name: Scenes and manifest

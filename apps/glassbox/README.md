@@ -5,7 +5,7 @@ versions, inspect the evidence, and return notes to the producer.
 
 The complete app is included here: Python backend, vanilla HTML/CSS/ES modules,
 producer CLI, current interface and synthetic tests. No frontend build,
-model account, Copilot installation or hosted service is required.
+model account, editor extension or hosted service is required.
 
 ## Run
 
@@ -38,21 +38,23 @@ python -B apps/glassbox/server.py --root /absolute/path/to/my-films \
 | `--root DIR` | Required project discovery root; repeatable |
 | `--engine DIR` | Folder containing `graph/workflow.yaml`; defaults to the enclosing VPG checkout |
 | `--port N` | Loopback port, default 4420; an occupied port is refused |
-| `--data-dir DIR` | Private reaction log and library index; must be outside project, library, engine and UI roots |
+| `--data-dir DIR` | Private reaction log and library index; default `~/.local/share/vpg-glassbox`, outside project, library, engine and UI roots |
 | `--library-root DIR` | Explicitly enable video indexing for this folder; repeatable |
 | `--no-library` | Explicitly disable indexing, which is also the default |
 | `--rescan SECONDS` | Project discovery interval, default 60 seconds |
 | `--static-dir DIR` | Alternate UI, relative to this app folder or absolute |
 | `--quiet` | Disable HTTP request logging |
 
-The data-directory default remains `~/.copilot/extension-data/vpg-glassbox` for
-compatibility with existing installations. It is an ordinary local directory:
-Copilot is not used. Set `--data-dir` to any suitable private folder.
+The default data directory is `~/.local/share/vpg-glassbox`. The server and producer
+CLI use the same location. No editor or agent-host installation is required.
 
 **Existing users:** supply the project and library roots you previously used.
-Keep project paths and `--data-dir` unchanged to preserve reaction associations;
-project and library IDs are path-derived. Installing this copy does not move data
-or restart an existing server. Never run tests against your production store.
+Earlier versions used a different default store. Pass `--data-dir /path/to/your/existing-store`
+to the server and to the producer CLI's offline reads to keep using those notes.
+Do not start with the new default if you expect notes from another directory.
+Keep project paths unchanged, since project and library IDs are path-derived.
+Installing this copy does not move, merge or delete stores, or restart an existing
+server. Never run tests against your production store.
 
 ## What you can do
 
@@ -217,7 +219,7 @@ merely to inspect a rollback version.
 ## Limitations and non-goals
 
 * Not an editor, renderer, workflow executor, hosted application or approval
-  authority. No engine write-through or embedded Copilot canvas is included.
+  authority. No engine write-through or embedded editor panel is included.
 * Discovery refreshes every 60 seconds and the UI polls every 15 seconds.
   Library files refresh on rescan; missing media is never regenerated.
 * Legacy review mapping, film grouping and approval/version matching can be

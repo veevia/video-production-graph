@@ -46,7 +46,7 @@ def put(path, data=None, seconds=10.0, mtime=None):
 def make_library_tree(home):
     """Fictional projects, archives and portfolio layouts with tiny files."""
     base = 1_790_000_000
-    hubs = home / "GitHub" / "Demo_workspace" / "01_Project-Hubs" / "01_CLIENT" / "03_build"
+    hubs = home / "GitHub" / "Demo_workspace" / "projects" / "example" / "productions"
     demo = hubs / "Demo_hub" / "video" / "vpg"
     (demo / "vpg.project.yaml").parent.mkdir(parents=True, exist_ok=True)
     (demo / "vpg.project.yaml").write_text("name: Demo film\nid: demo-film\n")
@@ -65,41 +65,41 @@ def make_library_tree(home):
         "artifacts": {"master@n14_video_assembly#a3": {"path": "work/n14_video_assembly/a3/master.mp4", "version": 3,
                                                         "key": "master", "node": "n14_video_assembly"}},
     }))
-    water = hubs / "Water_hub" / "video"
-    put(water / "revisions/round-07/outputs/r07-v07/demo-orbit-r07-master.mp4", mtime=base + 400)
-    put(water / "revisions/round-07/outputs/r07-v15/demo-orbit-r07-master.mp4", mtime=base + 500)
-    put(water / "revisions/round-07/outputs/r07-v15/demo-orbit-r07-review.mp4", mtime=base + 501)
-    put(water / "revisions/round-07/outputs/r07-v15/demo-orbit-r07-silent.mp4", mtime=base + 502)
-    put(water / "revisions/round-07/outputs/r07-v15/clips/01-problem.mp4", mtime=base + 503)
-    put(water / "releases/2026-10-04-r08-v16/demo-orbit-r08-v16.mp4", mtime=base + 600)
-    put(water / "revisions/round-03/outputs/02-solution.mp4", mtime=base + 150)
+    sample = hubs / "Sample_hub" / "video"
+    put(sample / "revisions/round-02/outputs/r02-v01/demo-orbit-r02-master.mp4", mtime=base + 400)
+    put(sample / "revisions/round-02/outputs/r02-v03/demo-orbit-r02-master.mp4", mtime=base + 500)
+    put(sample / "revisions/round-02/outputs/r02-v03/demo-orbit-r02-review.mp4", mtime=base + 501)
+    put(sample / "revisions/round-02/outputs/r02-v03/demo-orbit-r02-silent.mp4", mtime=base + 502)
+    put(sample / "revisions/round-02/outputs/r02-v03/clips/01-problem.mp4", mtime=base + 503)
+    put(sample / "releases/2035-01-04-r03-v04/demo-orbit-r03-v04.mp4", mtime=base + 600)
+    put(sample / "revisions/round-03/outputs/02-solution.mp4", mtime=base + 150)
     put(hubs / "Orbit_hub" / "video/outputs/v14/orbit-hub-v14-master.mp4", mtime=base + 700)
     archive = home / "Downloads" / "Archive"
-    archived = archive / "20261008-example-film" / "vpg"
+    archived = archive / "20350108-example-film" / "vpg"
     (archived / "vpg.project.yaml").parent.mkdir(parents=True, exist_ok=True)
     (archived / "vpg.project.yaml").write_text("name: Example film\n")
     put(archived / "work/n14_video_assembly/a1/master.mp4", mtime=base + 800)
     put(archived / "work/n14_video_assembly/a2/master.mp4", mtime=base + 810)
-    intro = archive / "20261002-self-intro"
+    intro = archive / "20350102-sample-variants"
     for variant in ("vpg/cand-A", "vpg/cand-B", "vpg/_blocked/cand-C"):
         (intro / variant).mkdir(parents=True, exist_ok=True)
         (intro / variant / "vpg.project.yaml").write_text(f"name: Intro {variant}\n")
         put(intro / variant / "work/n14_video_assembly/a1/master.mp4", mtime=base + 900)
     put(intro / "vpg/cand-B/work/n14_video_assembly/a2/master.mp4", mtime=base + 950)
     put(intro / "candidates/v3/V06-questions.mp4", mtime=base + 960)
-    put(home / "Downloads/V7_Delivery/01_master/Water_V7_Master.mp4", mtime=base + 1000)
+    put(home / "Downloads/V7_Delivery/01_master/Sample_V7_Master.mp4", mtime=base + 1000)
     put(home / "Downloads/V7_Delivery/02_clips/V7_clip_01_signal.mp4", mtime=base + 1001)
     put(home / "Downloads/Team Sync-Meeting Recording.mp4", mtime=base + 1100)
     put(home / "Downloads/Clips/raw-take.mkv", b"\x1aE\xdf\xa3 not really matroska", mtime=base + 1200)
     put(home / "GitHub/Demo_portfolio/src/assets/work/demo/film.mp4", v1.read_bytes(), mtime=base + 1300)
-    put(home / "GitHub/Physical-AI/runs/r1/videos/eval_episode_0.mp4", mtime=base + 1400)
+    put(home / "GitHub/Test-runner/runs/r1/videos/eval_episode_0.mp4", mtime=base + 1400)
     put(home / "GitHub/app/node_modules/pkg/demo-master.mp4")
     put(home / "GitHub/.hidden/secret-master.mp4")
     put(home / "GitHub/repo/.git/objects/x-master.mp4")
     outside = put(home / "elsewhere/outside-master.mp4")
     (home / "GitHub/linkdir").mkdir(parents=True, exist_ok=True)
     os.symlink(outside, home / "GitHub/linkdir/linked-master.mp4")
-    return {"demo": demo, "water": water, "v1": v1}
+    return {"demo": demo, "sample": sample, "v1": v1}
 
 
 @pytest.fixture
@@ -155,16 +155,16 @@ def test_fingerprint_and_sidecars(tmp_path):
 @pytest.mark.parametrize("path, role", [
     ("/h/GitHub/x/candidates/v2/n14_video_assembly/master.mp4", "master"),
     ("/h/GitHub/x/outputs/v14/orbit-hub-v14-master.mp4", "master"),
-    ("/h/GitHub/x/demo-orbit-r07-review.mp4", "review"),
-    ("/h/GitHub/x/demo-orbit-r07-silent.mp4", "silent"),
+    ("/h/GitHub/x/demo-orbit-r02-review.mp4", "review"),
+    ("/h/GitHub/x/demo-orbit-r02-silent.mp4", "silent"),
     ("/h/GitHub/x/n13_motion_scenes/film.mp4", "picture"),
     ("/h/GitHub/x/cuts/V01/rough-cut.mp4", "rough"),
-    ("/h/Downloads/Water Video/Water_Intelligence_preview_reel.mp4", "rough"),
+    ("/h/Downloads/Sample Video/Sample_animation_preview_reel.mp4", "rough"),
     ("/h/GitHub/x/clips/03-people.mp4", "clip"),
     ("/h/GitHub/x/seg2.mp4", "clip"),
     ("/h/GitHub/x/B12.mp4", "clip"),
     ("/h/Downloads/Full CC 60mins [02_12_26].mp4", "recording"),
-    ("/h/GitHub/Physical-AI/eval_episode_3.mp4", "eval"),
+    ("/h/GitHub/Test-runner/eval_episode_3.mp4", "eval"),
     ("/h/GitHub/x/video/vpg/sources/capture_TENANT/prototypes-hd/a-master.mp4", "source"),
     ("/h/GitHub/Demo_portfolio/src/assets/work/example/film.mp4", "published"),
     ("/h/Downloads/Archive/b/candidates/v3/V06-questions.mp4", "master"),
@@ -175,9 +175,9 @@ def test_roles(path, role):
 
 
 def test_versions_from_paths_and_names():
-    assert version_of("/r/revisions/round-07/outputs/r07-v15/a.mp4", "/r")[0] == "r07-v15"
+    assert version_of("/r/revisions/round-02/outputs/r02-v03/a.mp4", "/r")[0] == "r02-v03"
     assert version_of("/r/outputs/v14/orbit-v14-master.mp4", "/r")[0] == "v14"
-    assert version_of("/r/demo-orbit-r07-master.mp4", "/r")[0] == "r07"
+    assert version_of("/r/demo-orbit-r02-master.mp4", "/r")[0] == "r02"
     assert version_of("/r/work/n14_video_assembly/a7/master.mp4", "/r")[0] == "a7"
     assert version_of("/r/work/n13_motion_scenes/a7/film.mp4", "/r")[0] == "n13 a7"
     assert version_of("/r/work/n13_motion_scenes/a7/film.mp4", "/r", attempts_bucket=True)[0] == "N13 attempts"
@@ -206,21 +206,21 @@ def test_grouping_on_a_synthetic_mac(tree):
     assert sorted(m["role"] for m in v2["variants"]) == ["picture", "silent"]
     assert v2["primary"]["has_poster"] and v2["primary"]["has_captions"]
 
-    water = film_named(lib, "Water_hub")
-    labels = [v["label"] for v in water["versions"]]
-    assert labels[0] == "2026-10-04-r08-v16" and "r07-v15" in labels and "r07-v07" in labels
-    r15 = next(v for v in water["versions"] if v["label"] == "r07-v15")
-    assert r15["primary"]["name"] == "demo-orbit-r07-master.mp4"
+    sample = film_named(lib, "Sample_hub")
+    labels = [v["label"] for v in sample["versions"]]
+    assert labels[0] == "2035-01-04-r03-v04" and "r02-v03" in labels and "r02-v01" in labels
+    r15 = next(v for v in sample["versions"] if v["label"] == "r02-v03")
+    assert r15["primary"]["name"] == "demo-orbit-r02-master.mp4"
     assert sorted(m["role"] for m in r15["variants"]) == ["clip", "review", "silent"]
     assert [v["label"] for v in film_named(lib, "Orbit_hub")["versions"]] == ["v14"]
 
     archived = film_named(lib, "Example film")
     assert archived["archived"] and archived["job_pid"] is None and [v["label"] for v in archived["versions"]] == ["a2", "a1"]
-    variants = film_named(lib, "20261002-self-intro / vpg")
+    variants = film_named(lib, "20350102-sample-variants / vpg")
     assert variants["archived"] and sorted(v["label"] for v in variants["versions"]) == ["_blocked/cand-C", "cand-A", "cand-B"]
     cand_b = next(v for v in variants["versions"] if v["label"] == "cand-B")
     assert len(cand_b["variants"]) == 1 and "variant project cand-B" in cand_b["primary"]["version_why"]
-    assert [v["label"] for v in film_named(lib, "20261002-self-intro")["versions"]] == ["v3 / v06"]
+    assert [v["label"] for v in film_named(lib, "20350102-sample-variants")["versions"]] == ["v3 / v06"]
     v7 = film_named(lib, "V7_Delivery")
     assert [v["label"] for v in v7["versions"]] == ["v7"] and v7["versions"][0]["primary"]["role"] == "master"
 
@@ -253,7 +253,7 @@ def test_cache_reuse_and_writes_only_the_data_dir(tree, monkeypatch):
     monkeypatch.setattr(libmod, "quick_fingerprint", lambda path, size: calls.append(path) or real(path, size))
     again = scanned(tree)
     assert calls == [] and again.overview()["counts"]["videos"] == 28
-    changed = tree["water"] / "revisions/round-07/outputs/r07-v07/demo-orbit-r07-master.mp4"
+    changed = tree["sample"] / "revisions/round-02/outputs/r02-v01/demo-orbit-r02-master.mp4"
     put(changed, mp4_bytes(44.0, payload=b"changed"))
     third = scanned(tree)
     assert calls == [str(changed)]
@@ -265,12 +265,12 @@ def test_cache_reuse_and_writes_only_the_data_dir(tree, monkeypatch):
 def test_owner_map_overrides(tree):
     tree["data"].mkdir(parents=True, exist_ok=True)
     (tree["data"] / "library-map.json").write_text(json.dumps([
-        {"match": "V7_Delivery", "film": "Water V7 delivery", "version_regex": "(V7)_"},
+        {"match": "V7_Delivery", "film": "Sample V7 delivery", "version_regex": "(V7)_"},
         {"match": "Team Sync", "film": "Team syncs", "role": "master"},
         {"match": "(", "film": "broken rule is skipped"},
     ]))
     lib = scanned(tree)
-    v7 = film_named(lib, "Water V7 delivery")
+    v7 = film_named(lib, "Sample V7 delivery")
     assert [v["label"] for v in v7["versions"]] == ["V7"] and "owner map rule 1" in v7["versions"][0]["primary"]["version_why"]
     sync = film_named(lib, "Team syncs")
     assert sync["versions"][0]["primary"]["role_why"] == "owner map rule 2"
@@ -280,7 +280,7 @@ def test_owner_map_overrides(tree):
 @pytest.fixture
 def served(tree, tmp_path):
     engine = write_engine(tmp_path)
-    projects_root = tree["home"] / "GitHub" / "Demo_workspace" / "01_Project-Hubs"
+    projects_root = tree["home"] / "GitHub" / "Demo_workspace" / "projects"
     server = make_server([str(projects_root)], str(engine), str(tree["data"]), port=0, quiet=True,
                          library_roots=tree["roots"], library_home=str(tree["home"]))
     server.app.registry.scan()

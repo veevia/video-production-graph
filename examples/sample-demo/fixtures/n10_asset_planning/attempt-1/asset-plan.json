@@ -13,7 +13,7 @@
     "h": 1080,
     "format": "png"
    },
-   "subject": "Northwind blue field crossed by one white water-use signal line"
+   "subject": "Blue title plate with one white geometric line."
   },
   {
    "id": "A2",
@@ -28,7 +28,7 @@
     "h": 1080,
     "format": "png"
    },
-   "subject": "one plant's daily water-use line leaving its own expected range band"
+   "subject": "Three geometric cards with an outline on the middle card."
   },
   {
    "id": "A3",
@@ -43,8 +43,8 @@
     "h": 1080,
     "format": "png"
    },
-   "subject": "captured Northwind dashboard showing the Coastal plant signal and outlook card",
-   "ref": "sources/ui/dashboard.png"
+   "subject": "Generated Shape Board test image, not a capture of a real product.",
+   "ref": "sources/ui/board.png"
   },
   {
    "id": "A4",
@@ -59,8 +59,8 @@
     "h": 512,
     "format": "png"
    },
-   "subject": "the supplied Northwind mark used as delivered",
-   "ref": "assets/brand/northwind-mark.png"
+   "subject": "Generated three-square test mark.",
+   "ref": "assets/brand/shape-mark.png"
   }
  ]
 }

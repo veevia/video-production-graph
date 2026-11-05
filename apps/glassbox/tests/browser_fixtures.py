@@ -31,7 +31,7 @@ def create_films(base):
         raise RuntimeError("the synthetic browser check requires ffmpeg on PATH")
     home = base / "home"
     paths = make_library_tree(home)
-    root = home / "GitHub" / "Demo_workspace" / "01_Project-Hubs"
+    root = home / "GitHub" / "Demo_workspace" / "projects"
     job = make_job(root, rel=paths["demo"].relative_to(root).as_posix(), name="Demo film")
     write_telemetry(job, run_id="demo-run-1", bad_line=False)
     for version in ("v15", "v25"):

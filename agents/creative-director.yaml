@@ -33,7 +33,7 @@ outputs:
 - concepts
 - creative_decision
 - narrative
-decision_authority: Recommends the direction; Wei selects it.
+decision_authority: Recommends the direction; the project owner selects it.
 constraints:
 - ≥3 distinct anchors
 - Records a rejection reason for every alternative
@@ -42,7 +42,7 @@ evaluation:
 - concepts
 - creative-direction
 escalation:
-  when: Wei rejects every direction twice
-  to: Wei
+  when: the project owner rejects every direction twice
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: Design Synthesist

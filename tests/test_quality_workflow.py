@@ -59,7 +59,7 @@ def _hook():
         if not injected["done"] and e.state.runtime.current_version == 1 and all(
                 e.rt(n).status == NodeStatus.STEP_PASS for n in REVIEWERS):
             e.add_feedback("The captions appear after the words are spoken, right from the first line.",
-                           actor="simulated reviewer (dry run, not Wei)", at="00:00–00:05", severity="P2")
+                           actor="simulated reviewer (dry run, not Reviewer)", at="00:00–00:05", severity="P2")
             injected["done"] = True
     return hook
 
@@ -213,11 +213,11 @@ def test_rejected_animatic_rewrites_the_script_and_comes_back(tmp_path, measured
         nid = waiting[0]
         if nid == "n27_animatic" and not rejected:
             before = eng.rt("n07_script_development").executions
-            eng.decide(nid, "rejected", actor="Wei", reason="the middle beat drags",
+            eng.decide(nid, "rejected", actor="Reviewer", reason="the middle beat drags",
                        feedback=["The middle beat drags; tighten the signal chapter"])
             rejected = True
             continue
-        eng.decide(nid, "approved", actor="Wei", reason="ok")
+        eng.decide(nid, "approved", actor="Reviewer", reason="ok")
         if nid == "n27_animatic":
             break
     assert rejected
@@ -236,7 +236,7 @@ def test_rejected_animatic_rewrites_the_script_and_comes_back(tmp_path, measured
     assert not after(("node_dispatched",), "n10_asset_planning")              # nothing is built on the rejected timing
     assert _first(events, "node_dispatched", "n10_asset_planning") > ok
     fb = [f for f in eng.state.evaluation.feedback if "middle beat drags" in f.text]
-    assert fb and fb[0].actor == "Wei"
+    assert fb and fb[0].actor == "Reviewer"
 
 
 def test_rejected_look_reruns_and_reapproval_locks_once(tmp_path, measured_registry):
@@ -251,10 +251,10 @@ def test_rejected_look_reruns_and_reapproval_locks_once(tmp_path, measured_regis
             break
         nid = waiting[0]
         if nid == "n26_look_development" and "n26:rejected" not in decided:
-            eng.decide(nid, "rejected", actor="Wei", reason="too dark", feedback=["Lift the ground one step"])
+            eng.decide(nid, "rejected", actor="Reviewer", reason="too dark", feedback=["Lift the ground one step"])
             decided.append("n26:rejected")
             continue
-        eng.decide(nid, "approved", actor="Wei", reason="ok")
+        eng.decide(nid, "approved", actor="Reviewer", reason="ok")
         decided.append(f"{nid[:3]}:approved")
     assert decided.count("n26:rejected") == 1 and "n26:approved" in decided
     assert eng.rt("n26_look_development").executions == 2
@@ -300,7 +300,7 @@ def test_editing_a_locked_spec_document_outside_the_workflow_blocks_until_restor
     story.write_text(story.read_text().replace("runtime_s: {target: 18, max: 20}", "runtime_s: {target: 18, max: 40}"))
     st = eng.run(max_steps=5)
     assert st["status"] == "BLOCKED" and "spec/STORY.md changed outside the workflow" in json.dumps(st)
-    eng.restore_control("spec-story", actor="Wei")
+    eng.restore_control("spec-story", actor="Reviewer")
     assert "max: 20" in story.read_text()
     kept = list((proj / ".vpg" / "controls").glob("spec-story.discarded*.md"))
     assert kept and "max: 40" in kept[0].read_text()
@@ -317,7 +317,7 @@ def test_a_change_to_the_gates_is_a_bar_change(tmp_path, measured_registry):
     with pytest.raises(EngineError, match="bar change"):
         eng.approve_change_request(cr.id, by="agent:runner", reason="ok")
     with pytest.raises(EngineError, match="bar changes"):
-        eng.approve_change_request(cr.id, by="agent:runner", on_behalf_of="Wei", instruction="approve it",
+        eng.approve_change_request(cr.id, by="agent:runner", on_behalf_of="Reviewer", instruction="approve it",
                                    instruction_at="2026-10-26T10:00:00+00:00")
 
 
@@ -334,27 +334,27 @@ def test_a_run_cannot_switch_workflows(tmp_path, measured_registry):
 
 
 def test_provisional_look_and_animatic_need_an_explicit_opt_in(tmp_path, measured_registry):
-    base = {"humans": ["Wei"], "reviews": {"binding": "require", "independence": "require"},
+    base = {"humans": ["Reviewer"], "reviews": {"binding": "require", "independence": "require"},
             "loop_budget": {"on_exhaust": "extend_if_converging"}}
     for i, (extra, refused) in enumerate(((None, True), (["n26_look_development"], False))):
         proj = _project(tmp_path / str(i), measured_registry)
         cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-        cfg.update(base, autonomy={"mode": "provisional", "principal": "Wei",
+        cfg.update(base, autonomy={"mode": "provisional", "principal": "Reviewer",
                                    **({"provisional_gates_extra": extra} if extra else {})})
         (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
         eng = Engine(proj, executor=ScriptedExecutor(proj / "fixtures"))
         node = eng.node("n26_look_development")
         if refused:
             with pytest.raises(EngineError, match="provisional_gates_extra"):
-                eng._check_provisional_decision(node, "approved", "agent:runner", "Wei", "go")
+                eng._check_provisional_decision(node, "approved", "agent:runner", "Reviewer", "go")
         else:
             try:
-                eng._check_provisional_decision(node, "approved", "agent:runner", "Wei", "go")
+                eng._check_provisional_decision(node, "approved", "agent:runner", "Reviewer", "go")
             except EngineError as exc:
                 assert "allowed only at" not in str(exc)
     proj = _project(tmp_path / "bad", measured_registry)
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
-    cfg.update(base, autonomy={"mode": "provisional", "principal": "Wei", "provisional_gates_extra": ["n23_final_verification"]})
+    cfg.update(base, autonomy={"mode": "provisional", "principal": "Reviewer", "provisional_gates_extra": ["n23_final_verification"]})
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
     with pytest.raises(EngineError, match="provisional_gates_extra lists only"):
         Engine(proj, executor=ScriptedExecutor(proj / "fixtures"))
@@ -470,7 +470,7 @@ def test_story_beats_must_add_up_and_the_storyboard_must_honour_them(tmp_path, m
     data = json.loads(board.read_text())
     data["beats"][0]["duration_s"] = 12.0
     msgs = qualitygates.check_beats(_ctx(proj, storyboard=data)).messages
-    assert any("story beat problem gets" in m for m in msgs)
+    assert any("story beat group gets" in m for m in msgs)
     data["beats"][0]["chapter"] = "ch9"
     assert any("chapter ch9 belongs to no STORY.md beat" in m for m in qualitygates.check_beats(_ctx(proj, storyboard=data)).messages)
     story = proj / "spec" / "STORY.md"
@@ -506,7 +506,7 @@ def test_spec_proposals_are_validated_and_listed_for_a_person_to_file(tmp_path, 
     argv = shlex.split(lines[0].split("`")[1])
     reason = argv[argv.index("--reason") + 1]
     assert reason == "modify ST-TERMS-001: say 'own range' instead (because F001)"
-    eng.change_request("spec-story", reason, by="Wei")
+    eng.change_request("spec-story", reason, by="Reviewer")
     assert eng._spec_proposal_lines() == []
 
 
@@ -534,7 +534,7 @@ def test_a_spec_proposal_cannot_smuggle_a_command_into_the_suggested_one(tmp_pat
     shown = subprocess.run(["bash", "-c", "printf %s " + cmd.split("--reason ", 1)[1].rsplit(" --actor", 1)[0]],
                            cwd=tmp_path, capture_output=True, text=True)
     assert shown.stdout == reason and not (tmp_path / "PWNED").exists() and not (tmp_path / "PWNED2").exists()
-    eng.change_request("spec-story", reason, by="Wei")
+    eng.change_request("spec-story", reason, by="Reviewer")
     assert eng._spec_proposal_lines() == []
 
 

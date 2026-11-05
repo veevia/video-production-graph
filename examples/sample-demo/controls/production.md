@@ -7,6 +7,7 @@ pix_fmt: yuv420p
 audio_codec: aac
 sample_rate: 48000
 narration_wps: 2.8
+voice_age: adult
 unit_pause_s: 0.45
 head_tail_s: 1.5
 deliverables:
@@ -18,7 +19,7 @@ deliverables:
   - {key: script, name: 04-script/script.json}
   - {key: release_summary, name: 05-release/release-summary.md}
 ---
-# Production — Northwind Water Monitor teaser (fictional)
+# Production — Shape Board teaser (fictional)
 
 > Access: written by N09; locked when approved.
 

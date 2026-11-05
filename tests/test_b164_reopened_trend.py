@@ -1,8 +1,4 @@
-"""#164: the quality trend marks a version re-opened after its gate passed with none open.
-
-Water r08: an outside review's findings on v7 were fixed by re-opening N13 after N23 had passed v7, so they were never
-filed in v7, and the trend read v7 → v8 as "not converging" (0 → 2 open) with no hint why.
-"""
+"""Synthetic regression coverage: test b164 reopened trend."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -21,7 +17,7 @@ def test_a_version_after_a_passed_one_is_marked_and_explained(tmp_path):
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS" and eng.state.evaluation.gate_results[-1].outcome == "pass"
     flag(proj, "defect")                                   # an outside look finds something in the passed version
-    eng.invalidate_nodes(["d_build"], reason="re-open after an outside review", actor="Wei")
+    eng.invalidate_nodes(["d_build"], reason="re-open after an outside review", actor="Reviewer")
     for _ in range(60):
         eng.step()
         if len(eng.state.evaluation.gate_results) == 2:

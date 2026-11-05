@@ -31,6 +31,6 @@ evaluation:
 - technical
 escalation:
   when: Media can't be probed
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: FDE Test Engineer

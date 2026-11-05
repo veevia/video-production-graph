@@ -1,14 +1,14 @@
 {
  "age": "adult",
- "delivery": "calm, confident, precise; a tech professional explaining to operators",
+ "delivery": "calm and literal, describing generated shapes and labels",
  "engine": "macOS say (example only)",
  "voice": "system default",
  "pronunciations": [
   {
-   "term": "Northwind",
-   "say": "NORTH-wind"
+   "term": "Shape Board",
+   "say": "Shape Board"
   }
  ],
  "human_listening": "pending",
- "rate_wpm": 140
+ "rate_wpm": 110
 }

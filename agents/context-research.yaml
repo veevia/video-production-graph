@@ -33,7 +33,7 @@ outputs:
 - intake_notes
 - sources
 - sources_validated
-decision_authority: Decides which sources are registered and how each is tagged. Cannot decide that a gap is acceptable (blocking gaps go to Wei).
+decision_authority: Decides which sources are registered and how each is tagged. Cannot decide that a gap is acceptable (blocking gaps go to the project owner).
 constraints:
 - Read-only on raw intake
 - Never quotes confidential meeting content or names
@@ -42,6 +42,6 @@ evaluation:
 - intake
 escalation:
   when: Blocking gap, or 2 intake loops without closing the gaps
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: Meeting Harvester

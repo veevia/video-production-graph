@@ -1,10 +1,4 @@
-"""v1.7 governance: who may act for a human, and what a review is bound to.
-
-On the first real run (SRA) agents recorded human decisions in a human's name (#18), an agent's invalidation or note re-opened
-approved gates (#13, #14), and a review submitted for version 10 judged a different build (#62/#67). v1.7 makes delegation
-explicit (a grant, ledgered on every act), keeps listening, taste and the release with the human, holds an agent's note for
-a human's triage, and binds each review to the bytes it judged. Also: deferred change requests with an impact preview
-(#102, #80), what changed since a gate's last approval (#43), and the smaller fixes #22, #27, #100, #101, #105 and #106."""
+"""Synthetic regression coverage: test v17 governance."""
 
 from __future__ import annotations
 
@@ -49,22 +43,22 @@ def _config(proj, **extra) -> None:
 def test_only_a_named_human_grants_and_only_delegable_actions(project):
     proj, _ = project
     eng = Engine(proj, executor=FnExecutor())
-    ok = dict(grantee="agent:ops", actions=["unblock"], expires=_in(30), reason="Wei: keep the loop going")
+    ok = dict(grantee="agent:ops", actions=["unblock"], expires=_in(30), reason="Reviewer: keep the loop going")
     with pytest.raises(EngineError, match="granting a delegation needs a named human"):
         eng.grant(**ok, actor="agent:boss")
-    for bad, why in ((dict(grantee="Wei"), "names one agent"), (dict(grantee="agent:cli"), "names one agent"),
+    for bad, why in ((dict(grantee="Reviewer"), "names one agent"), (dict(grantee="agent:cli"), "names one agent"),
                      (dict(actions=[]), "lists the actions"), (dict(actions=["rollback"]), "not a delegable action"),
                      (dict(actions=["grant"]), "not a delegable action"), (dict(actions=["approve:nope"]), "not a node"),
                      (dict(actions=["accept-config"]), "not a delegable action"),
                      (dict(actions=["approve:d_build"]), "has no human gate"), (dict(expires="2026-13-40"), "end date"),
                      (dict(expires=_in(91)), "90 days"), (dict(expires=_in(-1)), "90 days"), (dict(reason=" "), "reason")):
         with pytest.raises(EngineError, match=why):
-            eng.grant(**{**ok, **bad}, actor="Wei")
+            eng.grant(**{**ok, **bad}, actor="Reviewer")
     assert not eng.state.history.grants and not events(proj, "grant_issued")   # every refusal left no trace
-    g = eng.grant(**{**ok, "actions": ["unblock", "unblock", "resolve"]}, actor="Wei")
-    assert (g.id, g.grantee, g.actions, g.grantor) == ("G-001", "agent:ops", ["unblock", "resolve"], "Wei")
+    g = eng.grant(**{**ok, "actions": ["unblock", "unblock", "resolve"]}, actor="Reviewer")
+    assert (g.id, g.grantee, g.actions, g.grantor) == ("G-001", "agent:ops", ["unblock", "resolve"], "Reviewer")
     assert events(proj, "grant_issued")[-1]["actions"] == ["unblock", "resolve"]
-    assert eng.status()["grants"] == [f"G-001 agent:ops may unblock, resolve for Wei until {_in(30)}"]
+    assert eng.status()["grants"] == [f"G-001 agent:ops may unblock, resolve for Reviewer until {_in(30)}"]
 
 
 def test_listening_taste_and_the_release_stay_with_the_human(tmp_path):
@@ -73,7 +67,7 @@ def test_listening_taste_and_the_release_stay_with_the_human(tmp_path):
     assert "covers PT-NOT-INVENTED" in eng._grantable("approve:n04_product_understanding")
     assert "the release" in eng._grantable("approve:n23_final_verification")
     with pytest.raises(EngineError, match="cannot delegate approve:n23_final_verification"):
-        eng.grant("agent:ops", ["approve:n23_final_verification"], _in(10), "ship it for me", actor="Wei")
+        eng.grant("agent:ops", ["approve:n23_final_verification"], _in(10), "ship it for me", actor="Reviewer")
 
 
 def _blocked_by_errors(tmp_path):
@@ -89,10 +83,10 @@ def test_a_granted_agent_acts_under_the_grant_and_every_event_names_it(tmp_path)
     proj, eng = _blocked_by_errors(tmp_path)
     with pytest.raises(EngineError, match="or an agent with a live grant for 'unblock'"):
         eng.unblock("c_audio", actor="agent:ops", note="the TTS is back")
-    eng.grant("agent:ops", ["unblock"], _in(30), "Wei, 20:51: keep the loop going", actor="Wei")
+    eng.grant("agent:ops", ["unblock"], _in(30), "Reviewer, 20:51: keep the loop going", actor="Reviewer")
     eng.unblock("c_audio", actor="agent:ops", note="the TTS is back (G-001)")
     [unblocked] = [e for e in _ledger(proj) if e["type"] == "unblocked"]
-    assert unblocked["data"]["actor"] == "agent:ops" and unblocked["data"]["grant"] == "G-001" and unblocked["data"]["grantor"] == "Wei"
+    assert unblocked["data"]["actor"] == "agent:ops" and unblocked["data"]["grant"] == "G-001" and unblocked["data"]["grantor"] == "Reviewer"
     eng.executor = FnExecutor()   # the TTS is back; the same engine carries on, so a leaked stamp would show
     eng.run(max_steps=200)
     evs = _ledger(proj)
@@ -100,25 +94,25 @@ def test_a_granted_agent_acts_under_the_grant_and_every_event_names_it(tmp_path)
     assert after and not any("grant" in e["data"] for e in after)   # the stamp covers only the action it authorized
     [row] = [r for r in human_record(_ledger(proj)) if r["action"] == "unblocked"]
     assert row["actor"] == "agent:ops" and "granted" in row["codes"]
-    assert "an agent acting under grant G-001 from Wei, not the human" in row["flags"]
+    assert "an agent acting under grant G-001 from Reviewer, not the human" in row["flags"]
     with pytest.raises(EngineError, match="accepting a configuration change needs a named human"):
         eng.accept_config("agent:ops", "a v1.7 engine")   # never delegable: it could rewrite this boundary
 
 
 def test_a_revoked_or_lapsed_grant_covers_nothing_and_a_rollback_never_revives_it(tmp_path):
     proj, eng = _blocked_by_errors(tmp_path)
-    eng.grant("agent:ops", ["unblock"], _in(30), "keep the loop going", actor="Wei")
+    eng.grant("agent:ops", ["unblock"], _in(30), "keep the loop going", actor="Reviewer")
     seq = eng.state.history.checkpoints[-1].seq
-    eng.revoke_grant("G-001", actor="Wei", reason="done")
+    eng.revoke_grant("G-001", actor="Reviewer", reason="done")
     with pytest.raises(EngineError, match="grants G-001 don't cover it or have ended"):
         eng.unblock("c_audio", actor="agent:ops", note="again")
-    eng.rollback(seq, actor="Wei")                           # a checkpoint taken while G-001 was live
+    eng.rollback(seq, actor="Reviewer")                           # a checkpoint taken while G-001 was live
     assert Engine(proj, read_only=True).state.history.grants[0].revoked_at
     with pytest.raises(EngineError, match="don't cover it or have ended"):
         eng.unblock("c_audio", actor="agent:ops", note="again")
-    eng.rollback(eng.state.history.checkpoints[0].seq, actor="Wei")   # before any grant was issued
+    eng.rollback(eng.state.history.checkpoints[0].seq, actor="Reviewer")   # before any grant was issued
     eng.state.history.grants = []   # even a state that lost its grants draws the next id from the ledger
-    assert eng.grant("agent:ops", ["unblock"], _in(1), "one more", actor="Wei").id == "G-002"   # ids never repeat
+    assert eng.grant("agent:ops", ["unblock"], _in(1), "one more", actor="Reviewer").id == "G-002"   # ids never repeat
     eng.state.history.grants[-1].expires = "2000-01-01"
     with pytest.raises(EngineError, match="don't cover it or have ended"):
         eng.unblock("c_audio", actor="agent:ops", note="again")
@@ -131,7 +125,7 @@ def test_a_delegable_gate_records_the_grant_and_not_a_human_decision(tmp_path):
     assert eng.rt("b_plan").status == S.WAITING_HUMAN
     with pytest.raises(EngineError, match="live grant for 'approve:b_plan'"):
         eng.decide("b_plan", "approved", actor="agent:ops", reason="fine")
-    eng.grant("agent:ops", ["approve:b_plan"], _in(5), "plans are routine here", actor="Wei")
+    eng.grant("agent:ops", ["approve:b_plan"], _in(5), "plans are routine here", actor="Reviewer")
     eng.decide("b_plan", "approved", actor="agent:ops", reason="matches the brief")
     [a] = eng.state.history.approvals
     assert (a.actor, a.human, a.grant) == ("agent:ops", False, "G-001") and set(a.outputs) == {"b_plan"}
@@ -144,7 +138,7 @@ def test_only_a_named_human_or_a_grant_may_invalidate_into_a_human_decision(tmp_
     proj = make_project(tmp_path, human_b=True)
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=100)
-    eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     eng.run(max_steps=200)
     assert eng.rt("b_plan").status == S.STEP_PASS
     eng.invalidate_nodes(["d_build"], reason="the agent re-checks its own build", actor="agent:builder")   # no gate below it
@@ -154,7 +148,7 @@ def test_only_a_named_human_or_a_grant_may_invalidate_into_a_human_decision(tmp_
     for anonymous in ("", "cli", "agent:"):
         with pytest.raises(EngineError, match="needs the requester's identity"):
             eng.invalidate_nodes(["d_build"], reason="a re-check", actor=anonymous)
-    eng.grant("agent:builder", ["invalidate"], _in(3), "re-read the brief when it changes", actor="Wei")
+    eng.grant("agent:builder", ["invalidate"], _in(3), "re-read the brief when it changes", actor="Reviewer")
     eng.invalidate_nodes(["a_intake"], reason="re-read the brief", actor="agent:builder")
     assert eng.rt("b_plan").status == S.STALE
     assert events(proj, "invalidated")[-1]["grant"] == "G-001"
@@ -177,7 +171,7 @@ def test_re_opening_the_frozen_inputs_needs_a_named_human(tmp_path):
     # #100: a node that reads the sources records the bytes it was given
     [dispatched] = [e for e in events(proj, "node_dispatched") if e["node"] == "n02_source_validation"]
     assert set(dispatched["sources"]) == {"S1", "S2", "S3"} and all(len(v) == 16 for v in dispatched["sources"].values())
-    eng.invalidate_nodes(["n01_context_intake"], reason="a late source", actor="Wei")
+    eng.invalidate_nodes(["n01_context_intake"], reason="a late source", actor="Reviewer")
     assert not eng.state.inputs.frozen
 
 
@@ -198,17 +192,17 @@ def test_an_agents_note_re_opens_nothing_and_waits_for_a_humans_triage(project):
     with pytest.raises(EngineError, match="live grant for 'feedback-triage'"):
         eng.triage_feedback("F001", accept=True, actor="agent:other", reason="agreed")
     with pytest.raises(EngineError, match="needs the reason"):
-        eng.triage_feedback("F001", accept=True, actor="Wei", reason="")
-    eng.triage_feedback("F001", accept=True, actor="Wei", reason="it does drag")
+        eng.triage_feedback("F001", accept=True, actor="Reviewer", reason="")
+    eng.triage_feedback("F001", accept=True, actor="Reviewer", reason="it does drag")
     note = eng.state.evaluation.feedback[0]   # a refused action restores the state, so earlier references are stale
     assert (note.status, note.triage, note.hold) == ("open", "accepted", "") and eng.rt("g_gate").status == S.STALE
-    assert events(proj, "feedback_triaged")[-1] == {"id": "F001", "outcome": "accepted", "by": "Wei", "author": "agent:critic",
+    assert events(proj, "feedback_triaged")[-1] == {"id": "F001", "outcome": "accepted", "by": "Reviewer", "author": "agent:critic",
                                                     "reason": "it does drag"}
     eng.run(max_steps=200)   # N21 maps it to no action: accepted, it counts as the human's, so an agent can't close it
     note = eng.state.evaluation.feedback[0]
     assert note.status == "interpreted" and note.hold and eng.rt("g_gate").status == S.BLOCKED
     with pytest.raises(EngineError, match="not awaiting triage"):
-        eng.triage_feedback("F001", accept=False, actor="Wei", reason="again")
+        eng.triage_feedback("F001", accept=False, actor="Reviewer", reason="again")
 
 
 def test_a_pending_note_holds_the_gate_and_only_its_triage_releases_it(project, capsys):
@@ -220,20 +214,20 @@ def test_a_pending_note_holds_the_gate_and_only_its_triage_releases_it(project, 
     eng.run(max_steps=200)
     gate = eng.state.evaluation.gate_results[-1]
     assert gate.outcome == "blocked" and any("an agent's note awaits a human's triage (F001" in r for r in gate.reasons)
-    eng.grant("agent:ops", ["unblock", "feedback-triage"], _in(3), "routine unblocks", actor="Wei")
+    eng.grant("agent:ops", ["unblock", "feedback-triage"], _in(3), "routine unblocks", actor="Reviewer")
     with pytest.raises(EngineError, match="holds F001 for a named human; a grant can't release them"):
         eng.unblock("g_gate", actor="agent:ops", note="go on")
-    eng.unblock("g_gate", actor="Wei", note="go on")
+    eng.unblock("g_gate", actor="Reviewer", note="go on")
     assert eng.state.evaluation.feedback[0].hold      # an unblock never releases a note awaiting triage
     eng.run(max_steps=200)
     assert eng.rt("g_gate").status == S.BLOCKED
     assert cli.main(["feedback", str(proj), "--triage", "F001", "--dismiss", "--reason", "the logo is a vector",
-                     "--actor", "Wei"]) == 0
+                     "--actor", "Reviewer"]) == 0
     assert "The gate has an open escalation" in capsys.readouterr().out
     fb = Engine(proj, executor=FnExecutor()).state.evaluation.feedback[0]
     assert (fb.status, fb.triage, fb.hold, fb.no_action_reason) == ("dismissed", "dismissed", "", "the logo is a vector")
     eng = Engine(proj, executor=FnExecutor())
-    eng.unblock("g_gate", actor="agent:ops", note="Wei dismissed the note")   # its hold is cleared, so the grant covers it
+    eng.unblock("g_gate", actor="agent:ops", note="Reviewer dismissed the note")   # its hold is cleared, so the grant covers it
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
 
@@ -346,22 +340,22 @@ def test_a_grant_never_resolves_a_defect_that_needs_a_human(project):
     proj, _ = project
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=200)
-    eng.grant("agent:ops", ["resolve"], _in(3), "close stale nits", actor="Wei")
+    eng.grant("agent:ops", ["resolve"], _in(3), "close stale nits", actor="Reviewer")
     base = dict(signature="s", severity="P3", description="before", source="rev-x", traced_node="d_build", status="open",
                 first_seen_version=1, last_seen_version=1)
     eng.state.evaluation.defects += [Defect(id="D901", dimension="VOI-ADULT", **base),
-                                     Defect(id="D902", dimension="LEG-SIZE", human_hold="Wei's call", **base),
+                                     Defect(id="D902", dimension="LEG-SIZE", human_hold="Reviewer's call", **base),
                                      Defect(id="D903", dimension="LEG-SIZE", needs_human=True, **base),
                                      Defect(id="D904", dimension="LEG-SIZE", **base),
-                                     Defect(id="D905", dimension="LEG-SIZE", **base)]   # a reviewer's, that Wei's note maps onto
-    eng.state.evaluation.feedback.append(Feedback(id="F009", text="the label is tiny", actor="Wei", created_at=now(),
+                                     Defect(id="D905", dimension="LEG-SIZE", **base)]   # a reviewer's, that Reviewer's note maps onto
+    eng.state.evaluation.feedback.append(Feedback(id="F009", text="the label is tiny", actor="Reviewer", created_at=now(),
                                                   status="interpreted", defect_ids=["D905"]))
     for did, why in (("D901", "is on a human-judged dimension"), ("D902", "is held for a named human"),
-                     ("D903", "needs a human decision"), ("D905", "comes from Wei's feedback")):
+                     ("D903", "needs a human decision"), ("D905", "comes from Reviewer's feedback")):
         with pytest.raises(EngineError, match=f"{did} {why}, so only a named human resolves it"):
             eng.resolve_defect(did, actor="agent:ops", evidence="fixed")
     assert eng.resolve_defect("D904", actor="agent:ops", evidence="fixed in v2").status == "resolved"
-    assert eng.resolve_defect("D901", actor="Wei", evidence="I listened").status == "resolved"
+    assert eng.resolve_defect("D901", actor="Reviewer", evidence="I listened").status == "resolved"
 
 
 def test_a_developer_edit_during_a_pre_flight_hold_is_not_taken_for_the_nodes_own_write(tmp_path):
@@ -402,25 +396,25 @@ def test_a_change_request_is_previewed_deferred_and_never_decided_by_its_own_age
     proj = make_project(tmp_path, human_b=True, lock_b=("design",))
     eng = Engine(proj, executor=FnExecutor())
     eng.run(max_steps=100)
-    eng.decide("b_plan", "approved", actor="Wei", reason="the plan is right")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan is right")
     eng.run(max_steps=200)
     assert eng.state.runtime.status.value == "RUN_PASS"
     with pytest.raises(EngineError, match="unknown control document 'desgin'"):
-        eng.change_request("desgin", "a typo", by="Wei")
+        eng.change_request("desgin", "a typo", by="Reviewer")
     assert not eng.state.history.change_requests
     cr = eng.change_request("design", "a warmer palette", by="agent:designer")
     impact = eng.change_request_impact(cr.id)
     assert impact["writer"] == "b_plan" and "d_build" in impact["readers"] and impact["human_gates"] == ["b_plan"]
     for kw, why in ((dict(until="", reason="later"), "revisit trigger"), (dict(until="after v1", reason=""), "the reason")):
         with pytest.raises(EngineError, match=why):
-            eng.defer_change_request(cr.id, by="Wei", **kw)
-    eng.defer_change_request(cr.id, by="Wei", until="after the v1 release", reason="not before the release")
+            eng.defer_change_request(cr.id, by="Reviewer", **kw)
+    eng.defer_change_request(cr.id, by="Reviewer", until="after the v1 release", reason="not before the release")
     cr = eng.state.history.change_requests[0]
     assert (cr.status, cr.revisit) == ("deferred", "after the v1 release") and eng.rt("b_plan").status == S.STEP_PASS
     assert eng.status()["deferred_change_requests"] == ["CR-001 on design.md until: after the v1 release"]
     [row] = [r for r in human_record(_ledger(proj)) if r["action"] == "change request deferred"]
-    assert row["actor"] == "Wei" and "until: after the v1 release" in row["subject"]
-    eng.grant("agent:designer", ["change-request"], _in(7), "routine palette work", actor="Wei")
+    assert row["actor"] == "Reviewer" and "until: after the v1 release" in row["subject"]
+    eng.grant("agent:designer", ["change-request"], _in(7), "routine palette work", actor="Reviewer")
     with pytest.raises(EngineError, match="an agent never decides its own change request"):
         eng.approve_change_request(cr.id, by="agent:designer")
     with pytest.raises(EngineError, match="an agent never decides its own change request"):
@@ -428,7 +422,7 @@ def test_a_change_request_is_previewed_deferred_and_never_decided_by_its_own_age
     assert cli.main(["change-request", str(proj), "--impact", cr.id]) == 0      # read-only, no --actor
     assert "human decisions that would re-open: b_plan" in capsys.readouterr().out
     eng = Engine(proj, executor=FnExecutor())
-    eng.approve_change_request(cr.id, by="Wei", reason="after all, now")        # a deferred request can still be approved
+    eng.approve_change_request(cr.id, by="Reviewer", reason="after all, now")        # a deferred request can still be approved
     eng.run(max_steps=100)
     assert eng.rt("b_plan").status == S.WAITING_HUMAN
     assert any("changed: b_plan" in line for line in cli._since_last_approval(eng, "b_plan"))   # #43

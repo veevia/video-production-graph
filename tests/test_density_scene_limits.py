@@ -1,7 +1,4 @@
-"""#98: a density exception for one scene. R-DEN-001's film-wide limit (8) is a first estimate awaiting Wei's calibration;
-SRA's B02 arrival beat shows 18 labelled tiles at once, as the approved reference does. The only way to accept that was
-CR-007's film-wide limit of 18, which would stop the check for every other scene. `thresholds.density.scene_limits`
-in evaluation.md sets one scene's limit; every other scene keeps the film-wide one."""
+"""Synthetic regression coverage: test density scene limits."""
 
 from __future__ import annotations
 

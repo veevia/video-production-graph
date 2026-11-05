@@ -4,6 +4,7 @@ import pytest
 
 import inbox
 import server
+from glassbox import DEFAULT_DATA_DIR
 from glassbox.web import make_server
 from synthetic import write_engine
 
@@ -93,4 +94,39 @@ def test_start_hint_explains_the_loopback_http_boundary(base):
 def test_producer_help_uses_a_neutral_example(capsys):
     assert inbox.main(["--help"]) == 0
     help_text = " ".join(capsys.readouterr().out.split())
-    assert "(for example 'Film producer (Copilot chat)')" in help_text
+    assert "(for example 'Film producer')" in help_text
+
+
+def test_given_default_settings_when_parsing_tools_then_share_neutral_storage(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    server_args = server.parse_args(["--root", str(tmp_path / "projects")])
+    inbox_args = inbox.parse(["--all"])
+
+    assert server_args.data_dir == inbox_args.data_dir == DEFAULT_DATA_DIR == "~/.local/share/vpg-glassbox"
+    assert not list(tmp_path.iterdir())
+
+
+def test_given_existing_store_when_parsing_tools_then_keep_the_explicit_path(tmp_path):
+    data = tmp_path / "existing notes"
+    data.mkdir()
+    log = data / "reactions.jsonl"
+    log.write_text('{"id": "existing-note"}\n')
+    before = log.read_bytes()
+
+    server_args = server.parse_args(["--root", str(tmp_path / "projects"), "--data-dir", str(data)])
+    inbox_args = inbox.parse(["--all", "--data-dir", str(data)])
+
+    assert server_args.data_dir == inbox_args.data_dir == str(data)
+    assert log.read_bytes() == before
+
+
+def test_given_help_when_requested_then_describe_neutral_storage_and_existing_notes(capsys):
+    with pytest.raises(SystemExit) as result:
+        server.parse_args(["--help"])
+    assert result.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert DEFAULT_DATA_DIR in help_text and "existing directory to retain notes" in help_text
+
+    assert inbox.main(["--help"]) == 0
+    assert DEFAULT_DATA_DIR in " ".join(capsys.readouterr().out.split())

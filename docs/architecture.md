@@ -29,7 +29,7 @@ rubrics/*.yaml, config/*.yaml        │   └── fan-in ◄─────�
 | Provenance | `vpg/provenance.py` | Append-only, hash-chained ledger; artifact lineage. |
 | Publishing | `vpg/publish.py` | Optional human-facing copies of every version, privacy-held when a scan cannot pass, never blocking the graph. |
 | Learning | `vpg/memory.py`, `knowledge/` | Governed rule lifecycle and proposals ([self-improvement](self-improvement.md)). |
-| Interface | `vpg/cli.py`, SOP, `/video-production` prompt | How humans and agents drive a production. |
+| Interface | `vpg/cli.py`, task packets and operator documentation | How humans and agents drive a production. |
 
 ## Design principles of the engine
 
@@ -41,11 +41,16 @@ rubrics/*.yaml, config/*.yaml        │   └── fan-in ◄─────�
 6. **Nothing is lost.** Outputs are superseded, never deleted; state is checkpointed after every step; the ledger is tamper-evident.
 7. **Refuse or block; never hang.** The engine refuses to run a graph that fails structural validation. A run that cannot progress is BLOCKED with a report, never left RUNNING. So is a run whose rules, rubrics, workflow or project config changed underneath it, or whose input artifacts no longer match their hashes.
 
-## Relationship to existing workspace systems
+## External integrations
 
-- **Workflow OS** (`02_Workflows/workflow-os/`): not modified. vpg reuses its state names and HITL principles; [ADR 0001](adr/0001-graph-engine.md) records why vpg is standalone and how to bridge the two.
-- **W1–W6 / SOPs:** vpg is callable as the `video-production` SOP and the `/video-production` prompt; it doesn't replace the design loop.
-- **Skills and agents:** nodes name worker capabilities, not Python dependencies. The portable [skill bindings](skill-bindings.md) describe each capability. Tests also check the workspace index when it exists. Agents map to custom agents where one fits ([agent catalog](agent-catalog.md)); a community user can supply an equivalent worker without installing the private workspace.
+- External schedulers can invoke the CLI and inspect project-local state without
+  becoming runtime dependencies. [ADR 0001](adr/0001-graph-engine.md) describes the
+  standalone engine contract.
+- Nodes name worker capabilities, not installed products. The portable
+  [skill bindings](skill-bindings.md) and [agent catalog](agent-catalog.md) describe
+  the required inputs, outputs and review boundaries.
+- Each project supplies its own renderers, authorized sources and named reviewers.
+  No private workspace structure is required.
 
 ## Logging and provenance
 

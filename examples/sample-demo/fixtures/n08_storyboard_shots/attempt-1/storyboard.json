@@ -6,16 +6,16 @@
    "unit_ids": [
     "u1"
    ],
-   "objective": "Plants report, but the pattern is invisible",
-   "visual": "blue field, title, the signal line",
+   "objective": "Introduce the card group.",
+   "visual": "Blue title plate and a geometric mark.",
    "source": {
     "type": "rendered",
     "ref": "A1"
    },
    "duration_s": 5.4,
    "on_screen_text": [
-    "WATER DATA, EVERYWHERE",
-    "No one sees the pattern in time"
+    "THREE SIMPLE CARDS",
+    "One selection, one detail"
    ],
    "layout": "title",
    "asset_ids": [
@@ -23,10 +23,10 @@
     "A4"
    ],
    "transition_out": {
-    "outgoing_anchor": "signal line",
-    "incoming_anchor": "range band",
+    "outgoing_anchor": "selected shape",
+    "incoming_anchor": "selected shape",
     "direction": "left-to-right",
-    "match_frame": "signal line height",
+    "match_frame": "centre of selected shape",
     "duration_s": 0.4,
     "audio_bridge": "music sustains under the pause"
    }
@@ -37,26 +37,26 @@
    "unit_ids": [
     "u2"
    ],
-   "objective": "The signal leaves the plant's own range",
-   "visual": "range band with the flagged point",
+   "objective": "Select Card B.",
+   "visual": "Three cards with one selection outline.",
    "source": {
     "type": "rendered",
     "ref": "A2"
    },
    "duration_s": 5.4,
    "on_screen_text": [
-    "Expected range",
-    "Water-use signal"
+    "Card group",
+    "Selection marker"
    ],
    "layout": "diagram",
    "asset_ids": [
     "A2"
    ],
    "transition_out": {
-    "outgoing_anchor": "flagged point",
-    "incoming_anchor": "outlook card",
+    "outgoing_anchor": "selected shape",
+    "incoming_anchor": "selected shape",
     "direction": "left-to-right",
-    "match_frame": "signal line height",
+    "match_frame": "centre of selected shape",
     "duration_s": 0.4,
     "audio_bridge": "music sustains under the pause"
    }
@@ -67,8 +67,8 @@
    "unit_ids": [
     "u3"
    ],
-   "objective": "The outlook card lets the team act first",
-   "visual": "the captured product screen, ring on the outlook card",
+   "objective": "Read Card B's detail panel.",
+   "visual": "Generated card-board image.",
    "source": {
     "type": "captured",
     "ref": "S04"

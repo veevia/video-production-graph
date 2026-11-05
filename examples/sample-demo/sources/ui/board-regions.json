@@ -1,0 +1,28 @@
+{
+ "source": "sources/ui/board.png",
+ "frame": [
+  1920,
+  1080
+ ],
+ "note": "Boxes from the synthetic image generator.",
+ "regions": {
+  "detail_panel": [
+   1200,
+   650,
+   680,
+   360
+  ],
+  "selection_marker": [
+   918,
+   238,
+   264,
+   284
+  ],
+  "card_list": [
+   28,
+   198,
+   364,
+   322
+  ]
+ }
+}

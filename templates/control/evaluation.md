@@ -1,12 +1,12 @@
 ---
 doc: evaluation
 gates: [technical, accessibility, design-compliance, product-accuracy, narrative-pacing, creative]
-review_lenses: ["<fill: e.g. executive>", "<fill: domain-operations leader>", "<fill: engineer>", "<fill: first-time viewer>"]
+review_lenses: ["<fill: intended audience>", "<fill: independent reviewer>"]
 thresholds: {}                # overrides of config/defaults.yaml, e.g. {captions: {max_cps: 17}}; one scene's density: {density: {scene_limits: {B02: 18}}}
 ---
 # Evaluation — <fill: film title>
 
-> Access: written by N03 Objective and Audience; read by the reviewers (N15–N21) and N23. Locked when Wei approves N03.
+> Access: written by N03 Objective and Audience; read by the reviewers (N15–N21) and N23. Locked when the project owner approves N03.
 
 ## Evaluation dimensions
 <fill: which rubric dimensions apply (rubrics/*.yaml) and any project-specific additions>
@@ -15,7 +15,7 @@ thresholds: {}                # overrides of config/defaults.yaml, e.g. {caption
 <fill: the six review gates and what "pass" means for each>
 
 ## Scoring rubrics
-<fill: tool dimensions pass/fail; review dimensions 1–5 with threshold 4; human dimensions decided by Wei>
+<fill: tool dimensions pass/fail; review dimensions 1–5 with threshold 4; human dimensions decided by the project owner>
 
 ## Approval thresholds
 <fill: no open P1–P3 defects; every review current and passing; the human release decision>

@@ -50,7 +50,7 @@ for i, b in enumerate(beats):
     if lay == "title":
         logo = Image.open(assets[b["asset_ids"][1]]).convert("RGBA").resize((128, 128))
         im.paste(logo, (120, 120), logo)
-        layers.append({"id": f"L{len(layers) + 1:02d}", "scene": b["id"], "kind": "logo", "asset": "assets/brand/northwind-mark.png",
+        layers.append({"id": f"L{len(layers) + 1:02d}", "scene": b["id"], "kind": "logo", "asset": "assets/brand/shape-mark.png",
                        "bbox": [120, 120, 128, 128], "start": round(start, 3), "end": round(end, 3), "opacity": 1.0, "essential": True})
         d = ImageDraw.Draw(im)
         text(texts[0], 120, 400, params.get("title_px", 92), 800, "paper", "brand")
@@ -62,8 +62,8 @@ for i, b in enumerate(beats):
             text(texts[1], 1180, 200, 40, 700, "ink", "paper")
     elif lay == "ui":
         text("Synthetic data", 1560, 110, 26, 600, "ink", "mist", essential=False)
-        regions = read_json(root / "sources/ui/dashboard-regions.json")["regions"]
-        x, y, w, h = regions["outlook_card"]
+        regions = read_json(root / "sources/ui/board-regions.json")["regions"]
+        x, y, w, h = regions["detail_panel"]
         ring_start = max(start, by_unit[b["unit_ids"][0]]["start"] + 0.4)
         d.rounded_rectangle([x - 10, y - 10, x + w + 10, y + h + 10], radius=20, outline=C["ink"], width=6)
         layers.append({"id": f"L{len(layers) + 1:02d}", "scene": b["id"], "kind": "ring", "bbox": [x - 10, y - 10, w + 20, h + 20],

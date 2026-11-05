@@ -25,8 +25,9 @@ from typing import Any
 
 from .util import PKG_ROOT, is_human_name, now, read_json, sha256_file, write_json_atomic
 
-LIFECYCLE = ["candidate", "observed_again", "validated", "approved", "adopted", "monitored", "revised", "retired"]
+LIFECYCLE = ["builtin", "candidate", "observed_again", "validated", "approved", "adopted", "monitored", "revised", "retired"]
 ALLOWED = {
+    "builtin": {"candidate", "revised", "retired"},
     "candidate": {"observed_again", "retired"},
     "observed_again": {"validated", "retired"},
     "validated": {"approved", "retired"},
@@ -48,6 +49,11 @@ class GovernanceError(Exception):
 
 def enforcement(rule: dict[str, Any]) -> str:
     state = rule["lifecycle"]["state"]
+    if state == "builtin":
+        mode = rule.get("default_enforcement")
+        if mode not in {"enforced", "advisory", "inactive"}:
+            raise GovernanceError(f"{rule['id']}: builtin policy needs a valid default_enforcement")
+        return mode
     return "enforced" if state in ENFORCED else "advisory" if state in ADVISORY else "inactive"
 
 
@@ -77,6 +83,8 @@ class RuleBase:
         cur = rule["lifecycle"]["state"]
         if to not in ALLOWED[cur]:
             raise GovernanceError(f"{rule_id}: {cur} → {to} is not an allowed lifecycle step")
+        if cur == "builtin" and (not human or not is_human_name(by)):
+            raise GovernanceError(f"{rule_id}: only a named human can change a built-in project policy")
         if rule.get("scope") in PROTECTED_SCOPES and to in {"approved", "adopted", "monitored"}:
             raise GovernanceError(f"{rule_id}: scope '{rule['scope']}' is protected; propose a change request to the project owner instead")
         refs = set(rule.get("evidence", [])) | set(evidence)
@@ -98,7 +106,7 @@ class RuleBase:
             raise GovernanceError(f"{rule_id}: {to} needs a reason and evidence")
         # Weakening a stable rule is a human decision: revising or retiring an approved or enforced rule changes what
         # every future production is judged by, so an agent may propose it but never do it.
-        if to in {"revised", "retired"} and cur in {"approved", "adopted", "monitored"} and (not human or not is_human_name(by)):
+        if to in {"revised", "retired"} and cur in {"builtin", "approved", "adopted", "monitored"} and (not human or not is_human_name(by)):
             raise GovernanceError(f"{rule_id}: only a named human can {'revise' if to == 'revised' else 'retire'} a rule that is {cur}")
 
         self._archive()
@@ -131,6 +139,8 @@ class RuleBase:
         return rule
 
     def _archive(self) -> None:
+        if self.path.resolve().is_relative_to(PKG_ROOT.resolve()):
+            raise GovernanceError("the shipped policy is read-only; use --rules with a private project rule file")
         self.history_dir.mkdir(parents=True, exist_ok=True)
         dest = self.history_dir / f"rules-v{self.data['version']}.json"
         if not dest.exists():

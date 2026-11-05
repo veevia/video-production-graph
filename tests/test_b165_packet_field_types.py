@@ -1,9 +1,4 @@
-"""#165: the packet's output contract gives every field's type, nested objects included, so an agent doesn't hand a list
-where a string belongs.
-
-Water, N21 a7: `defects[].feedback` was submitted as a list, and the schema needs a string. The contract listed the field
-names only.
-"""
+"""Synthetic regression coverage: test b165 packet field types."""
 from __future__ import annotations
 
 import json

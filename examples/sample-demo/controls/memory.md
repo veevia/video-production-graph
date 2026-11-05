@@ -1,7 +1,7 @@
 ---
 doc: memory
 ---
-# Memory — Northwind Water Monitor teaser (fictional)
+# Memory — Shape Board teaser (fictional)
 
 > Access: written by N25; never locked.
 

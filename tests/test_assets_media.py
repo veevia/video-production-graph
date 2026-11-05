@@ -1,6 +1,4 @@
-"""A recorded prototype walkthrough must be a first-class asset (first real run, #32/#45: N11 refused a take manifest as
-"not a readable image", so the take became a poster still plus an unregistered sidecar, and downstream memoisation
-reused a stale render after the take was re-recorded)."""
+"""Synthetic regression coverage: test assets media."""
 
 from __future__ import annotations
 

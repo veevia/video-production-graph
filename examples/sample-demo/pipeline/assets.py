@@ -32,11 +32,15 @@ for a in plan:
     elif a["role"] == "diagram":
         im = Image.new("RGB", (w, h), "#FFFFFF")
         d = ImageDraw.Draw(im)
-        d.rectangle([160, 400, 1760, 640], fill="#E6EEF7")
-        pts = [(160 + i * 50, 540 - 50 * math.sin(i / 3) - (190 if i == 26 else 0)) for i in range(33)]
-        d.line(pts, fill="#1A1F26", width=7)
-        x, y = pts[26]
-        d.ellipse([x - 26, y - 26, x + 26, y + 26], outline="#E03E2D", width=9)
+        for i, x in enumerate((430, 960, 1490)):
+            d.rounded_rectangle([x - 170, 400, x + 170, 730], radius=16, fill="#EEF1F4")
+            if i == 0:
+                d.rectangle([x - 70, 490, x + 70, 630], fill="#0B5CAD")
+            elif i == 1:
+                d.ellipse([x - 70, 490, x + 70, 630], fill="#0B5CAD")
+                d.rounded_rectangle([x - 182, 388, x + 182, 742], radius=20, outline="#1A1F26", width=6)
+            else:
+                d.polygon([(x, 480), (x - 80, 640), (x + 80, 640)], fill="#0B5CAD")
         im.save(dest)
     else:
         raise SystemExit(f"no recipe for asset {a['id']} ({a['role']}, {a['source_type']})")

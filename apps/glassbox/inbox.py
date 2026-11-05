@@ -27,14 +27,13 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
-from glassbox import fsio  # noqa: E402
+from glassbox import DEFAULT_DATA_DIR, fsio  # noqa: E402
 from glassbox.discovery import PROJECT_FILE, project_id  # noqa: E402
 from glassbox.producer import (inbox_markdown, inbox_payload, inbox_summary, parse_states,  # noqa: E402
                                summary_markdown)
 from glassbox.reactions import MAX_PRODUCER_CHARS, MAX_TEXT_CHARS, ReactionStore  # noqa: E402
 
 DEFAULT_BASE = "http://127.0.0.1:4420"
-DEFAULT_DATA_DIR = "~/.copilot/extension-data/vpg-glassbox"
 EXIT_OK, EXIT_ERROR, EXIT_NOTHING = 0, 2, 3
 TIMEOUT = 10
 
@@ -210,10 +209,10 @@ def parse(argv):
     parser.add_argument("--version", metavar="VN", help="with --resolve: the version that addresses the note")
     parser.add_argument("--reply", metavar="TEXT", help="your plan (--ack) or what changed (--resolve)")
     parser.add_argument("--producer", metavar="NAME", help=f"who answers, at most {MAX_PRODUCER_CHARS} characters "
-                                                          "(for example 'Film producer (Copilot chat)')")
+                                                          "(for example 'Film producer')")
     parser.add_argument("--base", default=DEFAULT_BASE, help=f"the Glass Box server (default {DEFAULT_BASE})")
-    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, help="where the server keeps reactions.jsonl, read only "
-                                                                     "when the server is down (default %(default)s)")
+    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
+                        help="default: %(default)s; existing reaction store for read-only access when the server is down")
     args = parser.parse_args(argv)
     if not args.all and not args.project:
         parser.error("give --project <job folder>, or --all")

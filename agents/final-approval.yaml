@@ -27,7 +27,7 @@ outputs:
 - package
 - release_summary
 - verification
-decision_authority: Prepares the decision; only Wei releases.
+decision_authority: Prepares the decision; only the project owner releases.
 constraints:
 - Never claims human approval; dry-run approvals are labelled
 - Works only from its task packet's allowed inputs; writes only its declared outputs
@@ -36,6 +36,6 @@ evaluation:
 - release
 escalation:
   when: A release condition fails twice
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: Repo Steward

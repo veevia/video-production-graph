@@ -1,9 +1,4 @@
-"""v1.6: a converging run never blocks on a loop budget; a stalled one still escalates, with the quality trend.
-
-On the first real run (SRA, 2026-09-27) rework loop E43 reached its bound of 3 while cycle 4 had just resolved 15
-defects, and the run sat BLOCKED for a day while the film kept improving outside the graph. Budgets are now project
-settings (`loop_budget` in vpg.project.yaml). With `on_exhaust: extend_if_converging` a spent rework loop, or the
-rework-cycle budget, is extended when the latest review round made progress, and the runaway guards still hold."""
+"""Synthetic regression coverage: test quality budget."""
 
 from __future__ import annotations
 
@@ -180,7 +175,7 @@ def test_the_wall_clock_guard_refuses_every_extension(tmp_path):
 def test_granted_budget_survives_a_rollback(tmp_path):
     proj, eng = scripted(tmp_path, [[A, B, C], [C], []], e13=1, on_exhaust="extend_if_converging")
     first = eng.state.history.checkpoints[0].seq
-    eng.rollback(first, actor="Wei")
+    eng.rollback(first, actor="Reviewer")
     assert eng.state.runtime.loop_extra == {"E13": 1}
 
 
@@ -241,12 +236,12 @@ def test_a_version_re_gated_after_a_humans_unblock_keeps_its_credit(tmp_path):
         seen.append(ctx.state.runtime.current_version)
         (ctx.workdir / "interpretation.json").write_text(json.dumps({"defects": [], "feedback": []}))
         if seen.count(2) == 1 and ctx.state.runtime.current_version == 2:
-            next(d for d in ctx.state.evaluation.defects if d.description == "problem c").human_hold = "held for Wei (test)"
+            next(d for d in ctx.state.evaluation.defects if d.description == "problem c").human_hold = "held for Reviewer (test)"
         return {"interpretation": "interpretation.json"}
     eng = Engine(proj, executor=FnExecutor({"g_gate": gate}))
     eng.run(max_steps=400)
     assert eng.state.runtime.status.value == "BLOCKED" and eng.state.evaluation.gate_results[-1].version == 2
-    eng.unblock("g_gate", actor="Wei", note="the re-trace is right")
+    eng.unblock("g_gate", actor="Reviewer", note="the re-trace is right")
     eng.run(max_steps=400)
     assert eng.state.runtime.status.value == "RUN_PASS"
     [ext] = events(proj, "rework_budget_extended")
@@ -263,7 +258,7 @@ def test_a_human_reset_clears_what_converging_rounds_were_granted(tmp_path):
     eng._pass(eng.node("x_regen"), x, "pass", {"targets": ["d_build"], "defect_ids": []})
     [esc] = [e for e in eng.state.runtime.escalations if not e.resolved]
     assert "not extended: E13 was already extended at version 3" in esc.report
-    eng.unblock("x_regen", actor="Wei", note="fresh budget")
+    eng.unblock("x_regen", actor="Reviewer", note="fresh budget")
     assert events(proj, "unblocked")[-1]["cleared_grants"] == {"E13": 1} and eng.state.runtime.loop_extra == {}
     assert "E13" not in eng.state.runtime.grant_versions
 
@@ -288,8 +283,7 @@ def test_a_pre_v1_6_rework_gate_gives_its_severity_split_from_its_reason(tmp_pat
 
 
 def test_a_rounds_severities_are_its_own_even_after_a_downgrade(tmp_path):
-    """A defect's severity follows its latest review (SRA's D002 was a P2 at v1 and is a nit now). The trend counts each
-    round by the severities its gate recorded, so a later downgrade can't rewrite it."""
+    """Synthetic regression coverage: test a rounds severities are its own even after a downgrade."""
     proj, eng = scripted(tmp_path, [[A, B, C], [C], []])
     before = [(r["version"], r["resolved"], r["new"]) for r in eng._trend()]
     for d in eng.state.evaluation.defects:

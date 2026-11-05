@@ -43,6 +43,6 @@ evaluation:
 - assets
 escalation:
   when: Rights need clearance, or a source is missing
-  to: Wei
+  to: the project owner
   how: The engine sets the node BLOCKED and writes .vpg/escalations/<node>-<n>.md
 runtime_binding: impeccable-asset-producer

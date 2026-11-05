@@ -90,7 +90,7 @@ def test_films_rows_marks_and_decisions(live):
 def test_films_merge_library_films_into_their_job(tmp_path):
     home = tmp_path / "home"
     paths = make_library_tree(home)
-    projects_root = home / "GitHub" / "Demo_workspace" / "01_Project-Hubs"
+    projects_root = home / "GitHub" / "Demo_workspace" / "projects"
     engine = write_engine(tmp_path)
     server = make_server([str(projects_root)], str(engine), str(tmp_path / "data"), port=0, quiet=True,
                          library_roots=[str(home / "GitHub"), str(home / "Downloads")], library_home=str(home))
@@ -105,9 +105,9 @@ def test_films_merge_library_films_into_their_job(tmp_path):
         job = next(r for r in films["rows"] if r["kind"] == "job")
         assert job["film_id"] and job["counts"]["library_versions"] == 4
         assert job["counts_text"].endswith("4 folders with video")
-        water = next(r for r in films["rows"] if r["name"] == "Water_hub")
-        assert water["kind"] == "library" and water["id"] == f"lib-{water['film_id']}" and water["area"] == "Workspace"
-        assert water["versions"][0]["label"] == "2026-10-04-r08-v16" and water["versions"][0]["item"]
+        sample = next(r for r in films["rows"] if r["name"] == "Sample_hub")
+        assert sample["kind"] == "library" and sample["id"] == f"lib-{sample['film_id']}" and sample["area"] == "Workspace"
+        assert sample["versions"][0]["label"] == "2035-01-04-r03-v04" and sample["versions"][0]["item"]
         archived = next(r for r in films["rows"] if r["name"] == "Example film")
         assert archived["archived"] and archived["area"] == "Archive"
         assert films["counts"]["library"] == len(films["rows"]) - 1
@@ -216,8 +216,8 @@ def test_old_deep_links_redirect():
         "#/p/abcdef0123/compare?a=v15&b=v25": "#/f/job-abcdef0123?tab=compare&a=v15&b=v25",
         "#/p/abcdef0123/compare?b=v25": "#/f/job-abcdef0123?tab=compare&b=v25",
         "#/library/f/0123456789abcdef": "#/f/lib-0123456789abcdef",
-        "#/library/f/0123456789abcdef?v=r07-v15&i=fedcba9876543210&t=3":
-            "#/f/lib-0123456789abcdef?v=r07-v15&i=fedcba9876543210&t=3",
+        "#/library/f/0123456789abcdef?v=r02-v03&i=fedcba9876543210&t=3":
+            "#/f/lib-0123456789abcdef?v=r02-v03&i=fedcba9876543210&t=3",
         "#/library/f/0123456789abcdef/compare?a=1111111111111111&b=2222222222222222":
             "#/f/lib-0123456789abcdef?tab=compare&a=1111111111111111&b=2222222222222222",
         "#/library/i/fedcba9876543210?t=4": "#/v/fedcba9876543210?t=4",

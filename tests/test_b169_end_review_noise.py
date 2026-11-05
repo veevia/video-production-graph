@@ -1,4 +1,4 @@
-"""#169 and #170, from the Water chat's E21 and E22: a clear `--notes` error, and no redaction warning from a count field."""
+"""Synthetic regression coverage: test b169 end review noise."""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -17,7 +17,7 @@ def _warnings(result_data):
 
 
 def test_a_list_size_or_a_setting_never_declares_a_redaction():
-    assert _warnings({"redaction_name_count": 16, "veil_frames": 0, "redact_ratio": 0.4}) == []   # Water N11, v12 and v13
+    assert _warnings({"redaction_name_count": 16, "veil_frames": 0, "redact_ratio": 0.4}) == []   # Synthetic regression case.
     assert _warnings({"redactions": [[0, 0, 10, 10]]}) == ["n11_capture declared redactions (1 entries); no engine tool "
                                                           "verifies where they sit, so check every frame where product UI moves"]
     assert _warnings({"redacted": True}) and _warnings({"veils": {"S1": [1, 2]}})            # a flag or a map still declares

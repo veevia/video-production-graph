@@ -4,18 +4,18 @@
 # learning-loop change: record it as a rule revision, never a silent edit.
 thresholds:
   text:
-    min_font_px_at_1080: 22        # R-LEG-001  Round 07 accessibility audit v2 minimum
+    min_font_px_at_1080: 22        # Project-overridable default; validate against the project's requirements.
     min_contrast_normal: 4.5       # R-LEG-002  WCAG 2.2 SC 1.4.3
     min_contrast_large: 3.0        # R-LEG-002  WCAG large-scale text
     large_text_px: 24              # WCAG large scale: 18 pt ≈ 24 px
     large_text_bold_px: 18.66      # WCAG large scale: 14 pt bold ≈ 18.66 px
     dwell_min_s: 1.0               # R-LEG-003  reading time: max(1.0 s, 0.24 s per word)
     dwell_s_per_word: 0.24         # R-LEG-003
-    safe_area: {x0: 96, x1: 1824, y0: 54, y1: 1026}   # R-LEG-004  title-safe used in Round 07 (x 96–1824)
+    safe_area: {x0: 96, x1: 1824, y0: 54, y1: 1026}   # Project-overridable default; validate against the project's requirements.
     caption_band_top_px: 900       # R-LEG-005  nothing essential below y 900 while captioned
     ghost_opacity_min_s: 0.3       # R-LEG-006  no partial-opacity "ghost" text; step down to a solid grey
   highlight:
-    min_ring_s: 1.0                # R-UI-002   focus rings on real UI hold ≥ 1 s (critic, r07-v10)
+    min_ring_s: 1.0                # Project-overridable default; validate against the project's requirements.
   captions:
     max_lag_s: 0.0                 # R-CAP-001  a cue never starts after its first spoken word
     max_chain_lead_s: 0.20         # R-CAP-001  mid-sentence lead ≤ 0.20 s
@@ -24,10 +24,10 @@ thresholds:
     max_cps: 20.0                  # R-CAP-002  adult reading-rate ceiling
     min_duration_s: 0.8            # R-CAP-002
   audio:
-    integrated_lufs: -16.0         # R-AUD-001  online-delivery target used in Round 07
+    integrated_lufs: -16.0         # Project-overridable default; validate against the project's requirements.
     lufs_tolerance: 1.0            # R-AUD-001
     true_peak_max_dbtp: -1.0       # R-AUD-001
-    voice_over_music_min_lu: 16.0  # R-AUD-002  voice over music p10 ≥ 16 LU (Round 07 mix evidence)
+    voice_over_music_min_lu: 16.0  # Project-overridable default; validate against the project's requirements.
     max_speech_dip_db: 6.0         # R-VOI-002  never attenuate inside speech by more than a 6 dB breath dip
     unexplained_silence_s: 1.5     # R-AUD-003  silence longer than this must be a planned pause
     seams:
@@ -41,7 +41,7 @@ thresholds:
       hard_cut_window_s: 0.01      # R-VOI-004
       audible_dbfs: -45.0          # R-VOI-004
       silence_dbfs: -70.0          # R-VOI-004
-      end_tail_inside_dbfs: -30.0   # R-VOI-004 calibrated 2026-10-02: Water v4 6/6, SRA/DSR 0 false positives
+      end_tail_inside_dbfs: -30.0   # Project-overridable default; validate against the project's requirements.
       end_tail_after_dbfs: -40.0    # R-VOI-004 calibrated 2026-10-02: catch sound after a seam, not quiet decay
       loud_tail_dbfs: -32.0        # R-VOI-004
       hard_onset_dbfs: -30.0       # R-VOI-004
@@ -53,5 +53,5 @@ thresholds:
     wps_min: 1.8                   # R-PRO-006  speaking-rate band (an assumption; calibration pending)
     wps_max: 3.2                   # R-PRO-006
   density:
-    max_text_layers_per_scene: 8   # R-DEN-001  one message per frame (Wei, P1/P2); calibration pending
+    max_text_layers_per_scene: 8   # Project-overridable default; validate against the project's requirements.
     scene_limits: {}               # R-DEN-001  a scene's own limit, e.g. {B02: 18}; set in evaluation.md, never here

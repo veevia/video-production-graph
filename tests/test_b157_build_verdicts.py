@@ -80,7 +80,7 @@ def test_rejection_without_fork_ranking_writes_build_verdict_not_decision_row(tm
     d["forks"] = {}
 
     before_decisions = (store / "decisions.jsonl").read_bytes() if (store / "decisions.jsonl").exists() else b""
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
 
     after_decisions = (store / "decisions.jsonl").read_bytes() if (store / "decisions.jsonl").exists() else b""
     assert after_decisions == before_decisions                  # verdicts never enter the fork-choice store
@@ -109,7 +109,7 @@ def test_approval_writes_build_verdict(tmp_path, monkeypatch):
     _add_review_forecast(eng)
     ctx = _release_wait(eng, proj)
 
-    eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved for release.")), actor="Wei")
+    eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved for release.")), actor="Reviewer")
 
     rows = _verdict_rows(store)
     assert len(rows) == 1
@@ -133,7 +133,7 @@ def test_invalid_verdict_ratings_refuse_atomically(tmp_path, monkeypatch, rating
     verdicts_before = (store / "verdicts.jsonl").read_bytes() if (store / "verdicts.jsonl").exists() else b""
 
     with pytest.raises(Exception, match="verdict_ratings"):
-        eng.record_review(_write(proj, d), actor="Wei")
+        eng.record_review(_write(proj, d), actor="Reviewer")
 
     assert (proj / ".vpg/state.json").read_bytes() == state_before
     assert (proj / ".vpg/ledger.jsonl").read_bytes() == ledger_before
@@ -143,7 +143,7 @@ def test_invalid_verdict_ratings_refuse_atomically(tmp_path, monkeypatch, rating
 
 def test_relayed_non_principal_records_ledger_but_no_verdict_row(tmp_path, monkeypatch):
     store = tmp_path / "prefs"
-    proj, eng = _project(tmp_path, monkeypatch, store=store, humans=("Wei", "Synthetic Principal"), principal="Wei")
+    proj, eng = _project(tmp_path, monkeypatch, store=store, humans=("Reviewer", "Synthetic Principal"), principal="Reviewer")
     _add_review_forecast(eng)
     ctx = _release_wait(eng, proj)
 
@@ -169,11 +169,11 @@ def test_undone_review_record_removes_verdict_row(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Engine, "_pass", fail_after_rows)
     with pytest.raises(RuntimeError, match="synthetic failure"):
-        eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved.")), actor="Wei")
+        eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved.")), actor="Reviewer")
     assert _verdict_rows(store) == []
 
     monkeypatch.setattr(Engine, "_pass", orig_pass)
-    Engine(proj).record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved."), "second.json"), actor="Wei")
+    Engine(proj).record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved."), "second.json"), actor="Reviewer")
     assert len(_verdict_rows(store)) == 1
 
 
@@ -185,9 +185,9 @@ def test_calibrate_reports_reviewer_false_pass_and_bias(tmp_path, monkeypatch, c
     d = _decision(ctx, release="changes", feedback="Scores were too generous.")
     d["forks"] = {}
     d["verdict_ratings"] = {"CRE-HOOK": 2, "NAR-CLARITY": 3}
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
 
-    assert main(["calibrate", str(proj), "--principal", "Wei"]) == 0
+    assert main(["calibrate", str(proj), "--principal", "Reviewer"]) == 0
 
     out = json.loads(capsys.readouterr().out)
     rc = out["reviewer_calibration"]
@@ -217,7 +217,7 @@ def test_pdg_score_fit_report_ignore_verdicts_jsonl(tmp_path):
     assert subprocess.run([sys.executable, str(script), "--data", str(data), "score", str(fork_path)],
                           cwd=tmp_path, text=True, capture_output=True).returncode == 0
     assert subprocess.run([sys.executable, str(script), "--data", str(data), "record", str(fork_path),
-                           "--rank", "B,A", "--why", "Synthetic preference"],
+                           "--rank", "B,A", "--principal", "Reviewer", "--why", "Synthetic preference"],
                           cwd=tmp_path, text=True, capture_output=True).returncode == 0
     scoring.append_verdict_atomic(data, {"type": "build_verdict", "schema": 1, "principal": "Synthetic", "run": "r1",
                                          "version": 1, "review_id": "r1:v1:n23:a1", "at": now(),
@@ -240,7 +240,7 @@ def test_v2_approval_must_answer_unanswered_v1_fork(tmp_path, monkeypatch):
     ctx1 = _release_wait(eng, proj, attempt=1, version=1)
     reject = _decision(ctx1, release="changes", feedback="Needs another version.")
     reject["forks"] = {}
-    eng.record_review(_write(proj, reject, "reject-v1.json"), actor="Wei")
+    eng.record_review(_write(proj, reject, "reject-v1.json"), actor="Reviewer")
 
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None, _s=store: _s)
@@ -249,13 +249,13 @@ def test_v2_approval_must_answer_unanswered_v1_fork(tmp_path, monkeypatch):
     approve = _decision(ctx2, release="approve", feedback="Now works.")
     approve["forks"] = {}
     with pytest.raises(Exception, match="missing \\['F-001'\\]"):
-        eng.record_review(_write(proj, approve, "approve-missing.json"), actor="Wei")
+        eng.record_review(_write(proj, approve, "approve-missing.json"), actor="Reviewer")
 
     approve["forks"] = {"F-001": read_json(ctx2.workdir / "decision.template.json")["forks"]["F-001"]}
     approve["forks"]["F-001"]["ranking"] = ["C1", "C2", "C3"]
     approve["forks"]["F-001"]["ratings"] = {}
     approve["forks"]["F-001"]["why"] = "Chosen after version two."
-    eng.record_review(_write(proj, approve, "approve-answered.json"), actor="Wei")
+    eng.record_review(_write(proj, approve, "approve-answered.json"), actor="Reviewer")
     assert eng.rt("n23_final_verification").status == S.STEP_PASS
 
 
@@ -283,13 +283,13 @@ def test_forecast_pass_none_and_unscored_must_when_reviews_missing(tmp_path, mon
     d = _decision(ctx, release="changes", feedback="No reviewer forecast yet.")
     d["forks"] = {}
 
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
 
     row = _verdict_rows(store)[0]
     assert row["forecast"] == {}
     assert row["forecast_pass"] is None
     assert "CRE-HOOK" in row["unscored_must"]
-    assert main(["calibrate", str(proj), "--principal", "Wei"]) == 0
+    assert main(["calibrate", str(proj), "--principal", "Reviewer"]) == 0
 
 
 def test_forecast_uses_minimum_latest_review_score_per_dimension(tmp_path, monkeypatch):
@@ -307,7 +307,7 @@ def test_forecast_uses_minimum_latest_review_score_per_dimension(tmp_path, monke
     d = _decision(ctx, release="changes", feedback="Pronunciation-like disagreement.")
     d["forks"] = {}
 
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
 
     row = _verdict_rows(store)[0]
     assert row["forecast"]["CRE-HOOK"] == 2.0
@@ -325,7 +325,7 @@ def test_forecast_pass_uses_score_passed_flag_not_threshold(tmp_path, monkeypatc
     d = _decision(ctx, release="changes", feedback="Tool override should fail.")
     d["forks"] = {}
 
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
 
     row = _verdict_rows(store)[0]
     assert row["forecast"] == {"CRE-HOOK": 5.0}
@@ -335,10 +335,10 @@ def test_forecast_pass_uses_score_passed_flag_not_threshold(tmp_path, monkeypatc
 def test_build_verdict_is_not_a_human_record_row_or_shared_reason(tmp_path):
     events = [
         {"type": "decision", "ts": "2026-10-02T00:00:00Z",
-         "data": {"node": "n23_final_verification", "decision": "changes_requested", "actor": "Wei",
+         "data": {"node": "n23_final_verification", "decision": "changes_requested", "actor": "Reviewer",
                   "reason": "Same release words.", "human": True}},
         {"type": "build_verdict", "ts": "2026-10-02T00:00:01Z",
-         "data": {"actor": "Wei", "outcome": "changes_requested", "words": "Same release words."}},
+         "data": {"actor": "Reviewer", "outcome": "changes_requested", "words": "Same release words."}},
     ]
 
     rows = human_record(events)
@@ -356,7 +356,7 @@ def test_verdict_words_are_masked_in_store(tmp_path, monkeypatch):
     d = _decision(ctx, release="changes", feedback=f"{listed} appears in the ending.")
     d["forks"] = {}
 
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
 
     words = _verdict_rows(store)[0]["words"]
     assert listed not in words
@@ -376,7 +376,7 @@ def test_verdict_ratings_accept_only_review_dimensions_and_integer_scores(tmp_pa
     ledger_before = (proj / ".vpg/ledger.jsonl").read_bytes()
 
     with pytest.raises(Exception, match="verdict_ratings"):
-        eng.record_review(_write(proj, d), actor="Wei")
+        eng.record_review(_write(proj, d), actor="Reviewer")
 
     assert (proj / ".vpg/state.json").read_bytes() == state_before
     assert (proj / ".vpg/ledger.jsonl").read_bytes() == ledger_before
@@ -392,11 +392,11 @@ def test_malformed_store_lines_do_not_block_review_record_and_are_reported(tmp_p
     _add_review_forecast(eng)
     ctx = _release_wait(eng, proj)
 
-    eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved.")), actor="Wei")
+    eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved.")), actor="Reviewer")
     assert sum(1 for line in (store / "decisions.jsonl").read_text().splitlines() if '"fork_id": "F-001"' in line) == 1
     assert len(_verdict_rows(store)) == 1
 
-    assert main(["calibrate", str(proj), "--principal", "Wei", "--reviewers"]) == 0
+    assert main(["calibrate", str(proj), "--principal", "Reviewer", "--reviewers"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["skipped_lines"]["verdicts.jsonl"] == 1
 
@@ -412,7 +412,7 @@ def test_failed_review_undo_removes_verdicts_file_created_by_action(tmp_path, mo
 
     monkeypatch.setattr(Engine, "_pass", fail_after_rows)
     with pytest.raises(RuntimeError, match="synthetic failure"):
-        eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved.")), actor="Wei")
+        eng.record_review(_write(proj, _decision(ctx, release="approve", feedback="Approved.")), actor="Reviewer")
 
     assert not (store / "verdicts.jsonl").exists()
 
@@ -424,10 +424,10 @@ def test_calibrate_reviewers_is_read_only(tmp_path, monkeypatch, capsys):
     ctx = _release_wait(eng, proj)
     d = _decision(ctx, release="changes", feedback="Reviewers passed a bad build.")
     d["forks"] = {}
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     before = sorted(p.relative_to(store).as_posix() for p in store.rglob("*") if p.is_file())
 
-    assert main(["calibrate", str(proj), "--principal", "Wei", "--reviewers"]) == 0
+    assert main(["calibrate", str(proj), "--principal", "Reviewer", "--reviewers"]) == 0
 
     after = sorted(p.relative_to(store).as_posix() for p in store.rglob("*") if p.is_file())
     out = json.loads(capsys.readouterr().out)
@@ -436,11 +436,8 @@ def test_calibrate_reviewers_is_read_only(tmp_path, monkeypatch, capsys):
 
 
 def test_the_engine_ships_no_active_nested_ignore_rules():
-    """The workspace forbids nested ignore layers (its TEST_GIT_013): exclusions live in the root policy, and any nested
-    .gitignore the engine ships is a comment-only note, as the source store's is. Store lock files stay untracked. The
-    workspace copy carries publication.json, which is never exported, so a checkout without it is the standalone
-    repository, whose own top-level .gitignore is that repository's root policy."""
-    standalone_root_policy = None if (PKG / "publication.json").exists() else PKG / ".gitignore"
+    """Public exclusions live in the root policy; cache-generated ignore files are not distribution rules."""
+    standalone_root_policy = PKG / ".gitignore"
     active = {}
     for p in PKG.rglob(".gitignore"):
         rel = p.relative_to(PKG)
@@ -459,7 +456,7 @@ def test_an_approval_must_still_answer_every_fork(tmp_path, monkeypatch):
     d["forks"] = {}
     state, ledger = (proj / ".vpg/state.json").read_bytes(), (proj / ".vpg/ledger.jsonl").read_bytes()
     with pytest.raises(Exception, match="missing"):
-        eng.record_review(_write(proj, d), actor="Wei")
+        eng.record_review(_write(proj, d), actor="Reviewer")
     assert (proj / ".vpg/state.json").read_bytes() == state and (proj / ".vpg/ledger.jsonl").read_bytes() == ledger
     assert _verdict_rows(store) == []
 
@@ -476,7 +473,7 @@ def test_same_node_same_version_offers_every_unanswered_fork(tmp_path, monkeypat
     d = _decision(ctx, release="approve", feedback="Approved.")
     d["forks"] = {"F-001": d["forks"]["F-001"]}
     with pytest.raises(Exception, match="missing \\['F-002'\\]"):
-        eng.record_review(_write(proj, d), actor="Wei")
+        eng.record_review(_write(proj, d), actor="Reviewer")
 
 
 def test_answered_successor_does_not_resurrect_superseded_fork(tmp_path, monkeypatch):
@@ -487,7 +484,7 @@ def test_answered_successor_does_not_resurrect_superseded_fork(tmp_path, monkeyp
     ctx2 = _release_wait(eng, proj, attempt=2, version=2)
     d2 = _decision(ctx2, release="approve", feedback="Answer the successor.")
     d2["forks"] = {"F-002": d2["forks"]["F-002"]}
-    eng.record_review(_write(proj, d2), actor="Wei")
+    eng.record_review(_write(proj, d2), actor="Reviewer")
 
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None, _s=store: _s)
@@ -497,7 +494,7 @@ def test_answered_successor_does_not_resurrect_superseded_fork(tmp_path, monkeyp
     assert read_json(ctx3.workdir / "decision.template.json")["forks"] == {}
     d3 = _decision(ctx3, release="approve", feedback="No old fork should return.")
     d3["forks"] = {}
-    eng.record_review(_write(proj, d3), actor="Wei")
+    eng.record_review(_write(proj, d3), actor="Reviewer")
     assert eng.rt("n23_final_verification").status == S.STEP_PASS
 
 
@@ -516,7 +513,7 @@ def test_removed_node_fork_is_not_required_forever(tmp_path, monkeypatch):
     assert read_json(ctx.workdir / "decision.template.json")["forks"] == {}
     d = _decision(ctx, release="approve", feedback="Removed node has no current fork decision.")
     d["forks"] = {}
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     assert eng.rt("n23_final_verification").status == S.STEP_PASS
 
 
@@ -540,7 +537,7 @@ def test_cli_recorded_attempt_zero_fork_stays_offered_across_versions(tmp_path, 
     ctx1 = _release_wait(eng, proj, attempt=1, version=1)
     d1 = _decision(ctx1, release="changes", feedback="Leave CLI fork open.")
     d1["forks"] = {}
-    eng.record_review(_write(proj, d1), actor="Wei")
+    eng.record_review(_write(proj, d1), actor="Reviewer")
 
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None, _s=store: _s)
@@ -556,14 +553,14 @@ def test_reoffered_fork_choice_is_not_blind(tmp_path, monkeypatch):
     ctx1 = _release_wait(eng, proj, attempt=1, version=1)
     d1 = _decision(ctx1, release="changes", feedback="Show me another version.")
     d1["forks"] = {}
-    eng.record_review(_write(proj, d1), actor="Wei")
+    eng.record_review(_write(proj, d1), actor="Reviewer")
 
     eng = Engine(proj)
     monkeypatch.setattr(Engine, "_preference_store", lambda self, principal=None, _s=store: _s)
     _add_review_forecast(eng, version=2)
     ctx2 = _release_wait(eng, proj, attempt=2, version=2)
     d2 = _decision(ctx2, release="approve", feedback="Now rank it.")
-    eng.record_review(_write(proj, d2), actor="Wei")
+    eng.record_review(_write(proj, d2), actor="Reviewer")
 
     row = scoring.load_decisions(store)[0]
     metrics, rows = scoring.evaluate(scoring.load_decisions(store))
@@ -579,14 +576,14 @@ def test_calibrate_reviewers_does_not_touch_project_state_or_resume(tmp_path, mo
     ctx = _release_wait(eng, proj)
     d = _decision(ctx, release="changes", feedback="Reviewer report only.")
     d["forks"] = {}
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     eng = Engine(proj)
     eng.rt("n06_creative_direction").status = S.RUNNING
     eng._save("test-running-node")
     before_vpg = _file_hashes(proj / ".vpg")
     before_store = _file_hashes(store)
 
-    assert main(["calibrate", str(proj), "--principal", "Wei", "--reviewers"]) == 0
+    assert main(["calibrate", str(proj), "--principal", "Reviewer", "--reviewers"]) == 0
 
     assert json.loads(capsys.readouterr().out)["reviewer_calibration"]["n_verdicts"] == 1
     assert _file_hashes(proj / ".vpg") == before_vpg
@@ -631,13 +628,13 @@ def test_the_packet_and_the_validator_agree_after_a_node_leaves_the_graph(tmp_pa
     assert packet_forks == set(eng._load_review_forks()) == set()                  # the packet asks what the validator asks
     del eng.state.runtime.nodes["n99_removed"]   # a stale runtime entry also breaks status() (pre-existing, out of scope)
     d = _decision(ctx, release="approve", feedback="Nothing to rank.")
-    eng.record_review(_write(proj, d), actor="Wei")
+    eng.record_review(_write(proj, d), actor="Reviewer")
     assert eng.rt("n23_final_verification").status == S.STEP_PASS
 
 
 def _wait_again_and_rank(eng, proj, store, *, attempt: int):
     d2_ctx = _release_wait(eng, proj, attempt=attempt, version=2)
-    eng.record_review(_write(proj, _decision(d2_ctx, release="approve", feedback="Ranked now.")), actor="Wei")
+    eng.record_review(_write(proj, _decision(d2_ctx, release="approve", feedback="Ranked now.")), actor="Reviewer")
     return scoring.load_decisions(store)[0]
 
 

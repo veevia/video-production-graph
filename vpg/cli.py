@@ -1,6 +1,6 @@
 """`python -m vpg <command>` — the interface agents and humans use to drive a production.
 
-Run from 02_Workflows/video-production (or add it to PYTHONPATH).
+Run from the toolkit checkout (or add it to PYTHONPATH).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from .controls import CONTROL_DOCS, KNOWN_DOCS, doc_label, rel_path
-from .util import PKG_ROOT, ConcurrentChange, NotRegularFile, read_json
+from .util import PKG_ROOT, ConcurrentChange, NotRegularFile, is_human_name, read_json
 
 INHERITED_SAFETY_KEYS = ("privacy", "reviews", "preflight", "loop_budget", "command_deps", "humans", "autonomy", "regression")
 
@@ -103,6 +103,13 @@ def _relay(args) -> dict[str, str]:
 
 def cmd_init(args) -> int:
     root = Path(args.project)
+    humans = getattr(args, "human", None)
+    if humans and any(not is_human_name(name) for name in humans):
+        print("--human must name a real reviewer; fill template fields before initialization", file=sys.stderr)
+        return 2
+    if root.resolve().is_relative_to(PKG_ROOT.resolve()):
+        print("project data must live outside the toolkit checkout", file=sys.stderr)
+        return 2
     if root.exists() and any(root.iterdir()) and not args.force:
         print(f"{root} is not empty; use --force to add missing files only")
         return 1
@@ -118,6 +125,8 @@ def cmd_init(args) -> int:
         cfg.write_text(yaml.safe_dump({
             "id": args.id or root.name, "name": args.name or root.name, "workflow": "quality" if quality else "default",
             "executor": "task", "brief": "sources/brief.md", "constraints": [], "commands": {}, "command_timeout_s": 900,
+            "rules": ".vpg/rules.json",
+            **({"humans": args.human} if getattr(args, "human", None) else {}),
             **({"observability": {"evaluation_events": True}} if quality else {})}, sort_keys=False))
     elif quality and (yaml.safe_load(cfg.read_text()) or {}).get("workflow") != "quality":
         print(f"note: {cfg} exists and does not say `workflow: quality`; the spec family is added, the config is unchanged")
@@ -129,6 +138,11 @@ def cmd_init(args) -> int:
             if not (root / SPEC_DIR / name).exists():
                 shutil.copy2(TEMPLATES / name, root / SPEC_DIR / name)
                 spec_files.append(name)
+    private_rules = root / ".vpg" / "rules.json"
+    if not private_rules.exists():
+        from .memory import DEFAULT_RULES
+        private_rules.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(DEFAULT_RULES, private_rules)
     copied, not_copied = [], []
     if args.from_project:
         src_root = Path(args.from_project)
@@ -605,6 +619,20 @@ def cmd_dry_run(args) -> int:
     return 0 if report["ok"] else 1
 
 
+def cmd_publication_check(args) -> int:
+    from .publication import check
+    try:
+        errors = check(terms_path=Path(args.private_terms) if args.private_terms else None)
+    except (OSError, ValueError) as exc:
+        print(f"publication check refused: {exc}", file=sys.stderr)
+        return 2
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        return 1
+    print("public inventory and publication checks passed")
+    return 0
+
+
 def cmd_publish(args) -> int:
     from .publish import publish
     eng = _read_only(args) if args.check else _engine(args)
@@ -633,6 +661,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sp = sub.add_parser("init", help="create a project from the control-document templates"); proj(sp)
     sp.add_argument("--name"); sp.add_argument("--id"); sp.add_argument("--force", action="store_true")
+    sp.add_argument("--human", action="append", help="named project reviewer (repeatable); otherwise configure humans before review")
     sp.add_argument("--from", dest="from_project", help="copy safety-critical top-level config keys from an existing project")
     sp.add_argument("--workflow", choices=["default", "quality"], default="default",
                     help="quality: the look and animatic gates, with the spec family templates in spec/ (docs/quality-workflow.md)")
@@ -640,6 +669,9 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("validate", help="validate the workflow graph")
     sp.add_argument("--workflow", help="default (the shipped graph), quality (with look and animatic gates), or a path")
     sp.set_defaults(fn=cmd_validate)
+    sp = sub.add_parser("publication-check", help="check the public file allowlist and private-data boundary")
+    sp.add_argument("--private-terms", help="optional private JSON term list outside this checkout; values are never printed")
+    sp.set_defaults(fn=cmd_publication_check)
     sp = sub.add_parser("run", help="run until the graph waits for an agent or a human, blocks, or finishes"); proj(sp)
     sp.add_argument("--max-steps", type=int, default=1000); sp.add_argument("--fixtures", help="replay agent outputs from fixtures (dry runs)")
     sp.add_argument("--auto-approve-dry-run", action="store_true",
@@ -762,9 +794,13 @@ def main(argv: list[str] | None = None) -> int:
                                           or (args.cmd == "grant" and args.list)
                                           or (args.cmd == "calibrate" and getattr(args, "reviewers", False)))
                 or (args.cmd == "telemetry" and args.write)):   # refreshing .vpg/telemetry/ writes into the run's folder
+            if Path(args.project).resolve().is_relative_to(PKG_ROOT.resolve()):
+                raise EngineError("production project data must live outside the toolkit checkout")
             with project_lock(args.project, args.cmd, args.lock_timeout):
                 return args.fn(args)
         if args.cmd == "memory" and args.action != "status":
+            if Path(args.rules or DEFAULT_RULES).resolve().is_relative_to(PKG_ROOT.resolve()):
+                raise GovernanceError("the shipped policy is read-only; use --rules with a private project rule file")
             with rules_lock(args.rules or DEFAULT_RULES, f"memory {args.action}"):
                 return args.fn(args)
         return args.fn(args)

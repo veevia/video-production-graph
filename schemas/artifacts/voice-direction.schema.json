@@ -5,9 +5,9 @@
  "type": "object",
  "properties": {
   "age": {
-   "enum": [
-    "adult"
-   ]
+   "type": "string",
+   "minLength": 1,
+   "description": "Project-selected voice profile or age category; must match production.voice_age when configured."
   },
   "delivery": {
    "type": "string",

@@ -249,7 +249,7 @@ def test_ratchet_needs_a_human_waiver(films):
     assert {"audio.pause_share", "audio.vo_over_music.p10", "video.motion_share", "text.overlap_all.count"} <= regressed
     agent = bm.ratchet(m["good0"], m["degraded"], waivers=[{"metric": "video.motion_share", "by": "agent:critic", "reason": "x"}])
     assert next(r for r in agent if r["metric"] == "video.motion_share")["status"] == "regressed"
-    human = bm.ratchet(m["good0"], m["degraded"], waivers=[{"metric": "video.motion_share", "by": "Wei", "reason": "kinetic opener"}])
+    human = bm.ratchet(m["good0"], m["degraded"], waivers=[{"metric": "video.motion_share", "by": "Reviewer", "reason": "kinetic opener"}])
     assert next(r for r in human if r["metric"] == "video.motion_share")["status"] == "waived"
     assert bm.ratchet(m["good0"], m["good0"]) == []
 
@@ -322,9 +322,9 @@ def test_only_a_named_human_sets_the_baseline(films):
     with pytest.raises(bm.BenchmarkError, match="named human"):
         bm.add_entry(path, "BEST-1", "previous_best", files, by="agent:producer", reason="best so far")
     with pytest.raises(bm.BenchmarkError, match="reason"):
-        bm.add_entry(path, "BEST-1", "previous_best", files, by="Wei")
-    first = bm.add_entry(path, "BEST-1", "previous_best", files, by="Wei", reason="approved at the end review")
-    second = bm.add_entry(path, "BEST-2", "previous_best", {k: str(v) for k, v in sets["good1"].items()}, by="Wei",
+        bm.add_entry(path, "BEST-1", "previous_best", files, by="Reviewer")
+    first = bm.add_entry(path, "BEST-1", "previous_best", files, by="Reviewer", reason="approved at the end review")
+    second = bm.add_entry(path, "BEST-2", "previous_best", {k: str(v) for k, v in sets["good1"].items()}, by="Reviewer",
                           reason="the new cut is better")
     data = bm.load(path)
     assert bm.live_baseline(data)["id"] == second["id"] and bm.entry(data, first["id"])["superseded_by"] == "BEST-2"

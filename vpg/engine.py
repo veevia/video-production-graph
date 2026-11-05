@@ -282,7 +282,7 @@ class Project:
         humans = self.config.get("humans")
         if humans is not None:
             if not isinstance(humans, list) or not humans:
-                problems.append("humans must be a non-empty list of declared human names, e.g. [Wei]")
+                problems.append("humans must be a non-empty list of declared human names, e.g. [the project owner]")
             else:
                 bad = [h for h in humans if not isinstance(h, str) or not h.strip() or not is_human_name(h, "dry-run-auto")]
                 if bad:
@@ -379,7 +379,7 @@ class Project:
         if block is None:
             return []
         if not isinstance(block, dict):
-            return ["autonomy must be a mapping, e.g. {mode: provisional, principal: Wei}"]
+            return ["autonomy must be a mapping, e.g. {mode: provisional, principal: the project owner}"]
         problems = [f"autonomy.{k} is not a setting (use mode, principal, provisional_expiry_h, provisional_gates_extra)"
                     for k in sorted(set(block) - {"mode", "principal", "provisional_expiry_h", "provisional_gates_extra"})]
         extra = block.get("provisional_gates_extra")
@@ -521,6 +521,8 @@ class Engine:
         self._state_identity: tuple[int, int, int] | None = None   # state.json as this engine last read or wrote it
         self.project = Project(project_dir)
         self.read_only = read_only
+        if not read_only and self.project.root.is_relative_to(PKG_ROOT.resolve()):
+            raise EngineError("production project data must live outside the toolkit checkout")
         cfg = self.project.config
         wf_ref = workflow_path or cfg.get("workflow")
         self.workflow_path = resolve_workflow(wf_ref, self.project.root)
@@ -629,7 +631,9 @@ class Engine:
                     continue
                 if mode == "advisory":
                     if d.get("level", "MUST") == "MUST":   # #162: only then is the rule why the dimension doesn't block
-                        d["advisory_reason"] = f"rule {d['rule']} is not yet adopted"
+                        builtin = rb.get(d["rule"])["lifecycle"]["state"] == "builtin"
+                        d["advisory_reason"] = (f"rule {d['rule']} is advisory in the shipped policy" if builtin
+                                                else f"rule {d['rule']} is not yet adopted")
                     d["level"] = "SHOULD"
                 dims.append(d)
             rub["dimensions"] = dims
@@ -937,7 +941,8 @@ class Engine:
             parts["judged_under"] = st.runtime.config_sha256
         if node.id == "n06_creative_direction":
             from . import scoring
-            principal = (((st.runtime.accepted_policy or {}).get("autonomy") or {}).get("principal") or "Wei").strip()
+            from .util import configured_principal
+            principal = configured_principal(st.runtime.accepted_policy or {}) or ("dry-run-owner" if st.runtime.dry_run else "")
             parts["preference_model_version"] = st.runtime.preference_model_pins.get(scoring.principal_key(principal))
         if parts["command"] and scheme >= 1:   # the code it runs: editing a script it calls re-runs the node, not a memo-skip
             parts["command_code"] = self.project.command_code(node.id) if code == "current" else [tuple(c) for c in code]
@@ -1417,10 +1422,16 @@ class Engine:
 
     def _preference_store(self, principal: str | None = None) -> Path:
         from . import scoring
-        return scoring.preference_store(PKG_ROOT, (principal or self._principal()).strip())
+        return scoring.preference_store(self.project.vpg, (principal or self._principal()).strip())
 
     def _principal(self) -> str:
-        return (((self.state.runtime.accepted_policy or {}).get("autonomy") or {}).get("principal") or "Wei").strip()
+        from .util import configured_principal
+        principal = configured_principal(self.state.runtime.accepted_policy or {})
+        if principal:
+            return principal
+        if self.state.runtime.dry_run:
+            return "dry-run-owner"
+        raise EngineError("declare a named reviewer in vpg.project.yaml humans before recording or scoring preferences")
 
     def _pinned_model_version(self, principal: str) -> int | None:
         from . import scoring
@@ -2876,12 +2887,13 @@ class Engine:
         return is_human_name(fb.actor, self.wf.policies.dry_run_actor) or fb.triage == "accepted"
 
     def _feedback_waits_for_end_review(self, fb: Feedback) -> bool:
-        principal = self._principal()
-        owner = fb.triaged_by if fb.triage == "accepted" else fb.actor
         policy = self.state.runtime.accepted_policy or {}
         autonomy = policy.get("autonomy") if isinstance(policy.get("autonomy"), dict) else {}
-        return ((self._autonomy_mode() == "provisional" or autonomy.get("mode") == "provisional")
-                and (owner == principal or owner == autonomy.get("principal")))
+        if self._autonomy_mode() != "provisional" and autonomy.get("mode") != "provisional":
+            return False
+        principal = self._principal()
+        owner = fb.triaged_by if fb.triage == "accepted" else fb.actor
+        return owner == principal or owner == autonomy.get("principal")
 
     def _mark_feedback_pending_confirmation(self, fb: Feedback, why: str) -> None:
         fb.status = "resolved_pending_confirmation"
@@ -3247,7 +3259,7 @@ class Engine:
     def _escalate_run(self, what: str, report: str) -> None:
         self.state.runtime.status = RunStatus.BLOCKED
         reason = report if len(report) <= 240 else report[:237] + "…"
-        self.state.runtime.escalations.append(Escalation(node=what, reason=reason, report=report, to="Wei", at=now()))
+        self.state.runtime.escalations.append(Escalation(node=what, reason=reason, report=report, to="the project owner", at=now()))
         self.ledger.append("escalated", node=what, reason=what, report=report, **self._trend_event())
 
     def invalidate(self, targets: list[str], reason: str, defects_by_target: dict[str, list[str]] | None = None,

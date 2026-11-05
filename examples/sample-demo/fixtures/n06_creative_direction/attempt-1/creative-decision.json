@@ -1,19 +1,19 @@
 {
  "selected": "C1",
- "rationale": "The only direction that proves both success criteria in 20 s without inventing a character.",
+ "rationale": "A short linear sequence matches the generated image and avoids invented behavior.",
  "rejected": [
   {
    "id": "C2",
-   "reason": "needs a persona the sources do not provide"
+   "reason": "The detail is easier to understand after its card."
   },
   {
    "id": "C3",
-   "reason": "a dense first frame breaks one message per frame"
+   "reason": "The shape comparison adds an unnecessary beat."
   }
  ],
  "narrative_arc": [
-  "problem",
-  "signal",
-  "action"
+  "group",
+  "select",
+  "inspect"
  ]
 }

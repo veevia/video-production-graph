@@ -40,7 +40,7 @@
      "type": "boolean"
     },
     "owner": {
-     "default": "Wei",
+     "default": "the project owner",
      "title": "Owner",
      "type": "string"
     },

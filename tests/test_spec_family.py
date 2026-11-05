@@ -154,7 +154,7 @@ def test_a_story_change_reopens_from_the_animatic(fam_dir):
 
     def more_terms(fm):
         _bump(fm)
-        fm["must_say"].append("plant team")
+        fm["must_say"].append("detail label")
     _edit_fm(fam_dir / "STORY.md", more_terms)
     d = sp.diff(old, sp.load_family(fam_dir))
     assert d["earliest_stage"] == "animatic" and d["rules"] == {"added": [], "modified": [], "retired": [], "removed": []}
@@ -225,9 +225,9 @@ def test_a_still_gate_with_its_own_roles_judges_exactly_those(fam_dir):
 
 
 def test_story_terms_cover_spoken_and_shown_text():
-    rep = term_report(["expected range", "seven-day outlook", "audit trail"], ["game-changing"],
-                      "It leaves its own expected range. A seven-day outlook helps.", "A game-changing monitor")
-    assert rep["covered"] == ["expected range", "seven-day outlook"] and rep["missing"] == ["audit trail"]
+    rep = term_report(["card group", "detail panel", "audit trail"], ["game-changing"],
+                      "A card group is shown beside a detail panel.", "A game-changing animation")
+    assert rep["covered"] == ["card group", "detail panel"] and rep["missing"] == ["audit trail"]
     assert rep["banned_hits"] == ["game-changing"] and rep["share"] == pytest.approx(0.6667, abs=1e-3)
 
 

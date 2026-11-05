@@ -1,5 +1,3 @@
-# Brand — Northwind (fictional)
+# Synthetic visual fixture
 
-- Primary field: Northwind blue #0B5CAD with white type. Ink #1A1F26 on white for body text. Accent for signals: #E03E2D.
-- Type: Mona Sans (OFL), bold caps for titles, regular for labels.
-- Mark: `assets/brand/northwind-mark.png`, used as supplied and never redrawn.
+Use the generated three-square mark and the blue, white and ink palette specified in controls/design.md. This is a test style, not an organisation's brand. All geometric artwork is generated locally by pipeline/fixtures.py.

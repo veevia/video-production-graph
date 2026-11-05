@@ -81,8 +81,8 @@ def registry(bench: Path) -> Path:
     for i, ref in enumerate(("REF-A", "REF-B")):
         media = cf.good_set(bench / ref, seed=i)
         frames = [(r, still(bench / ref / f"{r}.png", ground="muted", role=r, seed=i)) for r in ROLES]
-        benchmarks.add_entry(path, ref, "reference", media, by="Wei", style_frames=frames)
-    benchmarks.add_entry(path, "BEST-1", "previous_best", cf.good_set(bench / "BEST-1", seed=2), by="Wei",
+        benchmarks.add_entry(path, ref, "reference", media, by="Reviewer", style_frames=frames)
+    benchmarks.add_entry(path, "BEST-1", "previous_best", cf.good_set(bench / "BEST-1", seed=2), by="Reviewer",
                          reason="the accepted synthetic version")
     return path
 

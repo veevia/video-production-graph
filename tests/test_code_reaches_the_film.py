@@ -1,10 +1,4 @@
-"""Changed code reaches the film (triage #99, #97).
-
-`vpg accept-config` kept the pass of a producer whose code changed, and nothing scheduled the re-check its status warning
-promised: on the SRA run the take recorder's fix (`sra-take/v2`) sat in the pipeline while N11's registered take stayed
-`sra-take/v1`, until an owner invalidated N11 by hand. An accepted configuration now re-runs every command node whose
-code changed, and so does every rework cycle, whatever its plan routes. A narrowed code set is not a change (#97), and a
-human-gated node is left to a human."""
+"""Synthetic regression coverage: test code reaches the film."""
 
 from __future__ import annotations
 
@@ -68,7 +62,7 @@ def test_accepting_a_configuration_runs_the_changed_code(tmp_path):
     eng.rt("c_audio").command_code = {**dict(eng.project.command_code("c_audio")), "pipeline/film/generated.js": "0" * 64}
     assert eng._code_changed_nodes() == []                     # #97: only a file it no longer counts differs
     eng.rt("c_audio").command_code = recorded
-    eng.accept_config(actor="Wei", reason="the recorder fix")
+    eng.accept_config(actor="Reviewer", reason="the recorder fix")
     assert events(proj, "config_accepted")[-1]["rerun"] == ["c_audio"] and eng.rt("c_audio").status == S.STALE
     eng.run(max_steps=400)
     assert eng.state.runtime.status.value == "RUN_PASS" and eng.rt("c_audio").executions == 2
@@ -89,11 +83,11 @@ def test_a_human_gated_command_node_is_left_to_a_human(tmp_path):
     cfg = yaml.safe_load((proj / "vpg.project.yaml").read_text())
     (proj / "vpg.project.yaml").write_text(yaml.safe_dump({**cfg, "commands": {"b_plan": "{python} pipeline/run.py"}}))
     eng = _run(proj)
-    eng.decide("b_plan", "approved", actor="Wei", reason="the plan")
+    eng.decide("b_plan", "approved", actor="Reviewer", reason="the plan")
     eng.run(max_steps=400)
     assert eng.state.runtime.status.value == "RUN_PASS" and eng.rt("b_plan").command_code
     with open(proj / "pipeline/run.py", "a") as f:
-        f.write("# edited after Wei approved the plan\n")
+        f.write("# edited after Reviewer approved the plan\n")
     eng = Engine(proj, executor=FnExecutor())
     assert eng._code_changed_nodes() == []
     [warning] = [w for w in eng.status()["warnings"] if w.startswith("b_plan:")]

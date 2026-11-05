@@ -41,4 +41,4 @@ Read: {{controls_read}} · Write: {{controls_write}}. An approved document is lo
 - Quote confidential meeting content or participant names.
 - Mark a question blocking unless the film truly cannot proceed without it.
 - Register one file under two kinds (for example the brief as a spec). It then counts as evidence of neither.
-- Treat a question or a note as closing a gap from N02. Only a registered source closes it; if none exists, leave the gap open for Wei to supply the source or waive it.
+- Treat a question or a note as closing a gap from N02. Only a registered source closes it; if none exists, leave the gap open for the project owner to supply the source or waive it.

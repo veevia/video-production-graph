@@ -1,8 +1,7 @@
 """Judging: pairwise comparison with order swap, hidden anchors, Bradley-Terry ranking, judge calibration against
 human labels, and a saturation alarm for pointwise scores.
 
-Why pairwise: in a recent 90-second case-study film (NDA) the critic scored 4 or 5 on all 20 dimensions for good and
-regressed versions alike (reported). Absolute 1-5 scores saturate; "is A better than B on this criterion?" against a
+Absolute 1-5 scores can saturate; "is A better than B on this criterion?" against a
 benchmark and the previous best does not, provided the judge's position bias is controlled and the batch carries
 known-good and known-bad items it must rank correctly.
 

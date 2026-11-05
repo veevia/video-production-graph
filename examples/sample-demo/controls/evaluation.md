@@ -1,10 +1,10 @@
 ---
 doc: evaluation
 gates: [technical, accessibility, design-compliance, product-accuracy, narrative-pacing, creative]
-review_lenses: ["plant manager", "operations director", "first-time viewer"]
+review_lenses: ["viewer", "reviewer", "first-time viewer"]
 thresholds: {}
 ---
-# Evaluation — Northwind Water Monitor teaser (fictional)
+# Evaluation — Shape Board teaser (fictional)
 
 > Access: written by N03; locked when approved.
 

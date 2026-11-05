@@ -59,7 +59,7 @@ NODES: dict[str, dict[str, Any]] = {
                    "provenance": ["GATES.yaml locked on approval with the registry pin (part of the bar)"]},
         "instructions": "Quality workflow: also complete spec/GATES.yaml, the approved bar: each gate's metric and version, its "
                         "envelope (benchmark or stated), severity, stage and the rule ids it enforces, and the benchmark "
-                        "registry pinned by path and sha256. Wei approves it with the objective.",
+                        "registry pinned by path and sha256. the project owner approves it with the objective.",
     },
     "n06_creative_direction": {
         "append": {"inputs": ["control:spec-story"], "controls.read": ["spec-story"], "controls.write": ["spec-story"],
@@ -76,7 +76,7 @@ NODES: dict[str, dict[str, Any]] = {
                                    "description": "Every STORY.md must-say term is spoken; no banned phrase is spoken or shown"}],
                    "failure_conditions": ["A must-say term never spoken, or a banned phrase used"]},
         "instructions": "Quality workflow: name each chapter after its STORY.md beat (or list it in the beat's chapters), speak "
-                        "every must-say term and no banned phrase. A rejected animatic returns here with Wei's feedback.",
+                        "every must-say term and no banned phrase. A rejected animatic returns here with the project owner's feedback.",
     },
     "n08_storyboard_shots": {
         "append": {"inputs": ["control:spec-story"], "controls.read": ["spec-story"],
@@ -178,10 +178,10 @@ NEW_NODES: list[dict[str, Any]] = [
                                "A motion test that flashes more than 3 times in a second"],
         "retry": {"max_attempts": 3, "behavior": "Re-dispatch with the failing gates, roles, values and envelopes; fix the spec, "
                                                  "then re-render"},
-        "escalation": {"after": "3 consecutive failures or 2 rejections", "to": "Wei",
+        "escalation": {"after": "3 consecutive failures or 2 rejections", "to": "the project owner",
                        "report": "The gates the look cannot meet, the values tried, and the spec changes that did not move them"},
         "human_review": {"required": True, "decision": "Approve the look (style frames and motion test) before any asset is "
-                                                       "built", "approver": "Wei", "outcomes": ["approved", "rejected"]},
+                                                       "built", "approver": "the project owner", "outcomes": ["approved", "rejected"]},
         "provenance": ["look-frames.json and look-report.json per attempt (spec hash, measurements, gates)",
                        "design.md, DESIGN.md, its tokens and MOTION.md locked on approval"],
         "controls": {"read": ["creative", "design", "spec-design", "spec-tokens", "spec-motion", "spec-gates"],
@@ -206,7 +206,7 @@ NEW_NODES: list[dict[str, Any]] = [
         "tools": ["local TTS (scratch read)", "ffmpeg", "vpg spec hash"],
         "instructions": "Time each storyboard beat to a scratch read of the current script (start and end per beat), add the "
                         "music sketch when MUSIC.md asks for one and the times its hit points land, and write animatic.json "
-                        "with the spec hash from `vpg spec hash spec/`. Render the timed boards as a video for Wei's review.",
+                        "with the spec hash from `vpg spec hash spec/`. Render the timed boards as a video for the project owner's review.",
         "prompt": "prompts/n27_animatic.md",
         "outputs": [{"key": "animatic", "kind": "json", "schema": "animatic", "description": "Timed beats, scratch read and music sketch",
                      "state_path": "production.refs.animatic"},
@@ -220,10 +220,10 @@ NEW_NODES: list[dict[str, Any]] = [
         "failure_conditions": ["Runtime over the STORY.md cap", "A beat far from its share", "Pace or pauses outside their gate",
                                "A must-say term never spoken", "A music hit point missed"],
         "retry": {"max_attempts": 3, "behavior": "Re-dispatch with the failing beats, gates, terms and hit points"},
-        "escalation": {"after": "3 consecutive failures or 2 rejections", "to": "Wei",
+        "escalation": {"after": "3 consecutive failures or 2 rejections", "to": "the project owner",
                        "report": "The timing the script and boards cannot meet together"},
         "human_review": {"required": True, "decision": "Approve the animatic before voice, assets and scenes are built",
-                         "approver": "Wei", "outcomes": ["approved", "rejected"]},
+                         "approver": "the project owner", "outcomes": ["approved", "rejected"]},
         "provenance": ["animatic.json and animatic-report.json per attempt (spec hash, measurements, beat shares, hit points)"],
         "controls": {"read": ["creative", "spec-story", "spec-voice", "spec-music", "spec-mix", "spec-gates"], "write": []},
         "resources": ["tts", "renderer"],
@@ -246,23 +246,23 @@ def _edge(eid, a, b, kind, transition, when, transfers, threshold, branching, on
 NEW_EDGES = [
     _edge("Q01", "n09_visual_system", "n26_look_development", "flow", "conditional", "approved",
           ["design-system.json", "design.md", "locked production.md and sound specs"],
-          "Wei approves the visual system direction and the sound specs", "approved → look development", "see E16"),
+          "the project owner approves the visual system direction and the sound specs", "approved → look development", "see E16"),
     _edge("Q02", "n26_look_development", "n08_storyboard_shots", "flow", "conditional", "approved",
-          ["look-frames.json", "locked design.md and visual spec"], "every look gate passes and Wei approves the look",
+          ["look-frames.json", "locked design.md and visual spec"], "every look gate passes and the project owner approves the look",
           "fan-in with E14", "see Q03"),
-    _edge("Q03", "n26_look_development", "n26_look_development", "loop", "conditional", "rejected", ["Wei's feedback"],
+    _edge("Q03", "n26_look_development", "n26_look_development", "loop", "conditional", "rejected", ["the project owner's feedback"],
           "look rejected", "rejected → revise the spec and re-render", "after 2 rejections escalate", 2),
     _edge("Q04", "n08_storyboard_shots", "n27_animatic", "flow", "deterministic", "pass", ["storyboard.json", "shotlist.json"],
           "storyboard checks pass (beat shares included)", "none", "N08 retries (max 3)"),
     _edge("Q05", "n27_animatic", "n10_asset_planning", "flow", "conditional", "approved", ["animatic.json"],
-          "the animatic checks pass and Wei approves the timing", "approved → fan-out: asset planning ∥ voice", "see Q07"),
+          "the animatic checks pass and the project owner approves the timing", "approved → fan-out: asset planning ∥ voice", "see Q07"),
     _edge("Q06", "n27_animatic", "n12_voice_audio", "flow", "conditional", "approved", ["animatic.json", "script.json"],
-          "the animatic checks pass and Wei approves the timing", "approved → fan-out: voice ∥ asset planning", "see Q07"),
-    _edge("Q07", "n27_animatic", "n07_script_development", "loop", "conditional", "rejected", ["Wei's feedback"],
+          "the animatic checks pass and the project owner approves the timing", "approved → fan-out: voice ∥ asset planning", "see Q07"),
+    _edge("Q07", "n27_animatic", "n07_script_development", "loop", "conditional", "rejected", ["the project owner's feedback"],
           "animatic rejected", "rejected → rewrite the script with the feedback; the storyboard and animatic follow",
           "after 2 rejections escalate", 2),
     _edge("Q08", "n22_targeted_regeneration", "n26_look_development", "loop", "conditional", "target:n26_look_development",
-          ["defects traced to the look"], "a blocking defect traces here and Wei approved a change request",
+          ["defects traced to the look"], "a blocking defect traces here and the project owner approved a change request",
           "re-develop the look through a change request", "bounded, then escalate", 2),
     _edge("Q09", "n22_targeted_regeneration", "n27_animatic", "loop", "conditional", "target:n27_animatic",
           ["defects traced to the timing"], "a blocking defect traces here", "re-time the animatic", "bounded, then escalate", 2),

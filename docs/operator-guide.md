@@ -5,12 +5,13 @@ No workspace, model API, MCP server or custom agent is needed for the engine.
 See the [worker capabilities](skill-bindings.md) and [extension guide](extension-guide.md).
 
 1. Run `python -m vpg validate`, `python -m vpg docs --check` and `python -m vpg dry-run`.
-2. Initialize with `python -m vpg init /absolute/path/to/film --name "Film"` (add `--workflow quality` for the look
+2. Initialize with `python -m vpg init /absolute/path/to/film --name "Film" --human "<reviewer>"` (add `--workflow quality` for the look
    and animatic gates; a [benchmark registry](quality-workflow.md#adopting-it) must exist before N03 approves the bar).
 3. Put the requester's actual brief in `sources/brief.md`; add authorized product evidence and brand
    authority. A brief alone does not satisfy source validation.
 4. Bind production commands in `vpg.project.yaml`. The sample demonstrates asset, voice, scene and
-   assembly contracts; it is not a production renderer or TTS service.
+   assembly contracts; it is not a production renderer or TTS service. Complete the blank controls,
+   including the project's `production.voice_age`, before generating narration.
 5. Run `python -m vpg run /absolute/path/to/film` until it waits, passes or blocks.
 6. At `WAITING_RUNTIME`, run `python -m vpg tasks /absolute/path/to/film`. Give each packet to a worker.
    Respect declared outputs and control-document access; submit using the packet's token and command.

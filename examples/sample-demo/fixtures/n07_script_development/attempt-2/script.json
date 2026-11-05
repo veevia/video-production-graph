@@ -1,15 +1,15 @@
 {
- "title": "Northwind Water Monitor teaser",
+ "title": "Shape Board synthetic demonstration",
  "runtime_target_s": 16,
  "chapters": [
   {
    "id": "ch1",
-   "title": "The problem",
-   "objective": "Show that plants report water use but nobody sees the pattern.",
+   "title": "The group",
+   "objective": "Introduce three labelled shapes.",
    "units": [
     {
      "id": "u1",
-     "text": "Every plant reports its water use, but nobody sees the pattern in time.",
+     "text": "Three geometric cards share a board, with readable labels beside each shape.",
      "claims": [],
      "terms": []
     }
@@ -17,35 +17,35 @@
   },
   {
    "id": "ch2",
-   "title": "The signal",
-   "objective": "Show the water-use signal against the plant's own range.",
+   "title": "The selection",
+   "objective": "Show the selection marker.",
    "units": [
     {
      "id": "u2",
-     "text": "Northwind Water Monitor raises a water-use signal when a plant leaves its own expected range.",
+     "text": "Shape Board displays a selection marker around one geometric card in the card group.",
      "claims": [
       "C01"
      ],
      "terms": [
-      "water-use signal",
-      "expected range"
+      "selection marker",
+      "card group"
      ]
     }
    ]
   },
   {
    "id": "ch3",
-   "title": "The action",
-   "objective": "Show that the outlook lets the team act first.",
+   "title": "The detail",
+   "objective": "Show the matching detail panel.",
    "units": [
     {
      "id": "u3",
-     "text": "A seven-day outlook from the production plan helps the team act first.",
+     "text": "The detail panel repeats that card's label. All shown content is synthetic.",
      "claims": [
       "C02"
      ],
      "terms": [
-      "seven-day outlook"
+      "detail panel"
      ]
     }
    ]

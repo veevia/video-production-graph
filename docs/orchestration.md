@@ -39,4 +39,4 @@ Independence rule: a reviewer never reviews its own work. The Creative Critic sc
 2. Several packets can be open at once. Hand each to its agent (see `runtime_binding` in `agents/*.yaml`; for example the FDE Design Reviewer for N16/N17/N20).
 3. The agent writes its outputs into the packet's work directory and runs `python -m vpg submit <project> <node> --token … --actor <agent> --output key=path [--review review.json]`.
 4. The engine validates the submission, then continues; the next `vpg run` dispatches whatever became ready. If another command is changing the run, the submission waits for up to `--lock-timeout` seconds (default 900), then fails with exit code 4 and names the lock holder. Errors never print a traceback; retry the same command.
-5. At human gates, Wei runs `python -m vpg approve <project> <node> --actor Wei --reason "<Wei's words>" [--reject --feedback "…"]`.
+5. At human gates, the project owner runs `python -m vpg approve <project> <node> --actor "<name>" --reason "<the project owner's words>" [--reject --feedback "…"]`.

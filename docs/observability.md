@@ -7,10 +7,7 @@ approval is labelled `assumed`, can expire, and is never silent. This page is th
 
 ## Why
 
-In a recent 90-second case-study film (NDA), the run waited at its first human gate while candidates were built by
-running the production nodes directly (reported). Nothing reached the ledger or the engine's evaluation, so no view of
-the run could explain what was built, judged or decided. Observability here means: every node, gate and human decision
-has an event that says what was judged, by whom, with what evidence, and how sure the record is.
+Every governed attempt should be traceable to its artifacts and evaluation evidence. Direct runs remain labelled as outside the governed path.
 
 ## Spans
 

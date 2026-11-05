@@ -219,7 +219,7 @@
      "type": "string"
     },
     "approver": {
-     "default": "Wei",
+     "default": "project owner",
      "title": "Approver",
      "type": "string"
     },

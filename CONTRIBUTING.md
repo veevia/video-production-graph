@@ -1,5 +1,9 @@
 # Contributing
 
+Repository contributor: [veevia](https://github.com/veevia).
+Do not add automated-tool authorship, co-author or generation trailers.
+Third-party components retain their own [license notices](THIRD_PARTY_NOTICES.md).
+
 Use Python 3.11 or later with ffmpeg and ffprobe on PATH. Install `requirements.txt` in an isolated
 environment. Tesseract is needed for OCR; macOS `say` is optional for the fictional sample.
 
@@ -41,11 +45,10 @@ No model API or paid service should be required by tests.
 External workers can use any toolchain that satisfies the task packet and artifact schemas.
 Names in `skills` and `runtime_binding` are optional capability hints, not required packages.
 
-The originating workspace maintains the authoring copy. Before exporting, maintainers pull community
-changes into their standalone checkout and reconcile them with the workspace. The synchronization
-tool refuses to overwrite independently changed files. See [the update runbook](docs/standalone-sync.md).
-Glassbox changes map back to the workspace experiment; public README/CI changes map back to
-the publishing overlays. Do not update the sync hashes to bypass a source reconciliation.
+This repository owns the public starter. Generalize improvements here; never copy
+production history or private workspace snapshots into it. Update the explicit
+`publication.json` file inventory and run `python -m vpg publication-check` before
+publication. See [maintainer guidance](docs/standalone-sync.md).
 
 ## Scope
 

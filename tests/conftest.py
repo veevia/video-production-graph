@@ -35,7 +35,7 @@ def node(id, num, kind="agent", **kw):
         "outputs": [{"key": id, "kind": "json", "description": "out", "state_path": f"production.refs.{id}"}],
         "completion": [{"type": "artifact", "key": id, "description": "exists"}], "rubric": ["script"],
         "failure_conditions": ["missing output"], "retry": {"max_attempts": 2, "behavior": "retry"},
-        "escalation": {"after": "2 failures", "to": "Wei", "report": "what failed"},
+        "escalation": {"after": "2 failures", "to": "Reviewer", "report": "what failed"},
         "human_review": {"required": False, "decision": "not required"}, "provenance": ["ledger"],
     }
     base.update(kw)

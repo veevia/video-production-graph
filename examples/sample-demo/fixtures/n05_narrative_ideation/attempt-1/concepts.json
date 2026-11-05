@@ -2,53 +2,53 @@
  "concepts": [
   {
    "id": "C1",
-   "title": "See it before it's waste",
-   "logline": "One plant's signal, from pattern to action.",
-   "anchor": "problem-first story",
+   "title": "Group, select, inspect",
+   "logline": "Move from three cards to one labelled detail.",
+   "anchor": "step-by-step",
    "structure": [
-    "problem",
-    "signal",
-    "action"
+    "group",
+    "select",
+    "inspect"
    ],
    "strengths": [
-    "clear causality"
+    "clear synthetic example"
    ],
    "risks": [
-    "may feel small"
+    "must keep labels readable"
    ]
   },
   {
    "id": "C2",
-   "title": "A plant manager's morning",
-   "logline": "A day-in-the-life reveal.",
-   "anchor": "user's-day journey",
+   "title": "Start with the detail",
+   "logline": "Reveal the selected card before showing its group.",
+   "anchor": "reverse reveal",
    "structure": [
-    "morning",
-    "alert",
-    "decision"
+    "detail",
+    "card",
+    "group"
    ],
    "strengths": [
-    "human"
+    "clear synthetic example"
    ],
    "risks": [
-    "needs a character we do not have"
+    "must keep labels readable"
    ]
   },
   {
    "id": "C3",
-   "title": "The whole network",
-   "logline": "Zoom from all plants to one signal.",
-   "anchor": "system reveal",
+   "title": "Compare the shapes",
+   "logline": "Show each geometric shape before selecting one.",
+   "anchor": "comparison",
    "structure": [
-    "network",
-    "zoom",
-    "signal"
+    "square",
+    "circle",
+    "triangle"
    ],
    "strengths": [
-    "scale"
+    "clear synthetic example"
    ],
    "risks": [
-    "dense first frame"
+    "must keep labels readable"
    ]
   }
  ]
