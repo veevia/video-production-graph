@@ -14,8 +14,9 @@ does not call a model or network service.
 ## Synthetic sample
 
 The sample uses generated geometric cards, invented labels and a licensed font.
-`examples/sample-demo/pipeline/fixtures.py` reproduces its image inputs. The
-sample renders with Pillow and ffmpeg. macOS `say` is optional; the alternative
+`examples/sample-demo/pipeline/fixtures.py` reproduces its image inputs. Those
+labels are an embedded bitmap, so the rasters do not depend on FreeType.
+The sample renders with Pillow and ffmpeg. macOS `say` is optional; the alternative
 tone track is explicitly degraded and cannot establish listening quality.
 
 ## Glassbox

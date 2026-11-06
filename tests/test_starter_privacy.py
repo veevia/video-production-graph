@@ -2,10 +2,10 @@
 import json
 import importlib.util
 from pathlib import Path
-import shutil
 
 import pytest
 import yaml
+from PIL import Image
 
 from vpg import cli, scoring
 from vpg.engine import Engine, EngineError
@@ -101,14 +101,19 @@ def test_release_packet_uses_the_same_private_preference_store_as_the_engine(tmp
     assert verify._current_model(project, "Example Reviewer") == model
 
 
+def _raster(path: Path) -> tuple[str, tuple[int, int], bytes]:
+    with Image.open(path) as image:
+        return image.mode, image.size, image.tobytes()
+
+
 def test_sample_images_are_reproducible_from_geometric_fixture_code(tmp_path):
     sample = PKG_ROOT / "examples/sample-demo"
     spec = importlib.util.spec_from_file_location("sample_fixture_images", sample / "pipeline/fixtures.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    fonts = tmp_path / "assets/fonts"
-    fonts.mkdir(parents=True)
-    shutil.copyfile(sample / "assets/fonts/MonaSansVF.ttf", fonts / "MonaSansVF.ttf")
     module.generate(tmp_path)
-    for name in ("sources/ui/board.png", "sources/ui/board-regions.json", "assets/brand/shape-mark.png"):
-        assert (sample / name).read_bytes() == (tmp_path / name).read_bytes(), name
+    # PNG bytes are not portable: Pillow wheels bundle different zlib builds.
+    for name in ("sources/ui/board.png", "assets/brand/shape-mark.png"):
+        assert _raster(sample / name) == _raster(tmp_path / name), name
+    name = "sources/ui/board-regions.json"
+    assert (sample / name).read_bytes() == (tmp_path / name).read_bytes(), name
